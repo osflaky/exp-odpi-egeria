@@ -1,0 +1,604 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Copyright Contributors to the ODPi Egeria project. */
+package org.odpi.openmetadata.samples.archiveutilities.governanceengines;
+
+import org.odpi.openmetadata.adapters.connectors.governanceactions.provisioning.MoveCopyFileGuard;
+import org.odpi.openmetadata.adapters.connectors.governanceactions.remediation.OriginSeekerGuard;
+import org.odpi.openmetadata.adapters.connectors.governanceactions.remediation.RetentionClassifierGuard;
+import org.odpi.openmetadata.adapters.connectors.governanceactions.stewardship.EvaluateAnnotationsGuard;
+import org.odpi.openmetadata.contentpacks.core.RequestTypeDefinition;
+import org.odpi.openmetadata.contentpacks.core.core.CorePackArchiveWriter;
+import org.odpi.openmetadata.contentpacks.core.egeria.EgeriaArchiveWriter;
+import org.odpi.openmetadata.contentpacks.core.files.FilesArchiveWriter;
+import org.odpi.openmetadata.contentpacks.core.postgres.PostgresPackArchiveWriter;
+import org.odpi.openmetadata.contentpacks.core.unitycatalog.UnityCatalogPackArchiveWriter;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.NewActionTarget;
+import org.odpi.openmetadata.frameworks.openmetadata.types.OpenMetadataType;
+import org.odpi.openmetadata.frameworks.opensurvey.controls.SurveyActionGuard;
+import org.odpi.openmetadata.repositoryservices.connectors.stores.archivestore.properties.OpenMetadataArchive;
+import org.odpi.openmetadata.samples.archiveutilities.EgeriaBaseArchiveWriter;
+import org.odpi.openmetadata.samples.archiveutilities.GovernanceActionDescription;
+import org.odpi.openmetadata.samples.archiveutilities.governanceprogram.*;
+import org.odpi.openmetadata.samples.governanceactions.clinicaltrials.CocoClinicalTrialPlaceholderProperty;
+import org.odpi.openmetadata.samples.governanceactions.clinicaltrials.CocoClinicalTrialsAnnotationType;
+
+import java.util.*;
+
+
+/**
+ * CocoGovernanceEnginesArchiveWriter creates a physical open metadata archive file containing the governance engine definitions
+ * needed by Coco Pharmaceuticals.
+ */
+public class CocoGovernanceEnginesArchiveWriter extends EgeriaBaseArchiveWriter
+{
+    private static final String archiveFileName = "CocoGovernanceEngineDefinitionsArchive.omarchive";
+
+    /*
+     * This is the header information for the archive.
+     */
+    private static final String                  archiveGUID        = "9cbd2b33-e80f-4df2-adc6-d859ebff4c34";
+    private static final String                  archiveName        = "CocoGovernanceEngineDefinitions";
+    private static final String                  archiveDescription = "Governance Engines for Coco Pharmaceuticals.";
+    private static final Date                    creationDate       = new Date(1639984840038L);
+
+
+    /**
+     * Default constructor initializes the archive.
+     */
+    public CocoGovernanceEnginesArchiveWriter()
+    {
+        super(archiveGUID,
+              archiveName,
+              archiveDescription,
+              creationDate,
+              archiveFileName,
+              new OpenMetadataArchive[]{
+                      new CorePackArchiveWriter().getOpenMetadataArchive(),
+                      new EgeriaArchiveWriter().getOpenMetadataArchive(),
+                      new FilesArchiveWriter().getOpenMetadataArchive(),
+                      new PostgresPackArchiveWriter().getOpenMetadataArchive(),
+                      new UnityCatalogPackArchiveWriter().getOpenMetadataArchive(),
+                      new CocoGovernanceProgramArchiveWriter().getOpenMetadataArchive() });
+    }
+
+
+    /**
+     * Add details of a request type to the engine.
+     *
+     * @param governanceEngineGUID unique identifier of the engine
+     * @param governanceEngineName name of the governance engine
+     * @param governanceEngineTypeName type of engine
+     * @param governanceRequestType name of request type
+     * @param serviceRequestType internal name of the request type
+     * @param requestParameters any request parameters
+     * @param actionTargets action targets
+     * @param governanceActionDescription description of the governance action
+     * @param governanceActionTypeGUID unique identifier of the associated governance action type
+     * @param supportedElementQualifiedName element to link the governance action type to
+     */
+    private   void addRequestType(String                      governanceEngineGUID,
+                                  String                      governanceEngineName,
+                                  String                      governanceEngineTypeName,
+                                  String                      governanceRequestType,
+                                  String                      serviceRequestType,
+                                  Map<String, String>         requestParameters,
+                                  List<NewActionTarget>       actionTargets,
+                                  GovernanceActionDescription governanceActionDescription,
+                                  String                      governanceActionTypeGUID,
+                                  String                      supportedElementQualifiedName)
+    {
+        archiveHelper.addSupportedGovernanceService(governanceEngineGUID,
+                                                    governanceRequestType,
+                                                    serviceRequestType,
+                                                    requestParameters,
+                                                    true,
+                                                    governanceActionDescription.governanceServiceGUID);
+
+        String governanceActionTypeQualifiedName = governanceEngineName + "::" + governanceRequestType;
+
+        archiveHelper.setGUID(governanceActionTypeQualifiedName, governanceActionTypeGUID);
+
+        String guid = archiveHelper.addGovernanceActionType(null,
+                                                            governanceEngineGUID,
+                                                            governanceEngineTypeName,
+                                                            OpenMetadataType.SOFTWARE_CAPABILITY.typeName,
+                                                            null,
+                                                            governanceActionTypeQualifiedName,
+                                                            governanceRequestType + " (" + governanceEngineName + ")",
+                                                            governanceActionDescription.governanceServiceDescription,
+                                                            0,
+                                                            governanceActionDescription.supportedRequestParameters,
+                                                            governanceActionDescription.supportedActionTargets,
+                                                            governanceActionDescription.supportedAnalysisSteps,
+                                                            governanceActionDescription.supportedAnnotationTypes,
+                                                            governanceActionDescription.producedRequestParameters,
+                                                            governanceActionDescription.producedActionTargets,
+                                                            governanceActionDescription.producedGuards,
+                                                            0,
+                                                            null,
+                                                            null,
+                                                            null);
+        assert(governanceActionTypeGUID.equals(guid));
+
+        archiveHelper.addGovernanceActionExecutor(governanceActionTypeGUID,
+                                                  governanceRequestType,
+                                                  requestParameters,
+                                                  null,
+                                                  null,
+                                                  null,
+                                                  null,
+                                                  governanceEngineGUID);
+
+        if (actionTargets != null)
+        {
+            for (NewActionTarget actionTarget : actionTargets)
+            {
+                if (actionTarget != null)
+                {
+                    archiveHelper.addTargetForActionType(governanceActionTypeGUID, actionTarget);
+                }
+            }
+        }
+
+        if (supportedElementQualifiedName != null)
+        {
+            String supportedElementGUID = archiveHelper.queryGUID(supportedElementQualifiedName);
+            archiveHelper.addResourceListRelationshipByGUID(supportedElementGUID,
+                                                            governanceActionTypeGUID,
+                                                            governanceActionDescription.resourceUse.getResourceUse(),
+                                                            governanceActionDescription.governanceServiceDescription,
+                                                            requestParameters);
+        }
+    }
+
+
+
+    /**
+     * Create supply chains
+     */
+    private void addInformationSupplyChains()
+    {
+        final String methodName = "addInformationSupplyChains";
+
+        for (InformationSupplyChain informationSupplyChain : InformationSupplyChain.values())
+        {
+            archiveHelper.setGUID(informationSupplyChain.getQualifiedName(), informationSupplyChain.getGUID());
+
+            String iscGUID = archiveHelper.addInformationSupplyChain(informationSupplyChain.getOwningSupplyChain(),
+                                                                     informationSupplyChain.isOwningInformationSupplyChainAnchor(),
+                                                                     informationSupplyChain.getAnchorScopeGUID(),
+                                                                     OpenMetadataType.INFORMATION_SUPPLY_CHAIN.typeName,
+                                                                     informationSupplyChain.getQualifiedName(),
+                                                                     informationSupplyChain.getDisplayName(),
+                                                                     informationSupplyChain.getDescription(),
+                                                                     informationSupplyChain.getIdentifier(),
+                                                                     informationSupplyChain.getScope().getPreferredValue(),
+                                                                     informationSupplyChain.getDataProcessingPurposes(),
+                                                                     null,
+                                                                     informationSupplyChain.getOwner(),
+                                                                     informationSupplyChain.getOwnerTypeName(),
+                                                                     informationSupplyChain.getOwnerPropertyName(),
+                                                                     null,
+                                                                     null,
+                                                                     null);
+            assert(iscGUID.equals(informationSupplyChain.getGUID()));
+
+            if (informationSupplyChain.isTemplate())
+            {
+                archiveHelper.addTemplateClassification(iscGUID,
+                                                        informationSupplyChain.getTemplateName(),
+                                                        informationSupplyChain.getTemplateDescription(),
+                                                        "V1.0",
+                                                        null,
+                                                        methodName);
+
+                /*
+                 * These supply chain templates name the clinical trial in their properties, so a caller has to supply
+                 * the trial's identifier and name.  The specification is what makes that visible to them - and without
+                 * it the ~{...}~ markers survive into the supply chain created from the template.
+                 */
+                archiveHelper.addPlaceholderProperties(iscGUID,
+                                                       OpenMetadataType.INFORMATION_SUPPLY_CHAIN.typeName,
+                                                       iscGUID,
+                                                       OpenMetadataType.INFORMATION_SUPPLY_CHAIN.typeName,
+                                                       OpenMetadataType.INFORMATION_SUPPLY_CHAIN.typeName,
+                                                       null,
+                                                       List.of(CocoClinicalTrialPlaceholderProperty.CLINICAL_TRIAL_ID.getPlaceholderType(),
+                                                               CocoClinicalTrialPlaceholderProperty.CLINICAL_TRIAL_NAME.getPlaceholderType()));
+            }
+        }
+    }
+
+
+    /**
+     * Link information supply chain segments together.
+     */
+    private void addInformationSupplyChainLinks()
+    {
+        for (InformationSupplyChainLink informationSupplyChainLink : InformationSupplyChainLink.values())
+        {
+            archiveHelper.addInformationSupplyChainLinkRelationship(informationSupplyChainLink.getSegment1().getGUID(),
+                                                                    informationSupplyChainLink.getSegment2().getGUID(),
+                                                                    informationSupplyChainLink.getLabel(),
+                                                                    informationSupplyChainLink.getDescription());
+        }
+    }
+
+
+
+    /**
+     * Add the content to the archive builder.
+     */
+    @Override
+    public void getArchiveContent()
+    {
+        /*
+         * Create the default governance engines
+         */
+        for (CocoGovernanceEngineDefinition governanceEngineDefinition : CocoGovernanceEngineDefinition.values())
+        {
+            this.createGovernanceEngine(governanceEngineDefinition);
+        }
+
+        /*
+         * Register the governance services that are going to be in the default governance engines.
+         */
+        for (CocoGovernanceServiceDefinition governanceServiceDefinition : CocoGovernanceServiceDefinition.values())
+        {
+            this.addGovernanceServiceDefinition(governanceServiceDefinition);
+        }
+
+        /*
+         * Make sure the annotation types are catalogued for the report type (generated through the request types).
+         */
+        for (CocoClinicalTrialsAnnotationType annotationType : CocoClinicalTrialsAnnotationType.values())
+        {
+            super.addAnnotationType(annotationType);
+        }
+
+        archiveHelper.addSolutionRoles(List.of(SolutionRoleDefinition.values()));
+        addInformationSupplyChains();
+        addInformationSupplyChainLinks();
+
+        /*
+         * Connect the governance engines to the governance services using the request types.
+         */
+        for (CocoRequestTypeDefinition requestTypeDefinition : CocoRequestTypeDefinition.values())
+        {
+            this.addRequestType(requestTypeDefinition.getGovernanceEngine().getGUID(),
+                                requestTypeDefinition.getGovernanceEngine().getName(),
+                                requestTypeDefinition.getGovernanceEngine().getType(),
+                                requestTypeDefinition.getGovernanceRequestType(),
+                                requestTypeDefinition.getServiceRequestType(),
+                                requestTypeDefinition.getRequestParameters(),
+                                requestTypeDefinition.getActionTargets(),
+                                requestTypeDefinition.getGovernanceService().getGovernanceActionDescription(),
+                                requestTypeDefinition.getGovernanceActionTypeGUID(),
+                                requestTypeDefinition.getSupportedElementQualifiedName());
+        }
+
+        archiveHelper.addSolutionComponents(List.of(SolutionComponent.values()));
+        archiveHelper.addSolutionComponentActors(List.of(SolutionComponentActor.values()));
+        archiveHelper.addSolutionComponentWires(List.of(SolutionComponentWire.values()));
+        archiveHelper.addSolutionBlueprints(List.of(SolutionBlueprint.values()), CocoCollectionDefinition.SOLUTIONS.getGUID());
+
+        this.addOnboardingGovernanceActionProcess();
+    }
+
+
+
+    /**
+     * Create an entity that represents a governance engine.
+     *
+     * @param governanceEngineDefinition details of the governance engine
+     */
+    private void createGovernanceEngine(CocoGovernanceEngineDefinition governanceEngineDefinition)
+    {
+        archiveHelper.setGUID(governanceEngineDefinition.getName(),
+                              governanceEngineDefinition.getGUID());
+
+        archiveHelper.addGovernanceEngine(governanceEngineDefinition.getType(),
+                                          governanceEngineDefinition.getName(),
+                                          governanceEngineDefinition.getDisplayName(),
+                                          governanceEngineDefinition.getDescription(),
+                                          null,
+                                          null,
+                                          null,
+                                          null,
+                                          governanceEngineDefinition.getUserId(),
+                                          null,
+                                          null);
+    }
+
+
+    /**
+     * Add entities for each governance action service.
+     *
+     * @param governanceServiceDefinition details of governance service
+     */
+    private void addGovernanceServiceDefinition(CocoGovernanceServiceDefinition governanceServiceDefinition)
+    {
+        archiveHelper.setGUID(governanceServiceDefinition.getName(), governanceServiceDefinition.getGUID());
+
+        archiveHelper.addGovernanceService(governanceServiceDefinition.getDeployedImplementationType().getAssociatedTypeName(),
+                                           governanceServiceDefinition.getDeployedImplementationType().getDeployedImplementationType(),
+                                           governanceServiceDefinition.getConnectorProviderClassName(),
+                                           null,
+                                           governanceServiceDefinition.getName(),
+                                           governanceServiceDefinition.getDisplayName(),
+                                           governanceServiceDefinition.getDescription(),
+                                           null);
+    }
+
+
+    /**
+     * Create the onboarding process for clinical trials.
+     */
+    private void addOnboardingGovernanceActionProcess()
+    {
+        String qualifiedName = "Coco:GovernanceActionProcess:ClinicalTrials:WeeklyMeasurements:Onboarding";
+
+        String processGUID = archiveHelper.addGovernanceDefinition(OpenMetadataType.PROVISIONING_ACTION_PROCESS.typeName,
+                                                                   qualifiedName,
+                                                                   null,
+                                                                   "Onboard Landing Area Files For Clinical Trial Project",
+                                                                   "V1.0",
+                                                                   """
+                                                                              Ensures that new files added to the landing are correctly catalogued in the data lake.
+
+                                                                              This process performs the follow function:
+                                                                                   1) The physical file is moved to the data lake and renamed,
+                                                                                   2) A new asset is created for the new file,
+                                                                                   3) Lineage is created between the original file asset and the new file asset,
+                                                                                   4) The owner and origin are assigned,
+                                                                                   5) The governance zones are assigned to make the new asset visible to the research team.""",
+                                                                   null,
+                                                                   null,
+                                                                   0,
+                                                                   "https://egeria-project.org/egeria-solutions/leveraging-files/overview/",
+                                                                   null,
+                                                                   null,
+                                                                   null,
+                                                                   null,
+                                                                   null,
+                                                                   null,
+                                                                   null);
+
+        String step1GUID = archiveHelper.addGovernanceActionProcessStep(OpenMetadataType.GOVERNANCE_ACTION_PROCESS_STEP.typeName,
+                                                                        processGUID,
+                                                                        OpenMetadataType.PROVISIONING_ACTION_PROCESS.typeName,
+                                                                        OpenMetadataType.AUTHORED_REFERENCEABLE.typeName,
+                                                                        null,
+                                                                        qualifiedName + ":MoveWeeklyMeasurementsFile",
+                                                                        "Move Weekly Measurements File",
+                                                                        "The physical file is moved to the data lake and renamed, an asset is created for the new file (in the quarantine zone) and a lineage relationship is created between the original file asset and the new file asset.",
+                                                                        0,
+                                                                        null,
+                                                                        null,
+                                                                        null,
+                                                                        null,
+                                                                        null,
+                                                                        null,
+                                                                        null,
+                                                                        0,
+                                                                        true,
+                                                                        null,
+                                                                        null,
+                                                                        null);
+
+        if (step1GUID != null)
+        {
+            archiveHelper.addGovernanceActionExecutor(step1GUID,
+                                                      RequestTypeDefinition.MOVE_FILE.getGovernanceRequestType(),
+                                                      null,
+                                                      null,
+                                                      null,
+                                                      null,
+                                                      null,
+                                                      RequestTypeDefinition.MOVE_FILE.getGovernanceEngine().getGUID());
+
+            archiveHelper.addGovernanceActionProcessFlow(processGUID, null, null, step1GUID);
+        }
+
+        String step2GUID = archiveHelper.addGovernanceActionProcessStep(OpenMetadataType.GOVERNANCE_ACTION_PROCESS_STEP.typeName,
+                                                                        processGUID,
+                                                                        OpenMetadataType.PROVISIONING_ACTION_PROCESS.typeName,
+                                                                        OpenMetadataType.AUTHORED_REFERENCEABLE.typeName,
+                                                                        null,
+                                                                        qualifiedName + ":SeekOrigin",
+                                                                        "Seek and validate origin",
+                                                                        "Validate that origin of the file is correctly set up.",
+                                                                        0,
+                                                                        null,
+                                                                        null,
+                                                                        null,
+                                                                        null,
+                                                                        null,
+                                                                        null,
+                                                                        null,
+                                                                        0,
+                                                                        true,
+                                                                        null,
+                                                                        null,
+                                                                        null);
+
+        if (step2GUID != null)
+        {
+            archiveHelper.addGovernanceActionExecutor(step2GUID,
+                                                      RequestTypeDefinition.SEEK_ORIGIN.getGovernanceRequestType(),
+                                                      null,
+                                                      null,
+                                                      null,
+                                                      null,
+                                                      null,
+                                                      RequestTypeDefinition.SEEK_ORIGIN.getGovernanceEngine().getGUID());
+
+            archiveHelper.addNextGovernanceActionProcessStep(step1GUID, MoveCopyFileGuard.PROVISIONING_COMPLETE.getName(), false, step2GUID);
+        }
+
+        String step3GUID = archiveHelper.addGovernanceActionProcessStep(OpenMetadataType.GOVERNANCE_ACTION_PROCESS_STEP.typeName,
+                                                                        processGUID,
+                                                                        OpenMetadataType.PROVISIONING_ACTION_PROCESS.typeName,
+                                                                        OpenMetadataType.AUTHORED_REFERENCEABLE.typeName,
+                                                                        null,
+                                                                        qualifiedName + ":SetRetentionPeriod",
+                                                                        "Set retention period",
+                                                                        "Set up the dates when the data associated with the asset should be archived and then deleted.",
+                                                                        0,
+                                                                        null,
+                                                                        null,
+                                                                        null,
+                                                                        null,
+                                                                        null,
+                                                                        null,
+                                                                        null,
+                                                                        0,
+                                                                        true,
+                                                                        null,
+                                                                        null,
+                                                                        null);
+
+        if (step3GUID != null)
+        {
+            archiveHelper.addGovernanceActionExecutor(step3GUID,
+                                                      RequestTypeDefinition.RETENTION_PERIOD.getGovernanceRequestType(),
+                                                      null,
+                                                      null,
+                                                      null,
+                                                      null,
+                                                      null,
+                                                      RequestTypeDefinition.RETENTION_PERIOD.getGovernanceEngine().getGUID());
+
+            archiveHelper.addNextGovernanceActionProcessStep(step2GUID, OriginSeekerGuard.ORIGIN_ASSIGNED.getName(), false, step3GUID);
+            archiveHelper.addNextGovernanceActionProcessStep(step2GUID, OriginSeekerGuard.ORIGIN_ALREADY_ASSIGNED.getName(), false, step3GUID);
+        }
+
+        String step4GUID = archiveHelper.addGovernanceActionProcessStep(OpenMetadataType.GOVERNANCE_ACTION_PROCESS_STEP.typeName,
+                                                                        processGUID,
+                                                                        OpenMetadataType.PROVISIONING_ACTION_PROCESS.typeName,
+                                                                        OpenMetadataType.AUTHORED_REFERENCEABLE.typeName,
+                                                                        null,
+                                                                        qualifiedName + ":DataQuality",
+                                                                        "Check quality of data",
+                                                                        "Validate that origin of the file is correctly set up.",
+                                                                        0,
+                                                                        null,
+                                                                        null,
+                                                                        null,
+                                                                        null,
+                                                                        null,
+                                                                        null,
+                                                                        null,
+                                                                        0,
+                                                                        true,
+                                                                        null,
+                                                                        null,
+                                                                        null);
+
+        if (step4GUID != null)
+        {
+            archiveHelper.addGovernanceActionExecutor(step4GUID,
+                                                      CocoRequestTypeDefinition.CHECK_DATA.getGovernanceRequestType(),
+                                                      null,
+                                                      null,
+                                                      null,
+                                                      null,
+                                                      null,
+                                                      CocoRequestTypeDefinition.CHECK_DATA.getGovernanceEngine().getGUID());
+
+            archiveHelper.addNextGovernanceActionProcessStep(step1GUID, MoveCopyFileGuard.PROVISIONING_COMPLETE.getName(), false, step4GUID);
+        }
+
+        String step5GUID = archiveHelper.addGovernanceActionProcessStep(OpenMetadataType.GOVERNANCE_ACTION_PROCESS_STEP.typeName,
+                                                                        processGUID,
+                                                                        OpenMetadataType.PROVISIONING_ACTION_PROCESS.typeName,
+                                                                        OpenMetadataType.AUTHORED_REFERENCEABLE.typeName,
+                                                                        null,
+                                                                        qualifiedName + ":CheckForRFAs",
+                                                                        "Check for quality issues",
+                                                                        "Validate that there are no reported data qualify issues.",
+                                                                        0,
+                                                                        null,
+                                                                        null,
+                                                                        null,
+                                                                        null,
+                                                                        null,
+                                                                        null,
+                                                                        null,
+                                                                        0,
+                                                                        true,
+                                                                        null,
+                                                                        null,
+                                                                        null);
+
+        if (step5GUID != null)
+        {
+            archiveHelper.addGovernanceActionExecutor(step5GUID,
+                                                      RequestTypeDefinition.EVALUATE_ANNOTATIONS.getGovernanceRequestType(),
+                                                      null,
+                                                      null,
+                                                      null,
+                                                      null,
+                                                      null,
+                                                      RequestTypeDefinition.EVALUATE_ANNOTATIONS.getGovernanceEngine().getGUID());
+
+            archiveHelper.addNextGovernanceActionProcessStep(step4GUID, SurveyActionGuard.SURVEY_COMPLETED.getName(), false, step5GUID);
+        }
+
+
+        String step6GUID = archiveHelper.addGovernanceActionProcessStep(OpenMetadataType.GOVERNANCE_ACTION_PROCESS_STEP.typeName,
+                                                                        processGUID,
+                                                                        OpenMetadataType.PROVISIONING_ACTION_PROCESS.typeName,
+                                                                        OpenMetadataType.AUTHORED_REFERENCEABLE.typeName,
+                                                                        null,
+                                                                        qualifiedName + ":SetZones",
+                                                                        "Publish asset (set governance zones)",
+                                                                        "Set up the zones in the asset so that is it visible in the data lake.",
+                                                                        0,
+                                                                        null,
+                                                                        null,
+                                                                        null,
+                                                                        null,
+                                                                        null,
+                                                                        null,
+                                                                        null,
+                                                                        0,
+                                                                        true,
+                                                                        null,
+                                                                        null,
+                                                                        null);
+
+        if (step6GUID != null)
+        {
+            archiveHelper.addGovernanceActionExecutor(step6GUID,
+                                                      RequestTypeDefinition.ZONE_MEMBER.getGovernanceRequestType(),
+                                                      null,
+                                                      null,
+                                                      null,
+                                                      null,
+                                                      null,
+                                                      RequestTypeDefinition.ZONE_MEMBER.getGovernanceEngine().getGUID());
+
+            archiveHelper.addNextGovernanceActionProcessStep(step3GUID, RetentionClassifierGuard.CLASSIFICATION_ASSIGNED.getName(), true, step6GUID);
+            archiveHelper.addNextGovernanceActionProcessStep(step5GUID, EvaluateAnnotationsGuard.ACTIONS_ACTIONED.getName(), true, step6GUID);
+        }
+    }
+
+
+    /**
+     * Generates and writes out an open metadata archive for Coco Pharmaceuticals governance engines.
+     */
+    public void writeOpenMetadataArchive()
+    {
+        try
+        {
+            System.out.println("Writing to file: " + archiveFileName);
+
+            super.writeOpenMetadataArchive(archiveFileName, this.getOpenMetadataArchive());
+        }
+        catch (Exception error)
+        {
+            System.out.println("error is " + error);
+        }
+    }
+}

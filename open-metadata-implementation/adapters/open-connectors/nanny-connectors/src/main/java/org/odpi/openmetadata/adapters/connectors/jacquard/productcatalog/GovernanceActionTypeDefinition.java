@@ -1,0 +1,114 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Copyright Contributors to the ODPi Egeria project. */
+
+package org.odpi.openmetadata.adapters.connectors.jacquard.productcatalog;
+
+
+/**
+ * Defines the guids and request types for the governance action types that are used in the
+ * Open Metadata Digital Product Catalog.  They are set up in the core content pack and then customised
+ * by the harvester.
+ */
+public enum GovernanceActionTypeDefinition
+{
+    /**
+     * award-karma-points
+     */
+    AWARD_KARMA_POINTS("award-karma-points",
+                          "de681791-d978-4d5a-9828-6e19025e3a17"),
+
+    /**
+     * build-zone-membership-profile
+     */
+    BUILD_ZONE_MEMBERSHIP_PROFILE("build-zone-membership-profile",
+                       "70ab5403-96b3-4075-8d86-998d0a39c146"),
+
+    /**
+     * provision-tabular-data-set
+     */
+    PROFILE_OPEN_LINEAGE_RUNS("profile-open-lineage-runs",
+                              "97bea595-1791-41a8-bf3a-9f9de3518a65"),
+    REFINE_OPEN_LINEAGE_DATA_SCOPE("refine-open-lineage-data-scope",
+                                   "9711ca45-62ca-4474-85fd-3da864359691"),
+    SUMMARISE_OPEN_LINEAGE_DATA_QUALITY("summarise-open-lineage-data-quality",
+                                        "91112bdd-da1b-4f3e-8eaf-457e28c55b7a"),
+    PROVISION_TABULAR("provision-tabular-data-set",
+                      "bf03a1c7-ad5e-49b7-8f97-a66624243767"),
+
+    /**
+     * provision-subscription
+     */
+    PROVISION_SUBSCRIPTION("provision-subscription",
+                           "685d48bf-bebc-46da-b10f-ebbdaf79450b"),
+
+    /**
+     * create-digital-subscription
+     */
+    CREATE_SUBSCRIPTION("create-digital-subscription",
+                      "369e63b9-56b6-4f31-96a2-3dcf26a21ca8"),
+
+    /**
+     * cancel-digital-subscription
+     */
+    CANCEL_SUBSCRIPTION("cancel-digital-subscription",
+                        "88d9516b-6134-4cfd-bfcc-0e2fcd8dab7f"),
+
+
+
+
+    ;
+
+    private final String                      governanceRequestType;
+    private final String                      governanceActionTypeGUID;
+
+
+
+
+    /**
+     * Return the request type enum value.
+     *
+     * @param governanceRequestType request type used by the governance
+     * @param governanceActionTypeGUID unique identifier of the associated governance action type
+     */
+    GovernanceActionTypeDefinition(String                      governanceRequestType,
+                                   String                      governanceActionTypeGUID)
+    {
+        this.governanceRequestType         = governanceRequestType;
+        this.governanceActionTypeGUID      = governanceActionTypeGUID;
+    }
+
+
+    /**
+     * Return the Request Type.
+     *
+     * @return string
+     */
+    public String getGovernanceRequestType()
+    {
+        return governanceRequestType;
+    }
+
+
+    /**
+     * Return the unique identifier of the governance action type.
+     *
+     * @return string
+     */
+    public String getGovernanceActionTypeGUID()
+    {
+        return governanceActionTypeGUID;
+    }
+
+
+
+    /**
+     * Output of this enum class and main value.
+     *
+     * @return string showing enum value
+     */
+    @Override
+    public String toString()
+    {
+        return "GovernanceActionTypeDefinition{" + "governanceRequestType='" + governanceRequestType + '\'' + "}";
+    }
+}

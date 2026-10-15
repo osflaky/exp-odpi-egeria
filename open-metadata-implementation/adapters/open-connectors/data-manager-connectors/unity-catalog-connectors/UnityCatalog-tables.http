@@ -1,0 +1,53 @@
+
+@ucURL=http://localhost:8087
+#@ucURL=http://localhost:8187
+
+###
+# @name list tables
+GET {{ucURL}}/api/2.1/unity-catalog/tables?catalog_name=unity&schema_name=default&max_results=10
+
+###
+# @name create table
+# The request body is the flat CreateTable schema - it is not wrapped, unlike CreateFunctionRequest.
+POST {{ucURL}}/api/2.1/unity-catalog/tables
+Content-Type: application/json
+
+{
+  "name": "bookOfKnowledge",
+  "catalog_name" : "unity",
+  "schema_name" : "default",
+  "comment": "Useful data",
+  "table_type": "EXTERNAL",
+  "data_source_format": "DELTA",
+  "columns": [
+    {
+      "name": "id",
+      "type_text": "int",
+      "type_json": "{\"name\":\"id\",\"type\":\"integer\",\"nullable\":false,\"metadata\":{}}",
+      "type_name": "INT",
+      "position": 0,
+      "nullable": false
+    },
+    {
+      "name": "title",
+      "type_text": "string",
+      "type_json": "{\"name\":\"title\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}}",
+      "type_name": "STRING",
+      "position": 1,
+      "nullable": true
+    }
+  ],
+  "storage_location": "/tmp/uc-test/bookOfKnowledge"
+}
+
+###
+# @name get table
+GET {{ucURL}}/api/2.1/unity-catalog/tables/unity.default.bookOfKnowledge
+Content-Type: application/json
+
+
+###
+# @name delete table
+DELETE {{ucURL}}/api/2.1/unity-catalog/tables/unity.default.bookOfKnowledge
+Content-Type: application/json
+

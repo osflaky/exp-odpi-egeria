@@ -1,0 +1,11133 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Copyright Contributors to the ODPi Egeria project. */
+package org.odpi.openmetadata.commonservices.generichandlers;
+
+import org.odpi.openmetadata.commonservices.ffdc.InvalidParameterHandler;
+import org.odpi.openmetadata.commonservices.generichandlers.ffdc.GenericHandlersAuditCode;
+import org.odpi.openmetadata.commonservices.generichandlers.ffdc.GenericHandlersErrorCode;
+import org.odpi.openmetadata.commonservices.repositoryhandler.*;
+import org.odpi.openmetadata.frameworks.auditlog.AuditLog;
+import org.odpi.openmetadata.frameworks.openmetadata.ffdc.InvalidParameterException;
+import org.odpi.openmetadata.frameworks.openmetadata.ffdc.PropertyServerException;
+import org.odpi.openmetadata.frameworks.openmetadata.ffdc.UserNotAuthorizedException;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.AttachedClassification;
+import org.odpi.openmetadata.frameworks.openmetadata.refdata.StatusIdentifier;
+import org.odpi.openmetadata.frameworks.openmetadata.types.OpenMetadataProperty;
+import org.odpi.openmetadata.frameworks.openmetadata.types.OpenMetadataType;
+import org.odpi.openmetadata.metadataobservability.ffdc.OpenMetadataObservabilityAuditCode;
+import org.odpi.openmetadata.metadatasecurity.server.OpenMetadataServerSecurityVerifier;
+import org.odpi.openmetadata.repositoryservices.connectors.stores.metadatacollectionstore.properties.HistorySequencingOrder;
+import org.odpi.openmetadata.repositoryservices.connectors.stores.metadatacollectionstore.properties.MatchCriteria;
+import org.odpi.openmetadata.repositoryservices.connectors.stores.metadatacollectionstore.properties.SequencingOrder;
+import org.odpi.openmetadata.repositoryservices.connectors.stores.metadatacollectionstore.properties.instances.*;
+import org.odpi.openmetadata.repositoryservices.connectors.stores.metadatacollectionstore.properties.search.*;
+import org.odpi.openmetadata.repositoryservices.connectors.stores.metadatacollectionstore.properties.typedefs.*;
+import org.odpi.openmetadata.repositoryservices.connectors.stores.metadatacollectionstore.repositoryconnector.OMRSRepositoryHelper;
+import org.odpi.openmetadata.repositoryservices.ffdc.exception.ClassificationErrorException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.*;
+
+/**
+ * OpenMetadataAPIGenericHandler manages the exchange of Open Metadata API Bean content with the repository services
+ * (via the repository handler).
+ *
+ * @param <B> bean class
+ */
+public class OpenMetadataAPIGenericHandler<B> extends OpenMetadataAPIAnchorHandler<B>
+{
+    /*
+     * Number of relationships retrieved at a time when a delete cascades through an anchored graph.  See the
+     * note beside its use in deleteAnchoredBeanInRepository for why this is not the server's maximum page size.
+     */
+    private static final int cascadeTraversalPageSize = 100;
+
+    private static final Logger log = LoggerFactory.getLogger(OpenMetadataAPIGenericHandler.class);
+
+    /**
+     * Construct the handler information needed to interact with the repository services
+     *
+     * @param converter specific converter for this bean class
+     * @param beanClass name of bean class that is represented by the generic class B
+     * @param serviceName      name of this service
+     * @param serverName       name of the local server
+     * @param invalidParameterHandler handler for managing parameter errors
+     * @param repositoryHandler     manages calls to the repository services
+     * @param repositoryHelper provides utilities for manipulating the repository services objects
+     * @param localServerUserId userId for this server
+     * @param securityVerifier open metadata security services verifier
+     * @param auditLog destination for audit log events.
+     */
+    public OpenMetadataAPIGenericHandler(OpenMetadataAPIGenericConverter<B> converter,
+                                         Class<B>                           beanClass,
+                                         String                             serviceName,
+                                         String                             serverName,
+                                         InvalidParameterHandler            invalidParameterHandler,
+                                         RepositoryHandler                  repositoryHandler,
+                                         OMRSRepositoryHelper               repositoryHelper,
+                                         String                             localServerUserId,
+                                         OpenMetadataServerSecurityVerifier securityVerifier,
+                                         AuditLog                           auditLog)
+    {
+        super(converter, beanClass, serviceName, serverName, invalidParameterHandler, repositoryHandler, repositoryHelper, localServerUserId, securityVerifier, auditLog);
+    }
+
+
+    /**
+     * Validate the anchor guid and add its type and identifier to the builder.
+     *
+     * @param userId calling user
+     * @param anchorGUID unique identifier of the anchor
+     * @param anchorGUIDParameterName parameter used to pass anchorGUID
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param builder builder to receive the anchor (if appropriate).
+     * @param methodName calling method
+     *
+     * @throws InvalidParameterException asset or element not known, null userId or guid
+     * @throws PropertyServerException problem accessing property server
+     * @throws UserNotAuthorizedException security access problem
+     */
+    public void addAnchorGUIDToBuilder(String                        userId,
+                                       String                        anchorGUID,
+                                       String                        anchorGUIDParameterName,
+                                       boolean                       forLineage,
+                                       boolean                       forDuplicateProcessing,
+                                       Date                          effectiveTime,
+                                       OpenMetadataAPIGenericBuilder builder,
+                                       String                        methodName) throws InvalidParameterException,
+                                                                                        UserNotAuthorizedException,
+                                                                                        PropertyServerException
+    {
+        if (anchorGUID != null)
+        {
+            /*
+             * This method will validate the anchorGUID and ensure the usser has the right to add the element
+             * to the anchor.
+             */
+            this.setUpAnchorsClassificationFromAnchor(userId,
+                                                      anchorGUID,
+                                                      anchorGUIDParameterName,
+                                                      null,
+                                                      builder,
+                                                      forLineage,
+                                                      forDuplicateProcessing,
+                                                      effectiveTime,
+                                                      methodName);
+        }
+    }
+
+
+    /**
+     * Return the zone membership of an element.
+     *
+     * @param entity entity
+     * @return list of zones or null
+     */
+    protected List<String> getEntityZones(EntityDetail entity)
+    {
+        final String methodName = "getEntityZones";
+
+        Classification zoneMembershipClassification = this.getExistingClassification(entity, OpenMetadataType.ZONE_MEMBERSHIP_CLASSIFICATION.typeName);
+
+        if (zoneMembershipClassification != null)
+        {
+            return repositoryHelper.getStringArrayProperty(serviceName,
+                                                           OpenMetadataProperty.ZONE_MEMBERSHIP.name,
+                                                           zoneMembershipClassification.getProperties(),
+                                                           methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Check that a retrieved entity is readable.  This is always the first check and includes checks
+     * for private feedback, connection selection, and zones
+     *
+     * @param userId calling user
+     * @param connectToEntity entity retrieved
+     * @param connectToGUIDParameterName parameter used to pass the entity to retrieve.
+     * @param connectToType type of retrieved entity
+     * @param isExplicitGetRequest is this entity requested explicitly
+     * @param methodName calling method
+     * @throws InvalidParameterException one of the parameters is null or invalid.
+     * @throws PropertyServerException a problem adding the asset properties to the repositories.
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    private void validateRetrievedEntityIsVisible(String       userId,
+                                                  EntityDetail connectToEntity,
+                                                  String       connectToGUIDParameterName,
+                                                  String       connectToType,
+                                                  boolean      isExplicitGetRequest,
+                                                  String       methodName) throws InvalidParameterException,
+                                                                                  PropertyServerException,
+                                                                                  UserNotAuthorizedException
+    {
+        /*
+         * Even if the request is an update request, the security module is first called for read - the update
+         * is validated once the properties have been updated.
+         */
+        securityVerifier.validateUserForElementRead(userId,
+                                                    connectToEntity,
+                                                    isExplicitGetRequest,
+                                                    repositoryHelper,
+                                                    serviceName,
+                                                    methodName);
+
+        /*
+         * Log asset retrieval to identify where popular asset are.
+         */
+        if (repositoryHelper.isTypeOf(serviceName, connectToType, OpenMetadataType.ASSET.typeName))
+        {
+            if (isExplicitGetRequest)
+            {
+                auditLog.logMessage(assetActionDescription,
+                                    OpenMetadataObservabilityAuditCode.ASSET_ACTIVITY_READ.getMessageDefinition(userId,
+                                                                                                                connectToEntity.getType().getTypeDefName(),
+                                                                                                                connectToEntity.getGUID(),
+                                                                                                                methodName,
+                                                                                                                serviceName));
+            }
+            else
+            {
+                auditLog.logMessage(assetActionDescription,
+                                    OpenMetadataObservabilityAuditCode.ASSET_ACTIVITY_SEARCH.getMessageDefinition(userId,
+                                                                                                                  connectToEntity.getType().getTypeDefName(),
+                                                                                                                  connectToEntity.getGUID(),
+                                                                                                                  methodName,
+                                                                                                                  serviceName));
+            }
+        }
+    }
+
+
+    /**
+     * Validates whether an operation is valid based on the type of entity it is connecting to, who the user is and whether it is a read or an update.
+     *
+     * @param userId           userId of the user making the request.
+     * @param connectToGUID       unique id for the object to connect the attachment to.
+     * @param connectToGUIDParameterName  name of the parameter that passed the connectTo guid
+     * @param connectToType       type of the connectToElement.
+     * @param isExplicitGetRequest Is this request an explicit get request for the element or a find request.
+     * @param isUpdate         is this an update request?
+     * @param forLineage             the query is to support lineage retrieval
+     * @param forDuplicateProcessing the query is for duplicate processing and so must not deduplicate
+     * @param effectiveTime    the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName       calling method
+     * @return anchor entity or null.
+     * @throws InvalidParameterException one of the parameters is null or invalid.
+     * @throws PropertyServerException a problem adding the asset properties to the repositories.
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public EntityDetail validateEntityAndAnchorForRead(String       userId,
+                                                       String       connectToGUID,
+                                                       String       connectToGUIDParameterName,
+                                                       String       connectToType,
+                                                       boolean      isExplicitGetRequest,
+                                                       boolean      isUpdate,
+                                                       boolean      forLineage,
+                                                       boolean      forDuplicateProcessing,
+                                                       Date         effectiveTime,
+                                                       String       methodName) throws InvalidParameterException,
+                                                                                       PropertyServerException,
+                                                                                       UserNotAuthorizedException
+    {
+        invalidParameterHandler.validateUserId(userId, methodName);
+        invalidParameterHandler.validateGUID(connectToGUID, connectToGUIDParameterName, methodName);
+
+        /*
+         * This returns the entity for the connectTo element and validates it is of the correct type.
+         */
+        EntityDetail  connectToEntity = repositoryHandler.getEntityByGUID(userId,
+                                                                          connectToGUID,
+                                                                          connectToGUIDParameterName,
+                                                                          connectToType,
+                                                                          forLineage,
+                                                                          forDuplicateProcessing,
+                                                                          effectiveTime,
+                                                                          methodName);
+
+        return this.validateEntityAndAnchorForRead(userId,
+                                                   connectToType,
+                                                   connectToEntity,
+                                                   connectToGUIDParameterName,
+                                                   isExplicitGetRequest,
+                                                   isUpdate,
+                                                   forLineage,
+                                                   forDuplicateProcessing,
+                                                   effectiveTime,
+                                                   methodName);
+    }
+
+
+    /**
+     * Validates whether an operation is valid based on the type of entity it is connecting to, who the user is and whether it is a read or an
+     * update.
+     * <br><br>
+     * The first part of this method is looking to see if the connectToEntity is an anchor entity. In which case it calls any specific validation
+     * for that entity and returns the connectToEntity, assuming all is ok - exceptions are thrown if the entity is not valid or the user does not
+     * have access to it.
+     * <br><br>
+     * If the connectToEntity is of a type that has a lifecycle that is linked to the lifecycle of another entity - typically a referenceable -
+     * then that other entity is its anchor (examples are schema elements, comments, connections).  The anchor entity needs to be retrieved and
+     * validated.
+     * <br><br>
+     * Some anchor entities have specific validation to perform.
+     *
+     * @param userId           userId of the user making the request.
+     * @param connectToType    name of type of connectToEntity
+     * @param connectToEntity  entity retrieved from the repository
+     * @param connectToGUIDParameterName  name of the parameter that passed the connectTo guid
+     * @param isExplicitGetRequest Is this request an explicit get request for the asset or a find request.
+     * @param isUpdate         is this an update request?
+     * @param forLineage             the query is to support lineage retrieval
+     * @param forDuplicateProcessing the query is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName       calling method
+     *
+     * @return anchor entity or null if this entity is an anchor or does not have an anchor.
+     *
+     * @throws InvalidParameterException one of the parameters is null or invalid.
+     * @throws PropertyServerException a problem accessing the properties in the repositories.
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public EntityDetail validateEntityAndAnchorForRead(String        userId,
+                                                       String        connectToType,
+                                                       EntityDetail  connectToEntity,
+                                                       String        connectToGUIDParameterName,
+                                                       boolean       isExplicitGetRequest,
+                                                       boolean       isUpdate,
+                                                       boolean       forLineage,
+                                                       boolean       forDuplicateProcessing,
+                                                       Date          effectiveTime,
+                                                       String        methodName) throws InvalidParameterException,
+                                                                                        PropertyServerException,
+                                                                                        UserNotAuthorizedException
+    {
+        invalidParameterHandler.validateObject(connectToEntity, connectToGUIDParameterName, methodName);
+
+        /*
+         * This first processing looks at the retrieved entity itself to ensure it is visible.
+         */
+        validateRetrievedEntityIsVisible(userId,
+                                         connectToEntity,
+                                         connectToGUIDParameterName,
+                                         connectToType,
+                                         isExplicitGetRequest,
+                                         methodName);
+
+        /*
+         * If an entity has an anchor, the unique identifier of the anchor should be in the Anchors classifications.
+         * The exception occurs where the entity is not being managed by this handler, or something equivalent that
+         * maintains the Anchors classification.  Therefore, if the Anchors classification is missing, a new one is
+         * derived and added to the connectToEntity.
+         */
+        AnchorIdentifiers anchorIdentifiers = this.getAnchorGUIDForEntity(connectToEntity,
+                                                                          connectToGUIDParameterName,
+                                                                          forLineage,
+                                                                          forDuplicateProcessing,
+                                                                          effectiveTime,
+                                                                          methodName);
+
+
+        /*
+         * If an anchor GUID has been found then validate it by retrieving the identified entity.
+         * Note - anchorIdentifiers may or may not be null if the connectToEntity is actually an anchor.
+         */
+        return validateAnchorGUID(userId,
+                                  connectToEntity,
+                                  anchorIdentifiers,
+                                  isExplicitGetRequest,
+                                  isUpdate,
+                                  forLineage,
+                                  forDuplicateProcessing,
+                                  effectiveTime,
+                                  methodName);
+    }
+
+
+    /**
+     * Validates a list of entities retrieved from the repository as a result of a query.
+     * It validates supported zones read security and the anchor GUID.  It does not handle Mementos, effective dates
+     * and element status, since they are the responsibility of the repository handler.
+     *
+     * @param userId           userId of the user making the request.
+     * @param retrievedEntities  entities retrieved from the repository
+     * @param forLineage             the query is to support lineage retrieval
+     * @param forDuplicateProcessing the query is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName       calling method
+     *
+     * @return list of validated entities
+     */
+    public List<EntityDetail> validateEntitiesAndAnchorsForRead(String             userId,
+                                                                List<EntityDetail> retrievedEntities,
+                                                                boolean            forLineage,
+                                                                boolean            forDuplicateProcessing,
+                                                                Date               effectiveTime,
+                                                                String             methodName)
+    {
+        if (retrievedEntities != null)
+        {
+            final String connectToGUIDParameterName = "retrievedEntity.getGUID";
+
+            // LinkedHashMap (not HashMap) so that the "for (EntityDetail connectToEntity : visibleEntities.values())"
+            // loop below - which builds the entities list this method returns - preserves the order retrievedEntities
+            // arrived in, rather than a HashMap's unspecified iteration order silently discarding whatever
+            // sequencing (GUID, creation date, property value, ...) the originating query established.
+            Map<String, EntityDetail>      visibleEntities = new LinkedHashMap<>();
+
+            List<String>                   extractedAnchorGUIDs = new ArrayList<>();
+            Map<String, AnchorIdentifiers> extractedAnchors = new HashMap<>();
+
+            List<PropertyCondition> anchorRetrievalQuery = new ArrayList<>();
+
+            /*
+             * Identify the anchors that need to be retrieved.  The aim is to build a query that retrieves all of the
+             * required Anchor entities in a single retrieve to minimize the calls to the repositories.
+             */
+            for (EntityDetail connectToEntity : retrievedEntities)
+            {
+                if (connectToEntity != null)
+                {
+                    try
+                    {
+                        /*
+                         * This first processing looks at the retrieved entity itself to ensure it is visible.
+                         */
+                        validateRetrievedEntityIsVisible(userId,
+                                                         connectToEntity,
+                                                         connectToGUIDParameterName,
+                                                         connectToEntity.getType().getTypeDefName(),
+                                                         false,
+                                                         methodName);
+
+                        visibleEntities.put(connectToEntity.getGUID(), connectToEntity);
+
+                        /*
+                         * If an entity has an anchor, the unique identifier of the anchor should be in the Anchors classifications.
+                         * The exception occurs where the entity is not being managed by this handler, or something equivalent that
+                         * maintains the Anchors classification.  Therefore, if the Anchors classification is missing, a new one is
+                         * derived and added to the connectToEntity.
+                         */
+                        AnchorIdentifiers anchorIdentifiers = this.getAnchorGUIDForEntity(connectToEntity,
+                                                                                          connectToGUIDParameterName,
+                                                                                          forLineage,
+                                                                                          forDuplicateProcessing,
+                                                                                          effectiveTime,
+                                                                                          methodName);
+
+                        if (anchorIdentifiers != null)
+                        {
+                            extractedAnchors.put(connectToEntity.getGUID(), anchorIdentifiers);
+
+                            if (anchorIdentifiers.anchorGUID != null)
+                            {
+                                if (! extractedAnchorGUIDs.contains(anchorIdentifiers.anchorGUID))
+                                {
+                                    /*
+                                     * Need to retrieve the anchor entity
+                                     */
+                                    PropertyCondition propertyCondition = new PropertyCondition();
+
+                                    propertyCondition.setProperty(OpenMetadataProperty.GUID.name);
+                                    propertyCondition.setOperator(PropertyComparisonOperator.EQ);
+
+                                    PrimitivePropertyValue primitivePropertyValue = new PrimitivePropertyValue();
+
+                                    primitivePropertyValue.setPrimitiveDefCategory(PrimitiveDefCategory.OM_PRIMITIVE_TYPE_STRING);
+                                    primitivePropertyValue.setTypeGUID(PrimitiveDefCategory.OM_PRIMITIVE_TYPE_STRING.getGUID());
+                                    primitivePropertyValue.setTypeName(PrimitiveDefCategory.OM_PRIMITIVE_TYPE_STRING.getName());
+                                    primitivePropertyValue.setPrimitiveValue(anchorIdentifiers.anchorGUID);
+
+                                    propertyCondition.setValue(primitivePropertyValue);
+
+                                    anchorRetrievalQuery.add(propertyCondition);
+
+                                    extractedAnchorGUIDs.add(anchorIdentifiers.anchorGUID);
+                                }
+                            }
+                            else
+                            {
+                                if (! extractedAnchorGUIDs.contains(connectToEntity.getGUID()))
+                                {
+                                    extractedAnchorGUIDs.add(connectToEntity.getGUID());
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception unauthorizedEntity)
+                    {
+                        // ignore this entity since the user is not allowed to see it
+                    }
+                }
+            }
+
+            /*
+             * Retrieve the anchor entities
+             */
+            Map<String, EntityDetail> retrievedAnchors = this.getEntityList(userId,
+                                                                            OpenMetadataType.OPEN_METADATA_ROOT.typeGUID,
+                                                                            anchorRetrievalQuery,
+                                                                            forLineage,
+                                                                            forDuplicateProcessing,
+                                                                            effectiveTime,
+                                                                            methodName);
+
+            /*
+             * Validate the anchors.
+             */
+            List<String>       validatedAnchors  = new ArrayList<>();
+            List<EntityDetail> validatedEntities = new ArrayList<>();
+
+            for (EntityDetail connectToEntity : visibleEntities.values())
+            {
+                if (connectToEntity != null)
+                {
+                    try
+                    {
+                        /*
+                         * If an entity has an anchor, the unique identifier of the anchor should be in the Anchors classifications.
+                         * The exception occurs where the entity is not being managed by this handler, or something equivalent that
+                         * maintains the Anchors classification.  Therefore, if the Anchors classification is missing, a new one is
+                         * derived and added to the connectToEntity.
+                         */
+                        AnchorIdentifiers anchorIdentifiers = extractedAnchors.get(connectToEntity.getGUID());
+
+                        if (anchorIdentifiers != null)
+                        {
+                            if (anchorIdentifiers.anchorGUID != null)
+                            {
+                                EntityDetail anchorEntity = retrievedAnchors.get(anchorIdentifiers.anchorGUID);
+
+                                if (anchorEntity == null)
+                                {
+                                    /*
+                                     * Unexpectedly the Anchor GUID was not already retrieved.
+                                     */
+                                    validateAnchorGUID(userId,
+                                                       connectToEntity,
+                                                       anchorIdentifiers,
+                                                       false,
+                                                       false,
+                                                       forLineage,
+                                                       forDuplicateProcessing,
+                                                       effectiveTime,
+                                                       methodName);
+
+                                    validatedAnchors.add(anchorIdentifiers.anchorGUID);
+                                }
+                                else if (! validatedAnchors.contains(anchorEntity.getGUID()))
+                                {
+                                    validateAnchorEntity(userId,
+                                                         connectToEntity,
+                                                         anchorEntity,
+                                                         false,
+                                                         false,
+                                                         methodName);
+
+                                    validatedAnchors.add(anchorEntity.getGUID());
+                                }
+                            }
+                        }
+
+                        validatedEntities.add(connectToEntity);
+                    }
+                    catch (Exception unauthorizedEntity)
+                    {
+                        // ignore this entity since the user is not allowed to see it
+                    }
+                }
+            }
+
+            return validatedEntities;
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Check that the anchor attached to an entity allows the entity to be either returned to the caller or acted upon.
+     *
+     * @param userId userId of the user making the request.
+     * @param connectToEntity entity retrieved from the repository
+     * @param anchorIdentifiers retrieved anchors information
+     * @param isExplicitGetRequest Is this request an explicit get request for the asset or a find request.
+     * @param isUpdate         is this an update request?
+     * @param forLineage             the query is to support lineage retrieval
+     * @param forDuplicateProcessing the query is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName       calling method
+     * @return anchor entity (this may be the connectToEntity if it is its own anchor or null if the element is unanchored)
+     * @throws InvalidParameterException one of the parameters is null or invalid.
+     * @throws PropertyServerException a problem accessing the properties in the repositories.
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public EntityDetail validateAnchorGUID(String            userId,
+                                           EntityDetail      connectToEntity,
+                                           AnchorIdentifiers anchorIdentifiers,
+                                           boolean           isExplicitGetRequest,
+                                           boolean           isUpdate,
+                                           boolean           forLineage,
+                                           boolean           forDuplicateProcessing,
+                                           Date              effectiveTime,
+                                           String            methodName) throws InvalidParameterException,
+                                                                                PropertyServerException,
+                                                                                UserNotAuthorizedException
+    {
+        if (anchorIdentifiers == null)
+        {
+            /*
+             * The element is unanchored.
+             */
+            return null;
+        }
+
+        /*
+         * The element has an anchor.  If anchorGUID is null it means it is its own anchor.
+         */
+        if (anchorIdentifiers.anchorGUID != null)
+        {
+            final String anchorGUIDParameterName = "anchorIdentifiers";
+
+            if (! anchorIdentifiers.anchorGUID.equals(connectToEntity.getGUID()))
+            {
+                EntityDetail anchorEntity = repositoryHandler.getEntityByGUID(userId,
+                                                                              anchorIdentifiers.anchorGUID,
+                                                                              anchorGUIDParameterName,
+                                                                              OpenMetadataType.REFERENCEABLE.typeName,
+                                                                              forLineage,
+                                                                              forDuplicateProcessing,
+                                                                              effectiveTime,
+                                                                              methodName);
+
+                /*
+                 * Perform any special processing on the anchor entity
+                 */
+                validateAnchorEntity(userId,
+                                     connectToEntity,
+                                     anchorEntity,
+                                     isExplicitGetRequest,
+                                     isUpdate,
+                                     methodName);
+
+                return anchorEntity;
+            }
+            else
+            {
+                return connectToEntity;
+            }
+        }
+        else
+        {
+            return connectToEntity;
+        }
+    }
+
+
+    /**
+     * Check that the anchor attached to an entity allows the entity to be either returned to the caller or acted upon.
+     *
+     * @param userId userId of the user making the request.
+     * @param connectToEntity entity retrieved from the repository
+     * @param anchorEntity retrieved anchors entity
+     * @param isExplicitGetRequest Is this request an explicit get request for the asset or a find request.
+     * @param isUpdate         is this an update request?
+     * @param methodName       calling method
+     * @throws InvalidParameterException one of the parameters is null or invalid.
+     * @throws PropertyServerException a problem accessing the properties in the repositories.
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void validateAnchorEntity(String       userId,
+                                     EntityDetail connectToEntity,
+                                     EntityDetail anchorEntity,
+                                     boolean      isExplicitGetRequest,
+                                     boolean      isUpdate,
+                                     String       methodName) throws InvalidParameterException,
+                                                                     PropertyServerException,
+                                                                     UserNotAuthorizedException
+    {
+        final String anchorGUIDParameterName = "anchorIdentifiers";
+
+        /*
+         * Perform any special processing on the anchor entity
+         */
+        if (anchorEntity != null)
+        {
+            InstanceType anchorEntityType = anchorEntity.getType();
+
+            if (anchorEntityType != null)
+            {
+                String connectToType = connectToEntity.getType().getTypeDefName();
+                boolean isFeedbackEntity =
+                        (repositoryHelper.isTypeOf(serviceName, connectToType, OpenMetadataType.INFORMAL_TAG.typeName)) ||
+                                (repositoryHelper.isTypeOf(serviceName, connectToType, OpenMetadataType.COMMENT.typeName)) ||
+                                (repositoryHelper.isTypeOf(serviceName, connectToType, OpenMetadataType.RATING.typeName)) ||
+                                (repositoryHelper.isTypeOf(serviceName, connectToType, OpenMetadataType.LIKE.typeName));
+
+
+                if (isFeedbackEntity)
+                {
+                    securityVerifier.validateUserForAnchorAddFeedback(userId,
+                                                                      anchorEntity,
+                                                                      connectToEntity,
+                                                                      repositoryHelper,
+                                                                      serviceName,
+                                                                      methodName);
+                }
+                else if (isUpdate)
+                {
+                    securityVerifier.validateUserForAnchorMemberUpdate(userId,
+                                                                       anchorEntity,
+                                                                       repositoryHelper,
+                                                                       serviceName,
+                                                                       methodName);
+                }
+                else
+                {
+                    securityVerifier.validateUserForAnchorMemberRead(userId,
+                                                                     anchorEntity,
+                                                                     connectToEntity,
+                                                                     isExplicitGetRequest,
+                                                                     repositoryHelper,
+                                                                     serviceName,
+                                                                     methodName);
+                }
+
+                if (repositoryHelper.isTypeOf(serviceName, anchorEntityType.getTypeDefName(), OpenMetadataType.ASSET.typeName))
+                {
+                    if (isUpdate)
+                    {
+                        if (isFeedbackEntity)
+                        {
+                            auditLog.logMessage(assetActionDescription,
+                                                OpenMetadataObservabilityAuditCode.ASSET_ACTIVITY_UPDATE_FEEDBACK.getMessageDefinition(userId,
+                                                                                                                                       anchorEntityType.getTypeDefName(),
+                                                                                                                                       anchorEntity.getGUID(),
+                                                                                                                                       methodName,
+                                                                                                                                       serviceName));
+                        }
+                        else
+                        {
+                            auditLog.logMessage(assetActionDescription,
+                                                OpenMetadataObservabilityAuditCode.ASSET_ACTIVITY_UPDATE_ATTACHMENT.getMessageDefinition(userId,
+                                                                                                                                         anchorEntityType.getTypeDefName(),
+                                                                                                                                         anchorEntity.getGUID(),
+                                                                                                                                         methodName,
+                                                                                                                                         serviceName));
+                        }
+                    }
+                    else if (isExplicitGetRequest)
+                    {
+                        auditLog.logMessage(assetActionDescription,
+                                            OpenMetadataObservabilityAuditCode.ASSET_ACTIVITY_READ_ATTACHMENT.getMessageDefinition(userId,
+                                                                                                                                   anchorEntityType.getTypeDefName(),
+                                                                                                                                   anchorEntity.getGUID(),
+                                                                                                                                   methodName,
+                                                                                                                                   serviceName));
+                    }
+                    else
+                    {
+                        auditLog.logMessage(assetActionDescription,
+                                            OpenMetadataObservabilityAuditCode.ASSET_ACTIVITY_SEARCH_ATTACHMENT.getMessageDefinition(userId,
+                                                                                                                                     anchorEntityType.getTypeDefName(),
+                                                                                                                                     anchorEntity.getGUID(),
+                                                                                                                                     methodName,
+                                                                                                                                     serviceName));
+                    }
+                }
+            }
+        }
+    }
+
+
+    /**
+     * Add the requested classification to the matching entity in the repository.
+     *
+     * @param userId calling user
+     * @param externalSourceGUID guid of the software capability entity that represented the external source - null for local
+     * @param externalSourceName name of the software capability entity that represented the external source
+     * @param beanGUID unique identifier of the entity in the repositories
+     * @param beanGUIDParameterName parameter name that passed the beanGUID
+     * @param beanGUIDTypeName type of bean
+     * @param classificationTypeGUID unique identifier of classification type
+     * @param classificationTypeName unique name of classification type
+     * @param classificationProperties properties to save in the classification
+     * @param isMergeUpdate should the properties be merged with the existing properties or completely over-write them
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     * @throws InvalidParameterException the classification name is null
+     * @throws PropertyServerException a problem with the repositories
+     * @throws UserNotAuthorizedException the user is not allowed to perform this action
+     */
+    public void setClassificationInRepository(String             userId,
+                                              String             externalSourceGUID,
+                                              String             externalSourceName,
+                                              String             beanGUID,
+                                              String             beanGUIDParameterName,
+                                              String             beanGUIDTypeName,
+                                              String             classificationTypeGUID,
+                                              String             classificationTypeName,
+                                              InstanceProperties classificationProperties,
+                                              boolean            isMergeUpdate,
+                                              boolean            forLineage,
+                                              boolean            forDuplicateProcessing,
+                                              Date               effectiveTime,
+                                              String             methodName) throws InvalidParameterException,
+                                                                                    PropertyServerException,
+                                                                                    UserNotAuthorizedException
+    {
+        invalidParameterHandler.validateUserId(userId, methodName);
+        invalidParameterHandler.validateGUID(beanGUID, beanGUIDParameterName, methodName);
+
+        EntityDetail beanEntity = getEntityFromRepository(userId,
+                                                          beanGUID,
+                                                          beanGUIDParameterName,
+                                                          beanGUIDTypeName,
+                                                          null,
+                                                          null,
+                                                          forLineage,
+                                                          forDuplicateProcessing,
+                                                          effectiveTime,
+                                                          methodName);
+
+        setClassificationInRepository(userId,
+                                      externalSourceGUID,
+                                      externalSourceName,
+                                      beanEntity,
+                                      beanGUIDParameterName,
+                                      beanGUIDTypeName,
+                                      classificationTypeGUID,
+                                      classificationTypeName,
+                                      classificationProperties,
+                                      isMergeUpdate,
+                                      forLineage,
+                                      forDuplicateProcessing,
+                                      effectiveTime,
+                                      methodName);
+    }
+
+
+    /**
+     * Add the requested classification to the matching entity in the repository.
+     *
+     * @param userId calling user
+     * @param externalSourceGUID guid of the software capability entity that represented the external source - null for local
+     * @param externalSourceName name of the software capability entity that represented the external source
+     * @param beanEntity entity that the classification is for
+     * @param beanGUIDParameterName parameter name that passed the beanGUID
+     * @param beanGUIDTypeName type of bean
+     * @param classificationTypeGUID unique identifier of classification type
+     * @param classificationTypeName unique name of classification type
+     * @param classificationProperties properties to save in the classification
+     * @param isMergeUpdate should the properties be merged with the existing properties or completely over-write them
+     * @param forDuplicateProcessing the query is for duplicate processing and so must not deduplicate
+     * @param forLineage the query is for lineage so ignore Memento classifications
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     * @throws InvalidParameterException the classification name is null
+     * @throws PropertyServerException a problem with the repositories
+     * @throws UserNotAuthorizedException the user is not allowed to perform this action
+     */
+    public void setClassificationInRepository(String             userId,
+                                              String             externalSourceGUID,
+                                              String             externalSourceName,
+                                              EntityDetail       beanEntity,
+                                              String             beanGUIDParameterName,
+                                              String             beanGUIDTypeName,
+                                              String             classificationTypeGUID,
+                                              String             classificationTypeName,
+                                              InstanceProperties classificationProperties,
+                                              boolean            isMergeUpdate,
+                                              boolean            forLineage,
+                                              boolean            forDuplicateProcessing,
+                                              Date               effectiveTime,
+                                              String             methodName) throws InvalidParameterException,
+                                                                                    PropertyServerException,
+                                                                                    UserNotAuthorizedException
+    {
+        if (beanEntity != null)
+        {
+            EntityDetail anchorEntity = validateEntityAndAnchorForRead(userId,
+                                                                       beanGUIDTypeName,
+                                                                       beanEntity,
+                                                                       beanGUIDParameterName,
+                                                                       true,
+                                                                       true,
+                                                                       forLineage,
+                                                                       forDuplicateProcessing,
+                                                                       effectiveTime,
+                                                                       methodName);
+
+            /*
+             * Check that the user is able to classify the element.
+             */
+            if (anchorEntity != null)
+            {
+                securityVerifier.validateUserForAnchorClassify(userId,
+                                                               anchorEntity,
+                                                               classificationTypeName,
+                                                               classificationProperties,
+                                                               repositoryHelper,
+                                                               serviceName,
+                                                               methodName);
+            }
+            else
+            {
+                securityVerifier.validateUserForElementClassify(userId,
+                                                                beanEntity,
+                                                                classificationTypeName,
+                                                                classificationProperties,
+                                                                repositoryHelper,
+                                                                serviceName,
+                                                                methodName);
+            }
+
+            Classification existingClassification = this.getExistingClassification(beanEntity, classificationTypeName);
+
+            /*
+             * Classify the asset
+             */
+            if (existingClassification == null)
+            {
+                repositoryHandler.classifyEntity(userId,
+                                                 externalSourceGUID,
+                                                 externalSourceName,
+                                                 beanEntity.getGUID(),
+                                                 beanEntity,
+                                                 beanGUIDParameterName,
+                                                 beanGUIDTypeName,
+                                                 classificationTypeGUID,
+                                                 classificationTypeName,
+                                                 ClassificationOrigin.ASSIGNED,
+                                                 null,
+                                                 classificationProperties,
+                                                 forLineage,
+                                                 forDuplicateProcessing,
+                                                 effectiveTime,
+                                                 methodName);
+            }
+            else
+            {
+                InstanceProperties newProperties = setUpNewProperties(isMergeUpdate,
+                                                                      classificationProperties,
+                                                                      existingClassification.getProperties());
+
+                /*
+                 * If there are no properties to change then nothing more to do
+                 */
+                if ((newProperties == null) && (existingClassification.getProperties() == null))
+                {
+                    auditLog.logMessage(methodName,
+                                        GenericHandlersAuditCode.IGNORING_UNNECESSARY_CLASSIFICATION_UPDATE.getMessageDefinition(classificationTypeName,
+                                                                                                                         beanEntity.getGUID(),
+                                                                                                                         methodName,
+                                                                                                                         userId));
+                    return;
+                }
+
+                /*
+                 * If nothing has changed in the properties then nothing to do
+                 */
+                if ((newProperties != null) && (newProperties.equals(existingClassification.getProperties())))
+                {
+                    auditLog.logMessage(methodName,
+                                        GenericHandlersAuditCode.IGNORING_UNNECESSARY_CLASSIFICATION_UPDATE.getMessageDefinition(classificationTypeName,
+                                                                                                                                 beanEntity.getGUID(),
+                                                                                                                                 methodName,
+                                                                                                                                 userId));
+                    return;
+                }
+
+                repositoryHandler.reclassifyEntity(userId,
+                                                   externalSourceGUID,
+                                                   externalSourceName,
+                                                   beanEntity.getGUID(),
+                                                   beanGUIDParameterName,
+                                                   beanGUIDTypeName,
+                                                   classificationTypeGUID,
+                                                   classificationTypeName,
+                                                   existingClassification,
+                                                   newProperties,
+                                                   forLineage,
+                                                   forDuplicateProcessing,
+                                                   effectiveTime,
+                                                   methodName);
+            }
+        }
+    }
+
+
+    /**
+     * Locate the requested classification in the supplied entity.
+     *
+     * @param beanEntity entity potentially containing the classification
+     * @param classificationTypeName unique name of classification type
+     */
+    Classification getExistingClassification(EntitySummary beanEntity,
+                                             String        classificationTypeName)
+    {
+        Classification  existingClassification  = null;
+
+        if (beanEntity != null)
+        {
+            /*
+             * Look to see if there is an existing classification
+             */
+            List<Classification> existingClassifications = beanEntity.getClassifications();
+            if (existingClassifications != null)
+            {
+                for (Classification classification : existingClassifications)
+                {
+                    if (classification != null)
+                    {
+                        if (classificationTypeName.equals(classification.getName()))
+                        {
+                            existingClassification = classification;
+                        }
+                    }
+                }
+            }
+        }
+
+        return existingClassification;
+    }
+
+
+    /**
+     * Remove the requested classification from the matching entity in the repository.
+     *
+     * @param userId calling user
+     * @param externalSourceGUID guid of the software capability entity that represented the external source - null for local
+     * @param externalSourceName name of the software capability entity that represented the external source
+     * @param beanGUID unique identifier of the entity in the repositories
+     * @param beanGUIDParameterName parameter name that passed the beanGUID
+     * @param beanGUIDTypeName type of bean
+     * @param classificationTypeGUID unique identifier of classification type
+     * @param classificationTypeName unique name of classification type
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     * @throws InvalidParameterException the classification name is null
+     * @throws PropertyServerException a problem with the repositories
+     * @throws UserNotAuthorizedException the user is not allowed to update the security tags
+     */
+    public void removeClassificationFromRepository(String       userId,
+                                                   String       externalSourceGUID,
+                                                   String       externalSourceName,
+                                                   String       beanGUID,
+                                                   String       beanGUIDParameterName,
+                                                   String       beanGUIDTypeName,
+                                                   String       classificationTypeGUID,
+                                                   String       classificationTypeName,
+                                                   boolean      forLineage,
+                                                   boolean      forDuplicateProcessing,
+                                                   Date         effectiveTime,
+                                                   String       methodName) throws InvalidParameterException,
+                                                                                   PropertyServerException,
+                                                                                   UserNotAuthorizedException
+    {
+        invalidParameterHandler.validateUserId(userId, methodName);
+        invalidParameterHandler.validateGUID(beanGUID, beanGUIDParameterName, methodName);
+
+        EntityDetail  beanEntity = getEntityFromRepository(userId,
+                                                           beanGUID,
+                                                           beanGUIDParameterName,
+                                                           beanGUIDTypeName,
+                                                           null,
+                                                           null,
+                                                           forLineage,
+                                                           forDuplicateProcessing,
+                                                           effectiveTime,
+                                                           methodName);
+
+        if (beanEntity != null)
+        {
+            EntityDetail  anchorEntity = validateEntityAndAnchorForRead(userId,
+                                                                        beanGUIDTypeName,
+                                                                        beanEntity,
+                                                                        beanGUIDParameterName,
+                                                                        true,
+                                                                        true,
+                                                                        forLineage,
+                                                                        forDuplicateProcessing,
+                                                                        effectiveTime,
+                                                                        methodName);
+
+            if (anchorEntity != null)
+            {
+                securityVerifier.validateUserForAnchorDeclassify(userId,
+                                                                 anchorEntity,
+                                                                 classificationTypeName,
+                                                                 repositoryHelper,
+                                                                 serviceName,
+                                                                 methodName);
+            }
+            else
+            {
+                securityVerifier.validateUserForElementDeclassify(userId,
+                                                                  beanEntity,
+                                                                  classificationTypeName,
+                                                                  repositoryHelper,
+                                                                  serviceName,
+                                                                  methodName);
+            }
+
+            /*
+             * Look to see if there is an existing classification
+             */
+            InstanceAuditHeader existingClassification = this.getExistingClassification(beanEntity, classificationTypeName);
+
+            if (existingClassification != null)
+            {
+                repositoryHandler.declassifyEntity(userId,
+                                                   externalSourceGUID,
+                                                   externalSourceName,
+                                                   beanEntity.getGUID(),
+                                                   beanEntity,
+                                                   beanGUIDParameterName,
+                                                   beanGUIDTypeName,
+                                                   classificationTypeGUID,
+                                                   classificationTypeName,
+                                                   existingClassification,
+                                                   forLineage,
+                                                   forDuplicateProcessing,
+                                                   effectiveTime,
+                                                   methodName);
+            }
+        }
+    }
+
+
+    /**
+     * Update the effectivity dates of a specific classification attached to a metadata element.
+     * The effectivity dates control the visibility of the classification through specific APIs.
+     *
+     * @param userId calling user
+     * @param externalSourceGUID guid of the software capability entity that represented the external source - null for local
+     * @param externalSourceName name of the software capability entity that represented the external source
+     * @param beanGUID unique identifier of the entity in the repositories
+     * @param beanGUIDParameterName parameter name that passed the beanGUID
+     * @param beanGUIDTypeName type of bean
+     * @param classificationTypeGUID unique identifier of classification type
+     * @param classificationTypeName unique name of classification type
+     * @param forLineage the query is to support lineage retrieval
+     * @param forDuplicateProcessing the query is for duplicate processing and so must not deduplicate
+     * @param effectiveFrom the date when this element is active - null for active now
+     * @param effectiveTo the date when this element becomes inactive - null for active until deleted
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     *
+     * @throws InvalidParameterException either the unique identifier or the status are invalid in some way
+     * @throws UserNotAuthorizedException the user is not allowed to perform this action
+     * @throws PropertyServerException a problem with the metadata store
+     */
+    public void updateClassificationEffectivityDates(String       userId,
+                                                     String       externalSourceGUID,
+                                                     String       externalSourceName,
+                                                     String       beanGUID,
+                                                     String       beanGUIDParameterName,
+                                                     String       beanGUIDTypeName,
+                                                     String       classificationTypeGUID,
+                                                     String       classificationTypeName,
+                                                     boolean      forLineage,
+                                                     boolean      forDuplicateProcessing,
+                                                     Date         effectiveFrom,
+                                                     Date         effectiveTo,
+                                                     Date         effectiveTime,
+                                                     String       methodName) throws InvalidParameterException,
+                                                                                     UserNotAuthorizedException,
+                                                                                     PropertyServerException
+    {
+        invalidParameterHandler.validateUserId(userId, methodName);
+        invalidParameterHandler.validateGUID(beanGUID, beanGUIDParameterName, methodName);
+
+        EntityDetail  beanEntity = getEntityFromRepository(userId,
+                                                           beanGUID,
+                                                           beanGUIDParameterName,
+                                                           beanGUIDTypeName,
+                                                           null,
+                                                           null,
+                                                           forLineage,
+                                                           forDuplicateProcessing,
+                                                           effectiveTime,
+                                                           methodName);
+
+        EntityDetail  anchorEntity = validateEntityAndAnchorForRead(userId,
+                                                                    beanGUIDTypeName,
+                                                                    beanEntity,
+                                                                    beanGUIDParameterName,
+                                                                    true,
+                                                                    true,
+                                                                    forLineage,
+                                                                    forDuplicateProcessing,
+                                                                    effectiveTime,
+                                                                    methodName);
+
+        if (beanEntity != null)
+        {
+            Classification existingClassification = this.getExistingClassification(beanEntity, classificationTypeName);
+
+            invalidParameterHandler.validateObject(existingClassification, classificationTypeName, methodName);
+
+            InstanceProperties newProperties = existingClassification.getProperties();
+
+            if (newProperties == null)
+            {
+                newProperties = new InstanceProperties();
+            }
+
+            newProperties = this.setUpEffectiveDates(newProperties, effectiveFrom, effectiveTo);
+
+            /*
+             * Check that the user is able to change the classification attached to the element.
+             */
+            if (anchorEntity != null)
+            {
+                securityVerifier.validateUserForAnchorClassify(userId,
+                                                               anchorEntity,
+                                                               classificationTypeName,
+                                                               newProperties,
+                                                               repositoryHelper,
+                                                               serviceName,
+                                                               methodName);
+            }
+            else
+            {
+                securityVerifier.validateUserForElementClassify(userId,
+                                                                beanEntity,
+                                                                classificationTypeName,
+                                                                newProperties,
+                                                                repositoryHelper,
+                                                                serviceName,
+                                                                methodName);
+            }
+
+            repositoryHandler.reclassifyEntity(userId,
+                                               externalSourceGUID,
+                                               externalSourceName,
+                                               beanEntity.getGUID(),
+                                               beanGUIDParameterName,
+                                               beanGUIDTypeName,
+                                               classificationTypeGUID,
+                                               classificationTypeName,
+                                               existingClassification,
+                                               newProperties,
+                                               forLineage,
+                                               forDuplicateProcessing,
+                                               effectiveTime,
+                                               methodName);
+        }
+    }
+
+
+    /**
+     * Update the effectivity dates of a specific entity .
+     * The effectivity dates control the visibility of the entity through specific APIs.
+     *
+     * @param userId calling user
+     * @param externalSourceGUID guid of the software capability entity that represented the external source - null for local
+     * @param externalSourceName name of the software capability entity that represented the external source
+     * @param beanGUID unique identifier of the entity in the repositories
+     * @param beanGUIDParameterName parameter name that passed the beanGUID
+     * @param beanGUIDTypeGUID type of bean
+     * @param beanGUIDTypeName type of bean
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param effectiveFrom the date when this element is active - null for active now
+     * @param effectiveTo the date when this element becomes inactive - null for active until deleted
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     *
+     * @throws InvalidParameterException either the unique identifier or the status are invalid in some way
+     * @throws UserNotAuthorizedException the user is not allowed to perform this action
+     * @throws PropertyServerException a problem with the metadata store
+     */
+    public void updateBeanEffectivityDates(String       userId,
+                                           String       externalSourceGUID,
+                                           String       externalSourceName,
+                                           String       beanGUID,
+                                           String       beanGUIDParameterName,
+                                           String       beanGUIDTypeGUID,
+                                           String       beanGUIDTypeName,
+                                           boolean      forLineage,
+                                           boolean      forDuplicateProcessing,
+                                           Date         effectiveFrom,
+                                           Date         effectiveTo,
+                                           Date         effectiveTime,
+                                           String       methodName) throws InvalidParameterException,
+                                                                           UserNotAuthorizedException,
+                                                                           PropertyServerException
+    {
+        invalidParameterHandler.validateUserId(userId, methodName);
+        invalidParameterHandler.validateGUID(beanGUID, beanGUIDParameterName, methodName);
+
+        EntityDetail  beanEntity = getEntityFromRepository(userId,
+                                                           beanGUID,
+                                                           beanGUIDParameterName,
+                                                           beanGUIDTypeName,
+                                                           null,
+                                                           null,
+                                                           forLineage,
+                                                           forDuplicateProcessing,
+                                                           effectiveTime,
+                                                           methodName);
+
+        EntityDetail  anchorEntity = validateEntityAndAnchorForRead(userId,
+                                                                    beanGUIDTypeName,
+                                                                    beanEntity,
+                                                                    beanGUIDParameterName,
+                                                                    true,
+                                                                    true,
+                                                                    forLineage,
+                                                                    forDuplicateProcessing,
+                                                                    effectiveTime,
+                                                                    methodName);
+
+        if (beanEntity != null)
+        {
+            InstanceProperties newProperties = this.setUpEffectiveDates(null, effectiveFrom, effectiveTo);
+
+            /*
+             * Check that the user is able to classify the element.
+             */
+            if (anchorEntity != null)
+            {
+                securityVerifier.validateUserForAnchorMemberUpdate(userId,
+                                                                   anchorEntity,
+                                                                   repositoryHelper,
+                                                                   serviceName,
+                                                                   methodName);
+            }
+            else
+            {
+                securityVerifier.validateUserForElementDetailUpdate(userId,
+                                                                    beanEntity,
+                                                                    newProperties,
+                                                                    repositoryHelper,
+                                                                    serviceName,
+                                                                    methodName);
+            }
+
+            repositoryHandler.updateEntityProperties(userId,
+                                                     externalSourceGUID,
+                                                     externalSourceName,
+                                                     beanEntity.getGUID(),
+                                                     beanEntity,
+                                                     beanGUIDTypeGUID,
+                                                     beanGUIDTypeName,
+                                                     newProperties,
+                                                     methodName);
+        }
+    }
+
+
+    /**
+     * Create the new properties to hand to the repository helper based on the supplied properties,
+     * existing properties and whether this is a merge update or not.
+     * The effectivity dates are always preserved unless they are over-written by the caller.  If they need clearing then use the separate call.
+     *
+     * @param isMergeUpdate should the supplied updateProperties be merged with existing properties (true) by replacing just the properties with
+     *                      matching names, or should the entire properties of the instance be replaced?
+     * @param suppliedProperties properties from the caller
+     * @param existingProperties properties from the repository
+     * @return properties to store
+     */
+    private InstanceProperties setUpNewProperties(boolean            isMergeUpdate,
+                                                  InstanceProperties suppliedProperties,
+                                                  InstanceProperties existingProperties)
+    {
+        /*
+         * Sort out the properties
+         */
+        InstanceProperties newProperties;
+
+        if (isMergeUpdate)
+        {
+            newProperties = existingProperties;
+
+            if (newProperties == null)
+            {
+                newProperties = suppliedProperties;
+            }
+            else if (suppliedProperties != null)
+            {
+                Map<String, InstancePropertyValue>  propertyMap = suppliedProperties.getInstanceProperties();
+
+                for (String propertyName : propertyMap.keySet())
+                {
+                    if (propertyName != null)
+                    {
+                        newProperties.setProperty(propertyName, propertyMap.get(propertyName));
+                    }
+                }
+
+                if (suppliedProperties.getEffectiveFromTime() != null)
+                {
+                    newProperties.setEffectiveFromTime(suppliedProperties.getEffectiveFromTime());
+                }
+
+                if (suppliedProperties.getEffectiveToTime() != null)
+                {
+                    newProperties.setEffectiveToTime(suppliedProperties.getEffectiveToTime());
+                }
+            }
+        }
+        else
+        {
+            newProperties = suppliedProperties;
+
+            /*
+             * Preserve the effectivity dates even though the properties are being replaced.
+             */
+            if (existingProperties != null)
+            {
+                if (existingProperties.getEffectiveFromTime() != null)
+                {
+                    newProperties.setEffectiveFromTime(existingProperties.getEffectiveFromTime());
+                }
+                if (existingProperties.getEffectiveToTime() != null)
+                {
+                    newProperties.setEffectiveToTime(existingProperties.getEffectiveToTime());
+                }
+            }
+        }
+
+        return newProperties;
+    }
+
+
+    /**
+     * Retrieve a map of entities.
+     *
+     * @param userId calling users
+     * @param typeGUID unique identifier of the type to search for
+     * @param conditions list of anchor guid as search conditions
+     * @param forLineage             the query is to support lineage retrieval
+     * @param forDuplicateProcessing the query is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName       calling method
+     * @return map of anchor entity guid to anchor entities - empty map if nothing received
+     */
+    private Map<String, EntityDetail> getEntityList(String                  userId,
+                                                    String                  typeGUID,
+                                                    List<PropertyCondition> conditions,
+                                                    boolean                 forLineage,
+                                                    boolean                 forDuplicateProcessing,
+                                                    Date                    effectiveTime,
+                                                    String                  methodName)
+    {
+        Map<String, EntityDetail> retrievedAnchors = new HashMap<>();
+
+        if (!conditions.isEmpty())
+        {
+            SearchProperties searchProperties = new SearchProperties();
+
+            searchProperties.setConditions(conditions);
+            searchProperties.setMatchCriteria(MatchCriteria.ANY);
+
+            try
+            {
+                List<EntityDetail> retrievedEntities = repositoryHandler.findEntities(userId,
+                                                                                      typeGUID,
+                                                                                      null,
+                                                                                      searchProperties,
+                                                                                      null,
+                                                                                      null,
+                                                                                      null,
+                                                                                      null,
+                                                                                      SequencingOrder.GUID,
+                                                                                      forLineage,
+                                                                                      forDuplicateProcessing,
+                                                                                      0,
+                                                                                      invalidParameterHandler.getMaxPagingSize(),
+                                                                                      effectiveTime,
+                                                                                      methodName);
+
+                if (retrievedEntities != null)
+                {
+                    for (EntityDetail entity : retrievedEntities)
+                    {
+                        if (entity != null)
+                        {
+                            retrievedAnchors.put(entity.getGUID(), entity);
+                        }
+                    }
+                }
+            }
+            catch (Exception error)
+            {
+                auditLog.logMessage(methodName, GenericHandlersAuditCode.FAILED_TO_RETRIEVE_ENTITIES.getMessageDefinition(methodName,
+                                                                                                                          error.getClass().getName(),
+                                                                                                                          error.getMessage()));
+            }
+        }
+
+        return retrievedAnchors;
+    }
+
+
+
+    /**
+     * Validates that the unique property is not already in use across all types that contain the unique property.
+     *
+     * @param entityGUID existing entity (or null if this is a create method)
+     * @param entityTypeName the unique name of the type of the entity
+     * @param uniqueParameterValue the value of the unique parameter
+     * @param uniqueParameterName the name of the unique parameter
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method for exceptions and error messages
+     *
+     * @throws InvalidParameterException one of the parameters is null or invalid.
+     * @throws PropertyServerException a problem accessing the properties in the repositories.
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void validateUniqueProperty(String entityGUID,
+                                       String entityTypeName,
+                                       String uniqueParameterValue,
+                                       String uniqueParameterName,
+                                       Date   effectiveTime,
+                                       String methodName) throws InvalidParameterException,
+                                                                 PropertyServerException,
+                                                                 UserNotAuthorizedException
+    {
+        List<String> propertyNames = new ArrayList<>();
+        propertyNames.add(uniqueParameterName);
+
+        String owningEntityTypeGUID = null;
+        String owningEntityTypeName = null;
+
+        String entityTypeNameToCheck = entityTypeName;
+        while (owningEntityTypeGUID == null)
+        {
+            TypeDef potentialOwningEntityTypeDef = repositoryHelper.getTypeDefByName(methodName, entityTypeNameToCheck);
+            List<TypeDefAttribute> typeDefAttributes = potentialOwningEntityTypeDef.getPropertiesDefinition();
+            if (typeDefAttributes != null && !typeDefAttributes.isEmpty())
+            {
+                for (TypeDefAttribute typeDefAttribute:typeDefAttributes)
+                {
+                    if (typeDefAttribute.isUnique() && typeDefAttribute.getAttributeName().equals(uniqueParameterName))
+                    {
+                        owningEntityTypeGUID = potentialOwningEntityTypeDef.getGUID();
+                        owningEntityTypeName = potentialOwningEntityTypeDef.getName();
+                        break;
+                    }
+                }
+            }
+
+            TypeDefLink superTypeDefLink = potentialOwningEntityTypeDef.getSuperType();
+
+            if (superTypeDefLink != null)
+            {
+                entityTypeNameToCheck = superTypeDefLink.getName();
+            }
+            else
+            {
+                // Should not happen. Log?
+                break;
+            }
+        }
+
+        /*
+         * This is a lineage read so that an entity with the Promise classification (a placeholder for a real-world
+         * counterpart that has not been delivered yet) still reserves its unique name.  An entity with the Memento
+         * classification (whose real-world counterpart has gone) is excluded by name and so does not.
+         */
+        List<EntityDetail> existingEntities = this.getEntitiesByValue(localServerUserId,
+                                                                      uniqueParameterValue,
+                                                                      uniqueParameterName,
+                                                                      owningEntityTypeGUID,
+                                                                      owningEntityTypeName,
+                                                                      propertyNames,
+                                                                      true,
+                                                                      false,
+                                                                      null,
+                                                                      OpenMetadataType.MEMENTO_CLASSIFICATION.typeName,
+                                                                      null,
+                                                                      null,
+                                                                      SequencingOrder.CREATION_DATE_RECENT,
+                                                                      null,
+                                                                      true,
+                                                                      false,
+                                                                      0,
+                                                                      invalidParameterHandler.getMaxPagingSize(),
+                                                                      effectiveTime,
+                                                                      methodName);
+
+        if ((existingEntities != null) && (! existingEntities.isEmpty()))
+        {
+            if (entityGUID != null)
+            {
+                for (EntityDetail existingEntity : existingEntities)
+                {
+                    if ((existingEntity != null) && (! entityGUID.equals(existingEntity.getGUID())))
+                    {
+                        invalidParameterHandler.throwUniqueNameInUse(uniqueParameterValue,
+                                                                     uniqueParameterName,
+                                                                     entityTypeName,
+                                                                     serviceName,
+                                                                     methodName);
+                    }
+                }
+            }
+            else
+            {
+                invalidParameterHandler.throwUniqueNameInUse(uniqueParameterValue,
+                                                             uniqueParameterName,
+                                                             entityTypeName,
+                                                             serviceName,
+                                                             methodName);
+            }
+        }
+    }
+
+
+    /**
+     * Validate that new properties for an entity do not have unique properties that clash with other instances.
+     *
+     * @param entityGUID unique identifier of the entity to be updated (or null for a new entity).
+     * @param entityTypeName the unique name of the type of the entity
+     * @param newProperties properties to test
+     * @param effectiveTime  the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method for exceptions and error messages
+     * @throws InvalidParameterException one of the parameters is null or invalid.
+     * @throws PropertyServerException a problem accessing the properties in the repositories.
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    private void validateUniqueProperties(String             entityGUID,
+                                          String             entityTypeName,
+                                          InstanceProperties newProperties,
+                                          Date               effectiveTime,
+                                          String             methodName) throws InvalidParameterException,
+                                                                                PropertyServerException,
+                                                                                UserNotAuthorizedException
+    {
+        InstanceProperties uniqueProperties = repositoryHelper.getUniqueProperties(serviceName,
+                                                                                   entityTypeName,
+                                                                                   newProperties);
+
+        if ((uniqueProperties != null) && (uniqueProperties.getPropertyCount() > 0))
+        {
+            Iterator<String> uniquePropertyNames = uniqueProperties.getPropertyNames();
+
+            if (uniquePropertyNames != null)
+            {
+                while (uniquePropertyNames.hasNext())
+                {
+                    String uniquePropertyName = uniquePropertyNames.next();
+
+                    if (uniquePropertyName != null)
+                    {
+                        /*
+                         * This code assumes that the unique property is a string - which is fine for all current open metadata types.
+                         */
+                        InstancePropertyValue uniquePropertyValue = uniqueProperties.getPropertyValue(uniquePropertyName);
+
+                        validateUniqueProperty(entityGUID,
+                                               entityTypeName,
+                                               uniquePropertyValue.valueAsString(),
+                                               uniquePropertyName,
+                                               effectiveTime,
+                                               methodName);
+                    }
+                }
+            }
+        }
+    }
+
+
+    /**
+     * Validate that the user has permission to create a new entity
+     *
+     * @param userId           userId of the user making the request.
+     * @param entityTypeGUID unique identifier of the type of entity to create
+     * @param entityTypeName unique name of the type of entity to create
+     * @param newProperties properties for new entity
+     * @param classifications classifications for new entity
+     * @param instanceStatus status for new entity
+     * @param effectiveTime the time that the retrieved elements must be effective for
+     * @param methodName calling method
+     * @throws InvalidParameterException one of the parameters is null or invalid.
+     * @throws PropertyServerException a problem adding the asset properties to the repositories.
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    void validateNewEntityRequest(String               userId,
+                                  String               entityTypeGUID,
+                                  String               entityTypeName,
+                                  InstanceProperties   newProperties,
+                                  List<Classification> classifications,
+                                  InstanceStatus       instanceStatus,
+                                  Date                 effectiveTime,
+                                  String               methodName) throws InvalidParameterException,
+                                                                          PropertyServerException,
+                                                                          UserNotAuthorizedException
+    {
+        invalidParameterHandler.validateUserId(userId, methodName);
+
+        validateUniqueProperties(null, entityTypeName, newProperties, effectiveTime, methodName);
+
+        securityVerifier.validateUserForElementCreate(userId,
+                                                      entityTypeGUID,
+                                                      entityTypeName,
+                                                      newProperties,
+                                                      classifications,
+                                                      instanceStatus,
+                                                      repositoryHelper,
+                                                      serviceName,
+                                                      methodName);
+    }
+
+
+    /**
+     * Create a new entity in the repository assuming all parameters are ok.
+     *
+     * @param userId           userId of the user making the request.
+     * @param externalSourceGUID guid of the software capability entity that represented the external source - null for local
+     * @param externalSourceName name of the software capability entity that represented the external source
+     * @param entityTypeGUID unique identifier of the type of entity to create
+     * @param entityTypeName unique name of the type of entity to create
+     * @param propertyBuilder builder pre-populated with the properties and classifications of the new entity
+     * @param isOwnAnchor flag to indicate if the new entity should be anchored to itself
+     * @param anchorGUID optional anchor guid
+     * @param anchorScopeGUIDs unique identifiers of the scope of this element
+     * @param effectiveTime the time that the retrieved elements must be effective for
+     * @param methodName calling method
+     * @return unique identifier of new entity
+     * @throws InvalidParameterException one of the parameters is null or invalid.
+     * @throws PropertyServerException a problem adding the properties to the repositories.
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public String createBeanInRepository(String                        userId,
+                                         String                        externalSourceGUID,
+                                         String                        externalSourceName,
+                                         String                        entityTypeGUID,
+                                         String                        entityTypeName,
+                                         OpenMetadataAPIGenericBuilder propertyBuilder,
+                                         boolean                       isOwnAnchor,
+                                         String                        anchorGUID,
+                                         List<String>                  anchorScopeGUIDs,
+                                         Date                          effectiveTime,
+                                         String                        methodName) throws InvalidParameterException,
+                                                                                          PropertyServerException,
+                                                                                          UserNotAuthorizedException
+    {
+        invalidParameterHandler.validateUserId(userId, methodName);
+
+        /*
+         * The governance zones are moderated by the security verifier.
+         */
+        List<String> governanceZones = securityVerifier.getDefaultZones(propertyBuilder.getInitialGovernanceZones(), userId, entityTypeName, methodName);
+
+        if (isOwnAnchor)
+        {
+            /*
+             * A null anchorGUID meant that the element is its own Anchor.  The default governance zones are set up in
+             * both the Anchors classification and the ZoneMembership classification.
+             */
+            propertyBuilder.setAnchors(userId, null, entityTypeName, this.getDomainName(entityTypeName), anchorScopeGUIDs, governanceZones, methodName);
+            propertyBuilder.setGovernanceZones(userId, governanceZones, methodName);
+        }
+        else if ((anchorGUID != null) || (propertyBuilder.isClassificationSet(OpenMetadataType.ANCHORS_CLASSIFICATION.typeName)))
+        {
+            /*
+             * The caller has requested that an anchor classification be applied.
+             */
+            if (anchorGUID == null)
+            {
+                Classification anchorClassification = propertyBuilder.getClassification(OpenMetadataType.ANCHORS_CLASSIFICATION.typeName);
+
+                anchorGUID = repositoryHelper.getStringProperty(serviceName,
+                                                                OpenMetadataProperty.ANCHOR_GUID.name,
+                                                                anchorClassification.getProperties(),
+                                                                methodName);
+            }
+
+            /*
+             * The new entity is going to be its own anchor.  Make sure it is set up correctly.
+             */
+            if (anchorGUID == null)
+            {
+                propertyBuilder.setAnchors(userId,
+                                           null,
+                                           entityTypeName,
+                                           this.getDomainName(entityTypeName),
+                                           anchorScopeGUIDs,
+                                           governanceZones,
+                                           methodName);
+            }
+            else
+            {
+                /*
+                 * The new entity is going to be anchored to another element.  The caller must have permission
+                 * to access the anchor entity to add an anchored element to it.
+                 */
+                final String anchorGUIDParameterName = "anchorGUID";
+                EntityDetail anchorEntity = this.getEntityFromRepository(userId,
+                                                                         anchorGUID,
+                                                                         anchorGUIDParameterName,
+                                                                         OpenMetadataType.OPEN_METADATA_ROOT.typeName,
+                                                                         null,
+                                                                         null,
+                                                                         false,
+                                                                         false,
+                                                                         effectiveTime,
+                                                                         methodName);
+
+                if (anchorEntity != null)
+                {
+                    /*
+                     * Make sure the anchors classification includes the zome membership for the anchor.
+                     */
+                    Classification zoneMembership = null;
+
+                    if (anchorEntity.getClassifications() != null)
+                    {
+                        for (Classification classification : anchorEntity.getClassifications())
+                        {
+                            if (classification.getType().getTypeDefName().equals(OpenMetadataType.ZONE_MEMBERSHIP_CLASSIFICATION.typeName))
+                            {
+                                zoneMembership = classification;
+                                break;
+                            }
+                        }
+                    }
+
+                    List<String> anchorZones = null;
+                    if ((zoneMembership != null) && (zoneMembership.getProperties() != null))
+                    {
+                        anchorZones = repositoryHelper.getStringArrayProperty(serviceName,
+                                                                              OpenMetadataProperty.ZONE_MEMBERSHIP.name,
+                                                                              zoneMembership.getProperties(),
+                                                                              methodName);
+
+                    }
+
+                    propertyBuilder.setAnchors(userId, anchorEntity.getGUID(),
+                                               anchorEntity.getType().getTypeDefName(),
+                                               this.getDomainName(anchorEntity.getType().getTypeDefName()),
+                                               anchorScopeGUIDs,
+                                               anchorZones,
+                                               methodName);
+
+                    /*
+                     * If the caller has added overriding zones, then ensure they are also included.
+                     */
+                    if (propertyBuilder.getInitialGovernanceZones() != null)
+                    {
+                        propertyBuilder.setGovernanceZones(userId, governanceZones, methodName);
+                    }
+                }
+                else
+                {
+                    /*
+                     * The anchor entity is not available.  This should not happen as an exception is thrown
+                     * if the guid is invalid or the caller does not have access.  This exception is to make sure
+                     * the creation does not happen.
+                     */
+                    invalidParameterHandler.throwUnknownElement(userId,
+                                                                anchorGUID,
+                                                                OpenMetadataType.OPEN_METADATA_ROOT.typeName,
+                                                                serviceName,
+                                                                serverName,
+                                                                methodName);                }
+            }
+        }
+        else
+        {
+            /*
+             * No anchor is requested; just set up governance zones
+             */
+            propertyBuilder.setGovernanceZones(userId, governanceZones, methodName);
+        }
+
+        validateNewEntityRequest(userId,
+                                 entityTypeGUID,
+                                 entityTypeName,
+                                 propertyBuilder.getInstanceProperties(methodName),
+                                 propertyBuilder.getEntityClassifications(),
+                                 InstanceStatus.ACTIVE,
+                                 effectiveTime,
+                                 methodName);
+
+        String entityGUID = repositoryHandler.createEntity(userId,
+                                                           entityTypeGUID,
+                                                           entityTypeName,
+                                                           externalSourceGUID,
+                                                           externalSourceName,
+                                                           propertyBuilder.getInstanceProperties(methodName),
+                                                           propertyBuilder.getEntityClassifications(),
+                                                           InstanceStatus.ACTIVE,
+                                                           methodName);
+
+
+        if (repositoryHelper.isTypeOf(serviceName, entityTypeName, OpenMetadataType.ASSET.typeName))
+        {
+            auditLog.logMessage(assetActionDescription,
+                                OpenMetadataObservabilityAuditCode.ASSET_ACTIVITY_CREATE.getMessageDefinition(userId,
+                                                                                                              entityTypeName,
+                                                                                                              entityGUID,
+                                                                                                              methodName,
+                                                                                                              serviceName));
+        }
+
+        return entityGUID;
+    }
+
+
+    /**
+     * Update one or more properties in the requested entity.
+     *
+     * @param userId calling user
+     * @param externalSourceGUID guid of the software capability entity that represented the external source - null for local
+     * @param externalSourceName name of the software capability entity that represented the external source
+     * @param entityGUID unique identifier of object to update
+     * @param entityGUIDParameterName name of parameter supplying the GUID
+     * @param entityTypeGUID unique identifier of the entity's type
+     * @param entityTypeName unique name of the entity's type
+     * @param propertyName name of bean property to update
+     * @param propertyValue new value for bean property
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     *
+     * @throws InvalidParameterException one of the parameters is null or invalid.
+     * @throws PropertyServerException a problem updating the properties tin the repositories.
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void updateBeanPropertyInRepository(String  userId,
+                                               String  externalSourceGUID,
+                                               String  externalSourceName,
+                                               String  entityGUID,
+                                               String  entityGUIDParameterName,
+                                               String  entityTypeGUID,
+                                               String  entityTypeName,
+                                               String  propertyName,
+                                               String  propertyValue,
+                                               boolean forLineage,
+                                               boolean forDuplicateProcessing,
+                                               Date    effectiveTime,
+                                               String  methodName) throws InvalidParameterException,
+                                                                          PropertyServerException,
+                                                                          UserNotAuthorizedException
+    {
+        final String propertyParameterName = "propertyValue";
+        final String propertyNameParameterName = "propertyName";
+
+        invalidParameterHandler.validateName(propertyName, propertyNameParameterName, methodName);
+        invalidParameterHandler.validateObject(propertyValue, propertyParameterName, methodName);
+
+        InstanceProperties properties = repositoryHelper.addStringPropertyToInstance(serviceName, null, propertyName, propertyValue, methodName);
+
+        this.updateBeanInRepository(userId,
+                                    externalSourceGUID,
+                                    externalSourceName,
+                                    entityGUID,
+                                    entityGUIDParameterName,
+                                    entityTypeGUID,
+                                    entityTypeName,
+                                    forLineage,
+                                    forDuplicateProcessing,
+                                    properties,
+                                    true,
+                                    effectiveTime,
+                                    methodName);
+    }
+
+
+    /**
+     * Update one or more properties in the requested entity.
+     *
+     * @param userId calling user
+     * @param externalSourceGUID guid of the software capability entity that represented the external source - null for local
+     * @param externalSourceName name of the software capability entity that represented the external source
+     * @param entityGUID unique identifier of object to update
+     * @param entityGUIDParameterName name of parameter supplying the GUID
+     * @param entityTypeGUID unique identifier of the entity's type
+     * @param entityTypeName unique name of the entity's type
+     * @param properties object containing the properties for the repository instances based on the properties of the bean
+     * @param isMergeUpdate should the supplied properties be merged with existing properties (true) only replacing the properties with
+     *                      matching names, or should the entire properties of the instance be replaced?
+     * @param methodName calling method
+     *
+     * @throws InvalidParameterException one of the parameters is null or invalid.
+     * @throws PropertyServerException a problem updating the properties in the repositories.
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void updateBeanInRepository(String             userId,
+                                       String             externalSourceGUID,
+                                       String             externalSourceName,
+                                       String             entityGUID,
+                                       String             entityGUIDParameterName,
+                                       String             entityTypeGUID,
+                                       String             entityTypeName,
+                                       InstanceProperties properties,
+                                       boolean            isMergeUpdate,
+                                       String             methodName) throws InvalidParameterException,
+                                                                             PropertyServerException,
+                                                                             UserNotAuthorizedException
+    {
+        this.updateBeanInRepository(userId,
+                                    externalSourceGUID,
+                                    externalSourceName,
+                                    entityGUID,
+                                    entityGUIDParameterName,
+                                    entityTypeGUID,
+                                    entityTypeName,
+                                    false,
+                                    false,
+                                    properties,
+                                    isMergeUpdate,
+                                    new Date(),
+                                    methodName);
+    }
+
+
+    /**
+     * Update one or more updateProperties in the requested entity.
+     *
+     * @param userId calling user
+     * @param externalSourceGUID guid of the software capability entity that represented the external source - null for local
+     * @param externalSourceName name of the software capability entity that represented the external source
+     * @param entityGUID unique identifier of object to update
+     * @param entityGUIDParameterName name of parameter supplying the GUID
+     * @param entityTypeGUID unique identifier of the entity's type
+     * @param entityTypeName unique name of the entity's type
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param updateProperties object containing the properties
+     * @param isMergeUpdate should the supplied properties be merged with existing properties (true) by replacing just the properties with
+     *                      matching names, or should the entire properties of the instance be replaced?
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     *
+     * @return boolean - true if an update occurred
+     * @throws InvalidParameterException one of the parameters is null or invalid.
+     * @throws PropertyServerException a problem adding the new properties to the repositories.
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public boolean updateBeanInRepository(String             userId,
+                                          String             externalSourceGUID,
+                                          String             externalSourceName,
+                                          String             entityGUID,
+                                          String             entityGUIDParameterName,
+                                          String             entityTypeGUID,
+                                          String             entityTypeName,
+                                          boolean            forLineage,
+                                          boolean            forDuplicateProcessing,
+                                          InstanceProperties updateProperties,
+                                          boolean            isMergeUpdate,
+                                          Date               effectiveTime,
+                                          String             methodName) throws InvalidParameterException,
+                                                                                PropertyServerException,
+                                                                                UserNotAuthorizedException
+    {
+        EntityDetail startingEntity = repositoryHandler.getEntityByGUID(userId,
+                                                                        entityGUID,
+                                                                        entityGUIDParameterName,
+                                                                        entityTypeName,
+                                                                        forLineage,
+                                                                        forDuplicateProcessing,
+                                                                        effectiveTime,
+                                                                        methodName);
+
+        return updateBeanInRepository(userId,
+                                      externalSourceGUID,
+                                      externalSourceName,
+                                      startingEntity,
+                                      entityGUIDParameterName,
+                                      entityTypeGUID,
+                                      entityTypeName,
+                                      forLineage,
+                                      forDuplicateProcessing,
+                                      updateProperties,
+                                      isMergeUpdate,
+                                      effectiveTime,
+                                      methodName);
+    }
+
+
+    /**
+     * Update one or more updateProperties in the requested entity.
+     *
+     * @param userId calling user
+     * @param externalSourceGUID guid of the software capability entity that represented the external source - null for local
+     * @param externalSourceName name of the software capability entity that represented the external source
+     * @param originalEntity unique identifier of object to update
+     * @param entityGUIDParameterName name of parameter supplying the GUID
+     * @param entityTypeGUID unique identifier of the entity's type
+     * @param entityTypeName unique name of the entity's type
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param updateProperties object containing the properties
+     * @param isMergeUpdate should the supplied properties be merged with existing properties (true) by replacing just the properties with
+     *                      matching names, or should the entire properties of the instance be replaced?
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     *
+     * @return boolean - true if an update occurred
+     * @throws InvalidParameterException one of the parameters is null or invalid.
+     * @throws PropertyServerException a problem adding the new properties to the repositories.
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public boolean updateBeanInRepository(String             userId,
+                                          String             externalSourceGUID,
+                                          String             externalSourceName,
+                                          EntityDetail       originalEntity,
+                                          String             entityGUIDParameterName,
+                                          String             entityTypeGUID,
+                                          String             entityTypeName,
+                                          boolean            forLineage,
+                                          boolean            forDuplicateProcessing,
+                                          InstanceProperties updateProperties,
+                                          boolean            isMergeUpdate,
+                                          Date               effectiveTime,
+                                          String             methodName) throws InvalidParameterException,
+                                                                                PropertyServerException,
+                                                                                UserNotAuthorizedException
+    {
+        invalidParameterHandler.validateUserId(userId, methodName);
+
+        if ((originalEntity != null) && (originalEntity.getType() != null))
+        {
+            EntityDetail anchorEntity = this.validateEntityAndAnchorForRead(userId,
+                                                                            entityTypeName,
+                                                                            originalEntity,
+                                                                            entityGUIDParameterName,
+                                                                            true,
+                                                                            true,
+                                                                            forLineage,
+                                                                            forDuplicateProcessing,
+                                                                            effectiveTime,
+                                                                            methodName);
+
+            /*
+             * Sort out the properties
+             */
+            InstanceProperties newProperties = setUpNewProperties(isMergeUpdate,
+                                                                  updateProperties,
+                                                                  originalEntity.getProperties());
+
+            /*
+             * If there are no properties to change then nothing more to do
+             */
+            if ((newProperties == null) && (originalEntity.getProperties() == null))
+            {
+                auditLog.logMessage(methodName,
+                                    GenericHandlersAuditCode.IGNORING_UNNECESSARY_ENTITY_UPDATE.getMessageDefinition(originalEntity.getType().getTypeDefName(),
+                                                                                                                     originalEntity.getGUID(),
+                                                                                                                     methodName,
+                                                                                                                     userId));
+                return false;
+            }
+
+            /*
+             * If nothing has changed in the properties then nothing to do
+             */
+            if ((newProperties != null) && (newProperties.equals(originalEntity.getProperties())))
+            {
+                auditLog.logMessage(methodName,
+                                    GenericHandlersAuditCode.IGNORING_UNNECESSARY_ENTITY_UPDATE.getMessageDefinition(originalEntity.getType().getTypeDefName(),
+                                                                                                                     originalEntity.getGUID(),
+                                                                                                                     methodName,
+                                                                                                                     userId));
+
+                return false;
+            }
+
+            /*
+             * Validate that any changes to the unique properties do not clash with other entities.
+             */
+            validateUniqueProperties(originalEntity.getGUID(),
+                                     entityTypeName,
+                                     updateProperties,
+                                     effectiveTime,
+                                     methodName);
+
+            /*
+             * There is an extra security check if the update is for an element.
+             */
+            securityVerifier.validateUserForElementDetailUpdate(userId,
+                                                                originalEntity,
+                                                                newProperties,
+                                                                repositoryHelper,
+                                                                serviceName,
+                                                                methodName);
+
+            repositoryHandler.updateEntityProperties(userId,
+                                                     externalSourceGUID,
+                                                     externalSourceName,
+                                                     originalEntity.getGUID(),
+                                                     originalEntity,
+                                                     entityTypeGUID,
+                                                     entityTypeName,
+                                                     newProperties,
+                                                     methodName);
+
+            if (repositoryHelper.isTypeOf(serviceName, originalEntity.getType().getTypeDefName(), OpenMetadataType.ASSET.typeName))
+            {
+                auditLog.logMessage(assetActionDescription,
+                                    OpenMetadataObservabilityAuditCode.ASSET_ACTIVITY_UPDATE.getMessageDefinition(userId,
+                                                                                                                  originalEntity.getType().getTypeDefName(),
+                                                                                                                  originalEntity.getGUID(),
+                                                                                                                  methodName,
+                                                                                                                  serviceName));
+            }
+        }
+        else
+        {
+            String entityGUID = "<null>";
+
+            if (originalEntity != null)
+            {
+                entityGUID = originalEntity.getGUID();
+            }
+            invalidParameterHandler.throwUnknownElement(userId,
+                                                        entityGUID,
+                                                        entityTypeName,
+                                                        serviceName,
+                                                        serverName,
+                                                        methodName);
+        }
+
+        return true;
+    }
+
+
+    /**
+     * Change the unique identifier of an entity.  This is used if two different entities are discovered to have the
+     * same unique identifier.  The request is passed to the repository that is the home of the entity.
+     *
+     * @param userId calling user
+     * @param entityGUID current unique identifier of the entity
+     * @param entityGUIDParameterName name of parameter supplying the GUID
+     * @param entityTypeName expected type of the entity
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param newEntityGUID new unique identifier for the entity
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     *
+     * @throws InvalidParameterException one of the parameters is null or invalid.
+     * @throws PropertyServerException a problem communicating with the repositories.
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void reIdentifyBeanInRepository(String  userId,
+                                           String  entityGUID,
+                                           String  entityGUIDParameterName,
+                                           String  entityTypeName,
+                                           boolean forLineage,
+                                           boolean forDuplicateProcessing,
+                                           String  newEntityGUID,
+                                           Date    effectiveTime,
+                                           String  methodName) throws InvalidParameterException,
+                                                                      PropertyServerException,
+                                                                      UserNotAuthorizedException
+    {
+        final String newEntityGUIDParameterName = "newEntityGUID";
+
+        invalidParameterHandler.validateUserId(userId, methodName);
+        invalidParameterHandler.validateGUID(newEntityGUID, newEntityGUIDParameterName, methodName);
+
+        EntityDetail originalEntity = this.getEntityFromRepository(userId,
+                                                                   entityGUID,
+                                                                   entityGUIDParameterName,
+                                                                   entityTypeName,
+                                                                   null,
+                                                                   null,
+                                                                   forLineage,
+                                                                   forDuplicateProcessing,
+                                                                   effectiveTime,
+                                                                   methodName);
+
+        if ((originalEntity != null) && (originalEntity.getType() != null))
+        {
+            securityVerifier.validateUserForElementDetailUpdate(userId,
+                                                                originalEntity,
+                                                                originalEntity.getProperties(),
+                                                                repositoryHelper,
+                                                                serviceName,
+                                                                methodName);
+
+            repositoryHandler.reIdentifyEntity(userId,
+                                               originalEntity.getGUID(),
+                                               entityGUIDParameterName,
+                                               originalEntity.getType().getTypeDefGUID(),
+                                               originalEntity.getType().getTypeDefName(),
+                                               newEntityGUID,
+                                               methodName);
+        }
+    }
+
+
+    /**
+     * Change the type of an entity.  Typically, this action is taken to move an entity's type to either a supertype
+     * (so the subtype can be deleted) or a new subtype (so additional properties can be added).  The request is passed
+     * to the repository that is the home of the entity.
+     *
+     * @param userId calling user
+     * @param entityGUID unique identifier of the entity to change
+     * @param entityGUIDParameterName name of parameter supplying the GUID
+     * @param entityTypeName expected type of the entity
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param newTypeName name of the new type for the entity
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     *
+     * @throws InvalidParameterException one of the parameters is null or invalid.
+     * @throws PropertyServerException a problem communicating with the repositories.
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void reTypeBeanInRepository(String  userId,
+                                       String  entityGUID,
+                                       String  entityGUIDParameterName,
+                                       String  entityTypeName,
+                                       boolean forLineage,
+                                       boolean forDuplicateProcessing,
+                                       String  newTypeName,
+                                       Date    effectiveTime,
+                                       String  methodName) throws InvalidParameterException,
+                                                                  PropertyServerException,
+                                                                  UserNotAuthorizedException
+    {
+        final String newTypeNameParameterName = "newTypeName";
+
+        invalidParameterHandler.validateUserId(userId, methodName);
+        invalidParameterHandler.validateName(newTypeName, newTypeNameParameterName, methodName);
+
+        TypeDef newTypeDef = invalidParameterHandler.validateTypeDefName(newTypeName,
+                                                                         OpenMetadataType.OPEN_METADATA_ROOT.typeName,
+                                                                         serviceName,
+                                                                         methodName,
+                                                                         repositoryHelper);
+
+        EntityDetail originalEntity = this.getEntityFromRepository(userId,
+                                                                   entityGUID,
+                                                                   entityGUIDParameterName,
+                                                                   entityTypeName,
+                                                                   null,
+                                                                   null,
+                                                                   forLineage,
+                                                                   forDuplicateProcessing,
+                                                                   effectiveTime,
+                                                                   methodName);
+
+        if ((originalEntity != null) && (originalEntity.getType() != null))
+        {
+            securityVerifier.validateUserForElementDetailUpdate(userId,
+                                                                originalEntity,
+                                                                originalEntity.getProperties(),
+                                                                repositoryHelper,
+                                                                serviceName,
+                                                                methodName);
+
+            repositoryHandler.reTypeEntity(userId,
+                                           originalEntity.getGUID(),
+                                           entityGUIDParameterName,
+                                           this.getTypeDefSummary(originalEntity.getType()),
+                                           newTypeDef,
+                                           methodName);
+        }
+    }
+
+
+    /**
+     * Change the home repository of an entity.  This action is taken, for example, if the original home repository
+     * becomes permanently unavailable, or if the user community updating this entity moves to working from a
+     * different repository in the open metadata repository cohort.
+     *
+     * @param userId calling user
+     * @param entityGUID unique identifier of the entity to change
+     * @param entityGUIDParameterName name of parameter supplying the GUID
+     * @param entityTypeName expected type of the entity
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param newHomeMetadataCollectionId unique identifier for the new home metadata collection/repository
+     * @param newHomeMetadataCollectionName display name for the new home metadata collection/repository
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     *
+     * @throws InvalidParameterException one of the parameters is null or invalid.
+     * @throws PropertyServerException a problem communicating with the repositories.
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void reHomeBeanInRepository(String  userId,
+                                       String  entityGUID,
+                                       String  entityGUIDParameterName,
+                                       String  entityTypeName,
+                                       boolean forLineage,
+                                       boolean forDuplicateProcessing,
+                                       String  newHomeMetadataCollectionId,
+                                       String  newHomeMetadataCollectionName,
+                                       Date    effectiveTime,
+                                       String  methodName) throws InvalidParameterException,
+                                                                  PropertyServerException,
+                                                                  UserNotAuthorizedException
+    {
+        final String newHomeParameterName = "newHomeMetadataCollectionId";
+
+        invalidParameterHandler.validateUserId(userId, methodName);
+        invalidParameterHandler.validateGUID(newHomeMetadataCollectionId, newHomeParameterName, methodName);
+
+        EntityDetail originalEntity = this.getEntityFromRepository(userId,
+                                                                   entityGUID,
+                                                                   entityGUIDParameterName,
+                                                                   entityTypeName,
+                                                                   null,
+                                                                   null,
+                                                                   forLineage,
+                                                                   forDuplicateProcessing,
+                                                                   effectiveTime,
+                                                                   methodName);
+
+        if ((originalEntity != null) && (originalEntity.getType() != null))
+        {
+            securityVerifier.validateUserForElementDetailUpdate(userId,
+                                                                originalEntity,
+                                                                originalEntity.getProperties(),
+                                                                repositoryHelper,
+                                                                serviceName,
+                                                                methodName);
+
+            repositoryHandler.reHomeEntity(userId,
+                                           originalEntity.getGUID(),
+                                           entityGUIDParameterName,
+                                           originalEntity.getType().getTypeDefGUID(),
+                                           originalEntity.getType().getTypeDefName(),
+                                           originalEntity.getMetadataCollectionId(),
+                                           newHomeMetadataCollectionId,
+                                           newHomeMetadataCollectionName,
+                                           methodName);
+        }
+    }
+
+
+    /**
+     * Change the unique identifier of a relationship.  This is used if two different relationships are discovered to
+     * have the same unique identifier.  The request is passed to the repository that is the home of the relationship.
+     *
+     * @param userId calling user
+     * @param relationshipGUID current unique identifier of the relationship
+     * @param relationshipGUIDParameterName name of parameter supplying the GUID
+     * @param relationshipTypeName expected type of the relationship
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param newRelationshipGUID new unique identifier for the relationship
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     *
+     * @throws InvalidParameterException one of the parameters is null or invalid.
+     * @throws PropertyServerException a problem communicating with the repositories.
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void reIdentifyRelationshipInRepository(String  userId,
+                                                   String  relationshipGUID,
+                                                   String  relationshipGUIDParameterName,
+                                                   String  relationshipTypeName,
+                                                   boolean forLineage,
+                                                   boolean forDuplicateProcessing,
+                                                   String  newRelationshipGUID,
+                                                   Date    effectiveTime,
+                                                   String  methodName) throws InvalidParameterException,
+                                                                              PropertyServerException,
+                                                                              UserNotAuthorizedException
+    {
+        final String newRelationshipGUIDParameterName = "newRelationshipGUID";
+
+        invalidParameterHandler.validateUserId(userId, methodName);
+        invalidParameterHandler.validateGUID(relationshipGUID, relationshipGUIDParameterName, methodName);
+        invalidParameterHandler.validateGUID(newRelationshipGUID, newRelationshipGUIDParameterName, methodName);
+
+        Relationship relationship = repositoryHandler.getRelationshipByGUID(userId,
+                                                                            relationshipGUID,
+                                                                            relationshipGUIDParameterName,
+                                                                            relationshipTypeName,
+                                                                            effectiveTime,
+                                                                            methodName);
+
+        if ((relationship != null) && (relationship.getType() != null))
+        {
+            this.validateRelationshipChange(userId,
+                                            relationship,
+                                            false,
+                                            forLineage,
+                                            forDuplicateProcessing,
+                                            effectiveTime,
+                                            methodName);
+
+            repositoryHandler.reIdentifyRelationship(userId,
+                                                     relationship.getGUID(),
+                                                     relationshipGUIDParameterName,
+                                                     relationship.getType().getTypeDefGUID(),
+                                                     relationship.getType().getTypeDefName(),
+                                                     newRelationshipGUID,
+                                                     methodName);
+        }
+    }
+
+
+    /**
+     * Change the type of a relationship.  Typically, this action is taken to move a relationship's type to either a
+     * supertype (so the subtype can be deleted) or a new subtype (so additional properties can be added).  The request
+     * is passed to the repository that is the home of the relationship.
+     *
+     * @param userId calling user
+     * @param relationshipGUID unique identifier of the relationship to change
+     * @param relationshipGUIDParameterName name of parameter supplying the GUID
+     * @param relationshipTypeName expected type of the relationship
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param newTypeName name of the new type for the relationship
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     *
+     * @throws InvalidParameterException one of the parameters is null or invalid.
+     * @throws PropertyServerException a problem communicating with the repositories.
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void reTypeRelationshipInRepository(String  userId,
+                                               String  relationshipGUID,
+                                               String  relationshipGUIDParameterName,
+                                               String  relationshipTypeName,
+                                               boolean forLineage,
+                                               boolean forDuplicateProcessing,
+                                               String  newTypeName,
+                                               Date    effectiveTime,
+                                               String  methodName) throws InvalidParameterException,
+                                                                          PropertyServerException,
+                                                                          UserNotAuthorizedException
+    {
+        final String newTypeNameParameterName = "newTypeName";
+
+        invalidParameterHandler.validateUserId(userId, methodName);
+        invalidParameterHandler.validateGUID(relationshipGUID, relationshipGUIDParameterName, methodName);
+        invalidParameterHandler.validateName(newTypeName, newTypeNameParameterName, methodName);
+
+        TypeDef newTypeDef = invalidParameterHandler.validateTypeDefName(newTypeName,
+                                                                         null,
+                                                                         serviceName,
+                                                                         methodName,
+                                                                         repositoryHelper);
+
+        Relationship relationship = repositoryHandler.getRelationshipByGUID(userId,
+                                                                            relationshipGUID,
+                                                                            relationshipGUIDParameterName,
+                                                                            relationshipTypeName,
+                                                                            effectiveTime,
+                                                                            methodName);
+
+        if ((relationship != null) && (relationship.getType() != null))
+        {
+            this.validateRelationshipChange(userId,
+                                            relationship,
+                                            false,
+                                            forLineage,
+                                            forDuplicateProcessing,
+                                            effectiveTime,
+                                            methodName);
+
+            repositoryHandler.reTypeRelationship(userId,
+                                                 relationship.getGUID(),
+                                                 relationshipGUIDParameterName,
+                                                 this.getTypeDefSummary(relationship.getType()),
+                                                 newTypeDef,
+                                                 methodName);
+        }
+    }
+
+
+    /**
+     * Change the home repository of a relationship.  This action is taken, for example, if the original home
+     * repository becomes permanently unavailable, or if the user community updating this relationship moves to
+     * working from a different repository in the open metadata repository cohort.
+     *
+     * @param userId calling user
+     * @param relationshipGUID unique identifier of the relationship to change
+     * @param relationshipGUIDParameterName name of parameter supplying the GUID
+     * @param relationshipTypeName expected type of the relationship
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param newHomeMetadataCollectionId unique identifier for the new home metadata collection/repository
+     * @param newHomeMetadataCollectionName display name for the new home metadata collection/repository
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     *
+     * @throws InvalidParameterException one of the parameters is null or invalid.
+     * @throws PropertyServerException a problem communicating with the repositories.
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void reHomeRelationshipInRepository(String  userId,
+                                               String  relationshipGUID,
+                                               String  relationshipGUIDParameterName,
+                                               String  relationshipTypeName,
+                                               boolean forLineage,
+                                               boolean forDuplicateProcessing,
+                                               String  newHomeMetadataCollectionId,
+                                               String  newHomeMetadataCollectionName,
+                                               Date    effectiveTime,
+                                               String  methodName) throws InvalidParameterException,
+                                                                          PropertyServerException,
+                                                                          UserNotAuthorizedException
+    {
+        final String newHomeParameterName = "newHomeMetadataCollectionId";
+
+        invalidParameterHandler.validateUserId(userId, methodName);
+        invalidParameterHandler.validateGUID(relationshipGUID, relationshipGUIDParameterName, methodName);
+        invalidParameterHandler.validateGUID(newHomeMetadataCollectionId, newHomeParameterName, methodName);
+
+        Relationship relationship = repositoryHandler.getRelationshipByGUID(userId,
+                                                                            relationshipGUID,
+                                                                            relationshipGUIDParameterName,
+                                                                            relationshipTypeName,
+                                                                            effectiveTime,
+                                                                            methodName);
+
+        if ((relationship != null) && (relationship.getType() != null))
+        {
+            this.validateRelationshipChange(userId,
+                                            relationship,
+                                            false,
+                                            forLineage,
+                                            forDuplicateProcessing,
+                                            effectiveTime,
+                                            methodName);
+
+            repositoryHandler.reHomeRelationship(userId,
+                                                 relationship.getGUID(),
+                                                 relationshipGUIDParameterName,
+                                                 relationship.getType().getTypeDefGUID(),
+                                                 relationship.getType().getTypeDefName(),
+                                                 relationship.getMetadataCollectionId(),
+                                                 newHomeMetadataCollectionId,
+                                                 newHomeMetadataCollectionName,
+                                                 methodName);
+        }
+    }
+
+
+    /**
+     * Return the type definition that describes the type of an instance.  This is needed to verify the identity of an
+     * instance when its type or unique identifier is being changed.
+     *
+     * @param instanceType type information from the retrieved instance
+     * @return matching type definition
+     * @throws InvalidParameterException the instance's type is not recognized
+     */
+    private TypeDefSummary getTypeDefSummary(InstanceType instanceType) throws InvalidParameterException
+    {
+        final String methodName = "getTypeDefSummary";
+
+        return invalidParameterHandler.validateTypeDefName(instanceType.getTypeDefName(),
+                                                            null,
+                                                            serviceName,
+                                                            methodName,
+                                                            repositoryHelper);
+    }
+
+
+
+    /**
+     * Update the zones for a specific anchor element to the list set up in the user's publish zones.
+     *
+     * @param userId calling user
+     * @param externalSourceGUID      unique identifier of the software capability that owns this element
+     * @param externalSourceName      unique name of the software capability that owns this element
+     * @param entityGUID unique identifier for the asset to update
+     * @param entityGUIDParameterName parameter name supplying entityGUID
+     * @param entityTypeName expected type of entity
+     * @param forLineage return elements marked with the Memento classification?
+     * @param forDuplicateProcessing do not merge elements marked as duplicates?
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     *
+     * @throws InvalidParameterException guid or userId is null or this is not an anchor entity
+     * @throws PropertyServerException problem accessing property server
+     * @throws UserNotAuthorizedException security access problem
+     */
+    public void publishElement(String  userId,
+                               String  externalSourceGUID,
+                               String  externalSourceName,
+                               String  entityGUID,
+                               String  entityGUIDParameterName,
+                               String  entityTypeName,
+                               boolean forLineage,
+                               boolean forDuplicateProcessing,
+                               Date    effectiveTime,
+                               String  methodName) throws InvalidParameterException,
+                                                          UserNotAuthorizedException,
+                                                          PropertyServerException
+    {
+        invalidParameterHandler.validateUserId(userId, methodName);
+        invalidParameterHandler.validateGUID(entityGUID, entityGUIDParameterName, methodName);
+
+        /*
+         * This returns the entity for the connectTo element and validates it is of the correct type.
+         */
+        EntityDetail  originalEntity = repositoryHandler.getEntityByGUID(userId,
+                                                                         entityGUID,
+                                                                         entityGUIDParameterName,
+                                                                         entityTypeName,
+                                                                         forLineage,
+                                                                         forDuplicateProcessing,
+                                                                         effectiveTime,
+                                                                         methodName);
+
+        if ((originalEntity != null) && (originalEntity.getType() != null))
+        {
+            OpenMetadataAPIGenericBuilder builder = new OpenMetadataAPIGenericBuilder(originalEntity.getType().getTypeDefGUID(),
+                                                                                      originalEntity.getType().getTypeDefName(),
+                                                                                      repositoryHelper,
+                                                                                      serviceName,
+                                                                                      serverName);
+
+            List<String> elementZones = securityVerifier.getPublishZones(this.getEntityZones(originalEntity),
+                                                                         userId,
+                                                                         originalEntity.getType().getTypeDefName(),
+                                                                         methodName);
+            this.setClassificationInRepository(userId,
+                                               externalSourceGUID,
+                                               externalSourceName,
+                                               originalEntity.getGUID(),
+                                               entityGUIDParameterName,
+                                               originalEntity.getType().getTypeDefName(),
+                                               OpenMetadataType.ZONE_MEMBERSHIP_CLASSIFICATION.typeGUID,
+                                               OpenMetadataType.ZONE_MEMBERSHIP_CLASSIFICATION.typeName,
+                                               builder.getZoneMembershipProperties(elementZones, methodName),
+                                               true,
+                                               forLineage,
+                                               forDuplicateProcessing,
+                                               effectiveTime,
+                                               methodName);
+
+            super.refreshAnchorsClassification(userId,
+                                               externalSourceGUID,
+                                               externalSourceName,
+                                               originalEntity.getGUID(),
+                                               entityGUIDParameterName,
+                                               originalEntity.getType().getTypeDefName(),
+                                               forLineage,
+                                               forDuplicateProcessing,
+                                               effectiveTime,
+                                               methodName);
+
+        }
+    }
+
+
+    /**
+     * Update the zones for a specific asset to the list set up in default zones.
+     *
+     * @param userId calling user
+     * @param externalSourceGUID      unique identifier of the software capability that owns this element
+     * @param externalSourceName      unique name of the software capability that owns this element
+     * @param entityGUID unique identifier for the asset to update
+     * @param entityGUIDParameterName parameter name supplying entityGUID
+     * @param entityTypeName expected type of entity
+     * @param forLineage return elements marked with the Memento classification?
+     * @param forDuplicateProcessing do not merge elements marked as duplicates?
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     *
+     * @throws InvalidParameterException guid or userId is null
+     * @throws PropertyServerException problem accessing property server
+     * @throws UserNotAuthorizedException security access problem
+     */
+    public void withdrawElement(String  userId,
+                                String  externalSourceGUID,
+                                String  externalSourceName,
+                                String  entityGUID,
+                                String  entityGUIDParameterName,
+                                String  entityTypeName,
+                                boolean forLineage,
+                                boolean forDuplicateProcessing,
+                                Date    effectiveTime,
+                                String  methodName) throws InvalidParameterException,
+                                                           UserNotAuthorizedException,
+                                                           PropertyServerException
+    {
+        invalidParameterHandler.validateUserId(userId, methodName);
+        invalidParameterHandler.validateGUID(entityGUID, entityGUIDParameterName, methodName);
+
+        /*
+         * This returns the entity for the connectTo element and validates it is of the correct type.
+         */
+        EntityDetail  originalEntity = repositoryHandler.getEntityByGUID(userId,
+                                                                         entityGUID,
+                                                                         entityGUIDParameterName,
+                                                                         entityTypeName,
+                                                                         forLineage,
+                                                                         forDuplicateProcessing,
+                                                                         effectiveTime,
+                                                                         methodName);
+
+        if ((originalEntity != null) && (originalEntity.getType() != null))
+        {
+            OpenMetadataAPIGenericBuilder builder = new OpenMetadataAPIGenericBuilder(originalEntity.getType().getTypeDefGUID(),
+                                                                                      originalEntity.getType().getTypeDefName(),
+                                                                                      repositoryHelper,
+                                                                                      serviceName,
+                                                                                      serverName);
+
+            List<String> elementZones = securityVerifier.getDefaultZones(this.getEntityZones(originalEntity),
+                                                                         userId,
+                                                                         originalEntity.getType().getTypeDefName(),
+                                                                         methodName);
+            this.setClassificationInRepository(userId,
+                                               externalSourceGUID,
+                                               externalSourceName,
+                                               originalEntity.getGUID(),
+                                               entityGUIDParameterName,
+                                               originalEntity.getType().getTypeDefName(),
+                                               OpenMetadataType.ZONE_MEMBERSHIP_CLASSIFICATION.typeGUID,
+                                               OpenMetadataType.ZONE_MEMBERSHIP_CLASSIFICATION.typeName,
+                                               builder.getZoneMembershipProperties(elementZones, methodName),
+                                               true,
+                                               forLineage,
+                                               forDuplicateProcessing,
+                                               effectiveTime,
+                                               methodName);
+
+            super.refreshAnchorsClassification(userId,
+                                               externalSourceGUID,
+                                               externalSourceName,
+                                               originalEntity.getGUID(),
+                                               entityGUIDParameterName,
+                                               originalEntity.getType().getTypeDefName(),
+                                               forLineage,
+                                               forDuplicateProcessing,
+                                               effectiveTime,
+                                               methodName);
+        }
+    }
+
+
+    /**
+     * Undo the last update to the entity.
+     *
+     * @param userId calling user
+     * @param externalSourceGUID guid of the software capability entity that represented the external source - null for local
+     * @param externalSourceName name of the software capability entity that represented the external source
+     * @param originalEntity unique identifier of object to update
+     * @param entityGUIDParameterName name of parameter supplying the GUID
+     * @param entityTypeName unique name of the entity's type
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     * @return recovered bean
+     *
+     * @throws InvalidParameterException one of the parameters is null or invalid.
+     * @throws PropertyServerException a problem adding the new properties to the repositories.
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public B    undoBeanUpdateInRepository(String             userId,
+                                           String             externalSourceGUID,
+                                           String             externalSourceName,
+                                           EntityDetail       originalEntity,
+                                           String             entityGUIDParameterName,
+                                           String             entityTypeName,
+                                           boolean            forLineage,
+                                           boolean            forDuplicateProcessing,
+                                           Date               effectiveTime,
+                                           String             methodName) throws InvalidParameterException,
+                                                                                 PropertyServerException,
+                                                                                 UserNotAuthorizedException
+    {
+        final String originalEntityParameterName = "originalEntity";
+
+        invalidParameterHandler.validateUserId(userId, methodName);
+
+        if ((originalEntity != null) && (originalEntity.getType() != null))
+        {
+            EntityDetail anchorEntity = this.validateEntityAndAnchorForRead(userId,
+                                                                            entityTypeName,
+                                                                            originalEntity,
+                                                                            entityGUIDParameterName,
+                                                                            true,
+                                                                            true,
+                                                                            forLineage,
+                                                                            forDuplicateProcessing,
+                                                                            effectiveTime,
+                                                                            methodName);
+
+            EntityDetail recoveredEntity = repositoryHandler.undoEntityUpdate(userId,
+                                                                              externalSourceGUID,
+                                                                              externalSourceName,
+                                                                              originalEntity.getGUID(),
+                                                                              methodName);
+
+            /*
+             * There is an extra security check if the update is for an asset or glossary.
+             */
+            try
+            {
+                securityVerifier.validateUserForElementDetailUpdate(userId,
+                                                                    originalEntity,
+                                                                    recoveredEntity.getProperties(),
+                                                                    repositoryHelper,
+                                                                    serviceName,
+                                                                    methodName);
+            }
+            catch (UserNotAuthorizedException notAuth)
+            {
+                /*
+                 * Put the original entity back.
+                 */
+                repositoryHandler.updateEntity(userId,
+                                               externalSourceGUID,
+                                               externalSourceName,
+                                               originalEntity.getGUID(),
+                                               originalEntityParameterName,
+                                               originalEntity.getType().getTypeDefGUID(),
+                                               originalEntity.getType().getTypeDefName(),
+                                               originalEntity.getProperties(),
+                                               originalEntity.getClassifications(),
+                                               forLineage,
+                                               forDuplicateProcessing,
+                                               effectiveTime,
+                                               methodName);
+                throw notAuth;
+            }
+
+            if (repositoryHelper.isTypeOf(serviceName, originalEntity.getType().getTypeDefName(), OpenMetadataType.ASSET.typeName))
+            {
+                auditLog.logMessage(assetActionDescription,
+                                    OpenMetadataObservabilityAuditCode.ASSET_ACTIVITY_UPDATE.getMessageDefinition(userId,
+                                                                                                                  originalEntity.getType().getTypeDefName(),
+                                                                                                                  originalEntity.getGUID(),
+                                                                                                                  methodName,
+                                                                                                                  serviceName));
+            }
+
+            if (recoveredEntity != null)
+            {
+                return converter.getNewBean(beanClass, recoveredEntity, methodName);
+            }
+        }
+        else
+        {
+            String entityGUID = "<null>";
+
+            if (originalEntity != null)
+            {
+                entityGUID = originalEntity.getGUID();
+            }
+            invalidParameterHandler.throwUnknownElement(userId,
+                                                        entityGUID,
+                                                        entityTypeName,
+                                                        serviceName,
+                                                        serverName,
+                                                        methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Classify as a Memento any entity if it is anchored to the anchor entity.
+     *
+     * @param userId calling user
+     * @param externalSourceGUID guid of the software capability entity that represented the external source - null for local
+     * @param externalSourceName name of the software capability entity that represented the external source
+     * @param anchorEntity entity anchor to match against
+     * @param processedGUIDs entities that have already been processed
+     * @param potentialAnchoredEntity entity to validate
+     * @param classificationOriginGUID original entity that the Memento classification  was attached to
+     * @param classificationProperties properties for the classification
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     * @throws InvalidParameterException problem with the parameters
+     * @throws PropertyServerException problem in the repository services
+     * @throws UserNotAuthorizedException calling user is not authorize to issue this request
+     */
+    private void archiveAnchoredEntity(String             userId,
+                                       String             externalSourceGUID,
+                                       String             externalSourceName,
+                                       EntityDetail       anchorEntity,
+                                       List<String>       processedGUIDs,
+                                       EntityProxy        potentialAnchoredEntity,
+                                       String             classificationOriginGUID,
+                                       InstanceProperties classificationProperties,
+                                       boolean            forLineage,
+                                       boolean            forDuplicateProcessing,
+                                       Date               effectiveTime,
+                                       String             methodName) throws InvalidParameterException,
+                                                                             PropertyServerException,
+                                                                             UserNotAuthorizedException
+    {
+        /*
+         * Only need to progress if anchor entity exists.
+         */
+        if (anchorEntity != null)
+        {
+            final String guidParameterName = "potentialAnchoredEntity";
+
+            if ((potentialAnchoredEntity != null) && (potentialAnchoredEntity.getType() != null))
+            {
+                EntityDetail entity = repositoryHandler.getEntityByGUID(userId,
+                                                                        potentialAnchoredEntity.getGUID(),
+                                                                        guidParameterName,
+                                                                        potentialAnchoredEntity.getType().getTypeDefName(),
+                                                                        forLineage,
+                                                                        forDuplicateProcessing,
+                                                                        effectiveTime,
+                                                                        methodName);
+
+                AnchorIdentifiers anchorIdentifiers = this.getAnchorsFromAnchorsClassification(entity, methodName);
+
+                if ((anchorIdentifiers != null) && (anchorIdentifiers.anchorGUID.equals(anchorEntity.getGUID())))
+                {
+                    this.archiveBeanInRepository(userId,
+                                                 externalSourceGUID,
+                                                 externalSourceName,
+                                                 entity.getGUID(),
+                                                 guidParameterName,
+                                                 potentialAnchoredEntity.getType().getTypeDefName(),
+                                                 ClassificationOrigin.PROPAGATED,
+                                                 classificationOriginGUID,
+                                                 classificationProperties,
+                                                 anchorEntity,
+                                                 processedGUIDs,
+                                                 forLineage,
+                                                 forDuplicateProcessing,
+                                                 effectiveTime,
+                                                 methodName);
+                }
+            }
+        }
+    }
+
+
+    /**
+     * Classify an entity in the repository to show that its asset/artifact counterpart in the real world has either
+     * been deleted or archived. Note, this method is designed to work only on anchor entities or entities with no anchor.
+     *
+     * @param userId calling user
+     * @param externalSourceGUID guid of the software capability entity that represented the external source - null for local
+     * @param externalSourceName name of the software capability entity that represented the external source
+     * @param entityGUID unique identifier of object to update
+     * @param entityGUIDParameterName name of parameter supplying the GUID
+     * @param entityTypeName unique name of the entity's type
+     * @param classificationProperties properties for the classification
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     *
+     * @throws InvalidParameterException one of the parameters is null or invalid.
+     * @throws PropertyServerException a problem removing the properties from the repositories.
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void archiveBeanInRepository(String             userId,
+                                        String             externalSourceGUID,
+                                        String             externalSourceName,
+                                        String             entityGUID,
+                                        String             entityGUIDParameterName,
+                                        String             entityTypeName,
+                                        InstanceProperties classificationProperties,
+                                        boolean            forLineage,
+                                        boolean            forDuplicateProcessing,
+                                        Date               effectiveTime,
+                                        String             methodName) throws InvalidParameterException,
+                                                                              PropertyServerException,
+                                                                              UserNotAuthorizedException
+    {
+        invalidParameterHandler.validateUserId(userId, methodName);
+        invalidParameterHandler.validateGUID(entityGUID, entityGUIDParameterName, methodName);
+
+        EntityDetail anchorEntity = this.validateEntityAndAnchorForRead(userId,
+                                                                        entityGUID,
+                                                                        entityGUIDParameterName,
+                                                                        entityTypeName,
+                                                                        true,
+                                                                        true,
+                                                                        forLineage,
+                                                                        forDuplicateProcessing,
+                                                                        effectiveTime,
+                                                                        methodName);
+
+        /*
+         * At this point, archiving is only supported on the anchor entity.  This needs to change (eg to be able to archive schema elements)
+         * by adding logic very similar to the templating logic that makes sure the archive processing travels down the hierarchy and does not
+         * cover the whole anchored entity.
+         */
+        invalidParameterHandler.validateAnchorGUID(entityGUID,
+                                                   entityGUIDParameterName,
+                                                   anchorEntity,
+                                                   entityGUID,
+                                                   entityTypeName,
+                                                   methodName);
+
+        EntityDetail entity = this.archiveBeanInRepository(userId,
+                                                           externalSourceGUID,
+                                                           externalSourceName,
+                                                           entityGUID,
+                                                           entityGUIDParameterName,
+                                                           entityTypeName,
+                                                           ClassificationOrigin.ASSIGNED,
+                                                           entityGUID,
+                                                           classificationProperties,
+                                                           anchorEntity,
+                                                           new ArrayList<>(),
+                                                           forLineage,
+                                                           forDuplicateProcessing,
+                                                           effectiveTime,
+                                                           methodName);
+    }
+
+
+    /**
+     * Classify an entity in the repository to show that its asset/artifact counterpart in the real world has either
+     * been deleted or archived.  Note that this classification is propagated to all elements with the same
+     * AnchorGUID.
+     *
+     * @param userId calling user
+     * @param externalSourceGUID guid of the software capability entity that represented the external source - null for local
+     * @param externalSourceName name of the software capability entity that represented the external source
+     * @param entityGUID unique identifier of object to update
+     * @param entityGUIDParameterName parameter name supplying entityGUID
+     * @param entityTypeName unique name of the entity's type
+     * @param classificationOrigin is this classification assigned or propagated?
+     * @param classificationOriginGUID which entity did a propagated classification originate from?
+     * @param classificationProperties properties for the classification
+     * @param anchorEntity anchor entity for the bean (can be null)
+     * @param processedGUIDs list of processed GUIDs
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     * @return GUID of archived entity
+     * @throws InvalidParameterException one of the parameters is null or invalid.
+     * @throws PropertyServerException a problem removing the properties from the repository.
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    private EntityDetail archiveBeanInRepository(String               userId,
+                                                 String               externalSourceGUID,
+                                                 String               externalSourceName,
+                                                 String               entityGUID,
+                                                 String               entityGUIDParameterName,
+                                                 String               entityTypeName,
+                                                 ClassificationOrigin classificationOrigin,
+                                                 String               classificationOriginGUID,
+                                                 InstanceProperties   classificationProperties,
+                                                 EntityDetail         anchorEntity,
+                                                 List<String>         processedGUIDs,
+                                                 boolean              forLineage,
+                                                 boolean              forDuplicateProcessing,
+                                                 Date                 effectiveTime,
+                                                 String               methodName) throws InvalidParameterException,
+                                                                                         PropertyServerException,
+                                                                                         UserNotAuthorizedException
+    {
+        /*
+         * This is to pick up any errors in the iteration through the anchored elements.
+         */
+        invalidParameterHandler.validateGUID(entityGUID, entityGUIDParameterName, methodName);
+
+        EntityDetail targetEntity = repositoryHandler.getEntityByGUID(userId,
+                                                                      entityGUID,
+                                                                      entityGUIDParameterName,
+                                                                      entityTypeName,
+                                                                      forLineage,
+                                                                      forDuplicateProcessing,
+                                                                      effectiveTime,
+                                                                      methodName);
+
+        if (targetEntity != null)
+        {
+            processedGUIDs.add(targetEntity.getGUID());
+
+            /*
+             * Retrieve the entities attached to this element.  Any entity that is anchored, directly or indirectly, to the anchor entity is archived.
+             */
+            RepositoryRelationshipsIterator iterator = new RepositoryRelationshipsIterator(repositoryHandler,
+                                                                                           invalidParameterHandler,
+                                                                                           userId,
+                                                                                           targetEntity,
+                                                                                           entityTypeName,
+                                                                                           null,
+                                                                                           null,
+                                                                                           0,
+                                                                                           null,
+                                                                                           null,
+                                                                                           SequencingOrder.CREATION_DATE_RECENT,
+                                                                                           null,
+                                                                                           forLineage,
+                                                                                           forDuplicateProcessing,
+                                                                                           0,
+                                                                                           invalidParameterHandler.getMaxPagingSize(),
+                                                                                           effectiveTime,
+                                                                                           methodName);
+
+            while (iterator.moreToReceive())
+            {
+                Relationship relationship = iterator.getNext();
+                EntityProxy  otherEnd     = repositoryHandler.getOtherEnd(targetEntity.getGUID(), entityTypeName, relationship, 0, methodName);
+
+                if (! processedGUIDs.contains(otherEnd.getGUID()))
+                {
+                    if (anchorEntity == null)
+                    {
+                        this.archiveAnchoredEntity(userId,
+                                                   externalSourceGUID,
+                                                   externalSourceName,
+                                                   targetEntity,
+                                                   processedGUIDs,
+                                                   otherEnd,
+                                                   classificationOriginGUID,
+                                                   classificationProperties,
+                                                   forLineage,
+                                                   forDuplicateProcessing,
+                                                   effectiveTime,
+                                                   methodName);
+                    }
+                    else
+                    {
+                        this.archiveAnchoredEntity(userId,
+                                                   externalSourceGUID,
+                                                   externalSourceName,
+                                                   anchorEntity,
+                                                   processedGUIDs,
+                                                   otherEnd,
+                                                   classificationOriginGUID,
+                                                   classificationProperties,
+                                                   forLineage,
+                                                   forDuplicateProcessing,
+                                                   effectiveTime,
+                                                   methodName);
+                    }
+                }
+            }
+
+            repositoryHandler.classifyEntity(userId,
+                                             null,
+                                             null,
+                                             targetEntity.getGUID(),
+                                             targetEntity,
+                                             entityGUIDParameterName,
+                                             entityTypeName,
+                                             OpenMetadataType.MEMENTO_CLASSIFICATION.typeGUID,
+                                             OpenMetadataType.MEMENTO_CLASSIFICATION.typeName,
+                                             classificationOrigin,
+                                             classificationOriginGUID,
+                                             classificationProperties,
+                                             forLineage,
+                                             forDuplicateProcessing,
+                                             effectiveTime,
+                                             methodName);
+
+
+            /*
+             * Update the qualified name in the archived entity.
+             */
+            if (repositoryHelper.isTypeOf(serviceName, entityTypeName, OpenMetadataType.REFERENCEABLE.typeName))
+            {
+                String qualifiedName = repositoryHelper.getStringProperty(serviceName,
+                                                                          OpenMetadataProperty.QUALIFIED_NAME.name,
+                                                                          targetEntity.getProperties(),
+                                                                          methodName) + "_archivedOn_" + new Date();
+
+                String entityTypeGUID = invalidParameterHandler.validateTypeName(entityTypeName,
+                                                                                 OpenMetadataType.OPEN_METADATA_ROOT.typeName,
+                                                                                 serviceName,
+                                                                                 methodName,
+                                                                                 repositoryHelper);
+                this.updateBeanPropertyInRepository(userId,
+                                                    externalSourceGUID,
+                                                    externalSourceName,
+                                                    entityGUID,
+                                                    entityGUIDParameterName,
+                                                    entityTypeGUID,
+                                                    entityTypeName,
+                                                    OpenMetadataProperty.QUALIFIED_NAME.name,
+                                                    qualifiedName,
+                                                    forLineage,
+                                                    forDuplicateProcessing,
+                                                    effectiveTime,
+                                                    methodName);
+            }
+        }
+
+        return targetEntity;
+    }
+
+
+    /**
+     * Remove an entity if it is anchored to the anchor entity or any of the deleted entities.
+     *
+     * @param anchorEntityGUID original entity's anchor
+     * @param deletedEntityGUIDs entities that have been deleted
+     * @param externalSourceGUID unique identifier (guid) for the external source, or null for local.
+     * @param externalSourceName unique name for the external source.
+     * @param potentialAnchoredEntity entity to validate
+     * @param cascadedDelete     boolean indicating whether the delete request can cascade to dependent elements
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     * @throws InvalidParameterException problem with the parameters
+     * @throws PropertyServerException problem in the repository services
+     * @throws UserNotAuthorizedException calling user is not authorize to issue this request
+     */
+    public void deleteIfAppropriatelyAnchoredEntity(String       anchorEntityGUID,
+                                                    Set<String>  deletedEntityGUIDs,
+                                                    String       externalSourceGUID,
+                                                    String       externalSourceName,
+                                                    EntityProxy  potentialAnchoredEntity,
+                                                    boolean      cascadedDelete,
+                                                    boolean      forLineage,
+                                                    boolean      forDuplicateProcessing,
+                                                    Date         effectiveTime,
+                                                    String       methodName) throws InvalidParameterException,
+                                                                                    PropertyServerException,
+                                                                                    UserNotAuthorizedException
+    {
+        final String guidParameterName = "potentialAnchoredEntity";
+
+        /*
+         * An element that is already part of this delete is not looked at again.
+         *
+         * The linked element at the far end of a relationship is very often anchored to the element being
+         * deleted - the two are siblings in the same anchored graph - so the same element is reached from
+         * several directions, and without this guard it is processed once per relationship that leads to it.
+         * Termination then rests entirely on the element having already disappeared from the repository read
+         * below, which is not something to rely on: a soft-deleted element is still returned when the request
+         * is forLineage, and a purge leaves nothing behind to notice at all.  Checking the set that is already
+         * being maintained makes each element the responsibility of exactly one traversal, whichever reaches
+         * it first, and removes the repeated retrieve-and-discard for the rest.
+         */
+        if (deletedEntityGUIDs.contains(potentialAnchoredEntity.getGUID()))
+        {
+            return;
+        }
+
+        /*
+         * Only need to progress if anchor entity exists.
+         */
+        EntityDetail entity = repositoryHandler.getEntityByGUID(localServerUserId,
+                                                                potentialAnchoredEntity.getGUID(),
+                                                                guidParameterName,
+                                                                potentialAnchoredEntity.getType().getTypeDefName(),
+                                                                forLineage,
+                                                                forDuplicateProcessing,
+                                                                effectiveTime,
+                                                                methodName);
+
+        if (entity != null)
+        {
+            AnchorIdentifiers anchorIdentifiers = this.getAnchorsFromAnchorsClassification(entity, methodName);
+
+            if ((anchorIdentifiers != null) && (anchorIdentifiers.anchorGUID != null))
+            {
+                /*
+                 * Only delete if the anchor matches one of the deleted entities.
+                 */
+                if (deletedEntityGUIDs.contains(anchorIdentifiers.anchorGUID))
+                {
+                    this.deleteAnchoredBeanInRepository(localServerUserId,
+                                                        externalSourceGUID,
+                                                        externalSourceName,
+                                                        entity.getGUID(),
+                                                        guidParameterName,
+                                                        potentialAnchoredEntity.getType().getTypeDefGUID(),
+                                                        potentialAnchoredEntity.getType().getTypeDefName(),
+                                                        cascadedDelete,
+                                                        null,
+                                                        null,
+                                                        anchorEntityGUID,
+                                                        deletedEntityGUIDs,
+                                                        forLineage,
+                                                        forDuplicateProcessing,
+                                                        effectiveTime,
+                                                        methodName);
+                }
+            }
+        }
+    }
+
+
+    /**
+     * Return one page of the elements anchored to the supplied element.
+     * <br>
+     * The Anchors classification records the element that its bearer is <b>directly or indirectly</b> anchored
+     * to, so a single query against {@code anchorGUID} returns the whole anchored set at any depth - there is
+     * no need to walk relationships to find it.
+     *
+     * @param userId calling user
+     * @param anchorGUID the anchor whose members are wanted
+     * @param forLineage the request is to support lineage retrieval
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param startingFrom paging start point
+     * @param effectiveTime the time that the retrieved elements must be effective for
+     * @param methodName calling method
+     * @return one page of anchored elements, null or empty when there are no more
+     * @throws UserNotAuthorizedException the user is not allowed to issue the query
+     * @throws PropertyServerException problem with the repository, including a repository that does not
+     * support searching by classification property
+     */
+    private List<EntityDetail> getAnchoredMembers(String  userId,
+                                                  String  anchorGUID,
+                                                  boolean forLineage,
+                                                  boolean forDuplicateProcessing,
+                                                  int     startingFrom,
+                                                  Date    effectiveTime,
+                                                  String  methodName) throws UserNotAuthorizedException,
+                                                                             PropertyServerException
+    {
+        PrimitivePropertyValue anchorGUIDValue = new PrimitivePropertyValue();
+
+        anchorGUIDValue.setPrimitiveDefCategory(PrimitiveDefCategory.OM_PRIMITIVE_TYPE_STRING);
+        anchorGUIDValue.setTypeGUID(PrimitiveDefCategory.OM_PRIMITIVE_TYPE_STRING.getGUID());
+        anchorGUIDValue.setTypeName(PrimitiveDefCategory.OM_PRIMITIVE_TYPE_STRING.getName());
+        anchorGUIDValue.setPrimitiveValue(anchorGUID);
+
+        PropertyCondition anchorGUIDCondition = new PropertyCondition();
+
+        anchorGUIDCondition.setProperty(OpenMetadataProperty.ANCHOR_GUID.name);
+        anchorGUIDCondition.setOperator(PropertyComparisonOperator.EQ);
+        anchorGUIDCondition.setValue(anchorGUIDValue);
+
+        SearchProperties classificationProperties = new SearchProperties();
+
+        classificationProperties.setConditions(Collections.singletonList(anchorGUIDCondition));
+        classificationProperties.setMatchCriteria(MatchCriteria.ALL);
+
+        ClassificationCondition classificationCondition = new ClassificationCondition();
+
+        classificationCondition.setName(OpenMetadataType.ANCHORS_CLASSIFICATION.typeName);
+        classificationCondition.setMatchProperties(classificationProperties);
+
+        SearchClassifications searchClassifications = new SearchClassifications();
+
+        searchClassifications.setConditions(Collections.singletonList(classificationCondition));
+        searchClassifications.setMatchCriteria(MatchCriteria.ALL);
+
+        return repositoryHandler.findEntities(userId,
+                                              null,
+                                              null,
+                                              null,
+                                              null,
+                                              searchClassifications,
+                                              null,
+                                              null,
+                                              SequencingOrder.CREATION_DATE_RECENT,
+                                              forLineage,
+                                              forDuplicateProcessing,
+                                              startingFrom,
+                                              cascadeTraversalPageSize,
+                                              effectiveTime,
+                                              methodName);
+    }
+
+
+    /**
+     * Delete everything anchored to the supplied element by asking for it directly, rather than by walking
+     * relationships to find it.
+     * <br>
+     * The Anchors classification names the element that its bearer is directly or indirectly anchored to, so
+     * one query returns the entire anchored set however deep the graph is.  That matters for two reasons.  It
+     * replaces a traversal whose cost was proportional to the number of <em>relationships</em> in the graph
+     * with one query per <em>anchor</em>.  And it removes the recursion: the traversal it replaces descends
+     * through the graph holding a page of relationships alive at every level, so the memory it needs grows
+     * with the depth of the graph, and a deep or wide anchored graph could exhaust the heap - which, before
+     * the Error handling was corrected, took the whole platform with it.
+     * <br>
+     * <b>Nested anchors.</b>  An element inside an anchored set can be an anchor in its own right, and
+     * anything anchored to <em>it</em> carries its GUID rather than the outer one.  Those are found without
+     * any extra queries: such an element is its own anchor, so its Anchors classification names itself, and
+     * the entities returned already carry their classifications.  Each one found is queued and its own
+     * subgraph retrieved in turn.
+     * <br>
+     * <b>Fallback.</b>  Searching by classification property is an optional repository capability - a
+     * repository proxy in front of a third-party store may not offer it.  If the first query cannot be run,
+     * this method reports that it could not be used and the caller falls back to the relationship traversal,
+     * which is the behaviour this has always had.  Once the first query succeeds the capability is proven, so
+     * later failures are real errors and are allowed to propagate rather than being hidden behind a silent
+     * change of strategy.
+     *
+     * @param userId calling user
+     * @param externalSourceGUID guid of the software capability that represents the external source
+     * @param externalSourceName name of the software capability that represents the external source
+     * @param anchorGUID the element being deleted, which is its own anchor
+     * @param cascadedDelete can the delete cascade to dependent elements?
+     * @param deletedEntityGUIDs entities that have already been deleted in this cascade
+     * @param forLineage the request is to support lineage retrieval
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for
+     * @param methodName calling method
+     * @return true if the anchored members were found and removed this way; false if the repository cannot
+     * answer the query and the caller should use the relationship traversal instead
+     * @throws InvalidParameterException one of the parameters is null or invalid
+     * @throws PropertyServerException problem removing the properties from the repositories
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request
+     */
+    private boolean deleteAnchoredMembersByQuery(String      userId,
+                                                 String      externalSourceGUID,
+                                                 String      externalSourceName,
+                                                 String      anchorGUID,
+                                                 boolean     cascadedDelete,
+                                                 Set<String> deletedEntityGUIDs,
+                                                 boolean     forLineage,
+                                                 boolean     forDuplicateProcessing,
+                                                 Date        effectiveTime,
+                                                 String      methodName) throws InvalidParameterException,
+                                                                                PropertyServerException,
+                                                                                UserNotAuthorizedException
+    {
+        final String memberGUIDParameterName = "anchoredMemberGUID";
+
+        List<EntityDetail> firstPage;
+
+        try
+        {
+            firstPage = this.getAnchoredMembers(userId, anchorGUID, forLineage, forDuplicateProcessing, 0, effectiveTime, methodName);
+        }
+        catch (Exception queryNotSupported)
+        {
+            log.debug("Anchored members of " + anchorGUID + " can not be retrieved by query (" +
+                              queryNotSupported.getClass().getName() + ": " + queryNotSupported.getMessage() +
+                              "); falling back to walking the relationships", queryNotSupported);
+            return false;
+        }
+
+        /*
+         * Anchors are discovered breadth-first and deleted depth-first.
+         *
+         * Nesting can go through any number of levels: an element anchored to this one can be an anchor
+         * itself, and so can an element anchored to that.  Each level is found by the same query, so
+         * discovery is a queue rather than a recursion, and it simply runs until nothing new is queued.
+         *
+         * Deletion runs the other way.  A nested anchor is recorded during discovery but deliberately not
+         * deleted then: the elements anchored to it are still to be found, and deleting an anchor before its
+         * members would break the rule the traversal has always followed - members first, anchor afterwards.
+         * Because discovery is breadth-first, walking the discovered anchors backwards visits the deepest
+         * first, which restores that order at every level.
+         */
+        Deque<String> anchorsToProcess  = new ArrayDeque<>();
+        Set<String>   anchorsProcessed  = new HashSet<>();
+        List<String>  nestedAnchorGUIDs = new ArrayList<>();
+
+        anchorsToProcess.add(anchorGUID);
+
+        List<EntityDetail> members = firstPage;
+
+        while (! anchorsToProcess.isEmpty())
+        {
+            String currentAnchorGUID = anchorsToProcess.poll();
+
+            if (! anchorsProcessed.add(currentAnchorGUID))
+            {
+                continue;
+            }
+
+            if (members == null)
+            {
+                members = this.getAnchoredMembers(userId, currentAnchorGUID, forLineage, forDuplicateProcessing, 0, effectiveTime, methodName);
+            }
+
+            while ((members != null) && (! members.isEmpty()))
+            {
+                boolean anyProcessed = false;
+
+                /*
+                 * Claim the whole page before deleting any of it.
+                 *
+                 * The members of one anchor are usually linked to each other, so removing the relationships of
+                 * the first one leads straight to its siblings.  Those siblings are anchored to the element
+                 * being deleted, so the traversal would happily delete them there and then - recursively, and
+                 * to whatever depth the graph happens to have, which is the behaviour this method exists to
+                 * replace.  Registering the page first means that traversal recognises them as already spoken
+                 * for and leaves them alone; each is then dealt with by the loop below, once, at this level.
+                 */
+                List<EntityDetail> claimedMembers = new ArrayList<>();
+
+                for (EntityDetail member : members)
+                {
+                    if ((member != null) && (! currentAnchorGUID.equals(member.getGUID())) && (deletedEntityGUIDs.add(member.getGUID())))
+                    {
+                        claimedMembers.add(member);
+                    }
+                }
+
+                for (EntityDetail member : claimedMembers)
+                {
+                    anyProcessed = true;
+
+                    AnchorIdentifiers memberAnchor = this.getAnchorsFromAnchorsClassification(member, methodName);
+
+                    if ((memberAnchor != null) && (member.getGUID().equals(memberAnchor.anchorGUID)))
+                    {
+                        /*
+                         * This member is its own anchor, so it has a subgraph of its own.  Queue it so that
+                         * subgraph is found, and leave the element itself until its members have gone.
+                         */
+                        anchorsToProcess.add(member.getGUID());
+                        nestedAnchorGUIDs.add(member.getGUID());
+                        continue;
+                    }
+
+                    /*
+                     * The member is removed through the standard single-element delete so that it keeps every
+                     * check and every event that a delete has always produced: the security verifier is called
+                     * for it, its own dependent relationships are validated, and its relationships are removed
+                     * individually before the entity itself.  What has changed is only how it was found.
+                     */
+                    this.deleteAnchoredBeanInRepository(userId,
+                                                        externalSourceGUID,
+                                                        externalSourceName,
+                                                        member.getGUID(),
+                                                        memberGUIDParameterName,
+                                                        member.getType().getTypeDefGUID(),
+                                                        member.getType().getTypeDefName(),
+                                                        cascadedDelete,
+                                                        null,
+                                                        null,
+                                                        currentAnchorGUID,
+                                                        deletedEntityGUIDs,
+                                                        forLineage,
+                                                        forDuplicateProcessing,
+                                                        effectiveTime,
+                                                        methodName);
+                }
+
+                if (! anyProcessed)
+                {
+                    /*
+                     * Nothing on this page was this traversal's to deal with - every entry was either the
+                     * anchor itself or already claimed.  Re-querying would return the same page for ever.
+                     */
+                    break;
+                }
+
+                /*
+                 * Deleting shrinks the result set, so the next page is read from the start rather than by
+                 * advancing an offset over a set that is moving underneath the query.  Any nested anchor
+                 * claimed above is still there, which is why a page of nothing but nested anchors ends the
+                 * loop through anyProcessed rather than being read again.
+                 */
+                members = this.getAnchoredMembers(userId, currentAnchorGUID, forLineage, forDuplicateProcessing, 0, effectiveTime, methodName);
+
+                if ((members != null) && (! members.isEmpty()))
+                {
+                    boolean somethingLeftToClaim = false;
+
+                    for (EntityDetail member : members)
+                    {
+                        if ((member != null) && (! deletedEntityGUIDs.contains(member.getGUID())))
+                        {
+                            somethingLeftToClaim = true;
+                            break;
+                        }
+                    }
+
+                    if (! somethingLeftToClaim)
+                    {
+                        break;
+                    }
+                }
+            }
+
+            members = null;
+        }
+
+        /*
+         * The nested anchors, deepest first - see the note at the top of this loop.
+         */
+        for (int nestedAnchor = nestedAnchorGUIDs.size() - 1; nestedAnchor >= 0; nestedAnchor--)
+        {
+            String nestedAnchorGUID = nestedAnchorGUIDs.get(nestedAnchor);
+
+            EntityDetail nestedAnchorEntity = repositoryHandler.getEntityByGUID(userId,
+                                                                                nestedAnchorGUID,
+                                                                                memberGUIDParameterName,
+                                                                                OpenMetadataType.OPEN_METADATA_ROOT.typeName,
+                                                                                forLineage,
+                                                                                forDuplicateProcessing,
+                                                                                effectiveTime,
+                                                                                methodName);
+
+            if (nestedAnchorEntity != null)
+            {
+                this.deleteAnchoredBeanInRepository(userId,
+                                                    externalSourceGUID,
+                                                    externalSourceName,
+                                                    nestedAnchorEntity.getGUID(),
+                                                    memberGUIDParameterName,
+                                                    nestedAnchorEntity.getType().getTypeDefGUID(),
+                                                    nestedAnchorEntity.getType().getTypeDefName(),
+                                                    cascadedDelete,
+                                                    null,
+                                                    null,
+                                                    anchorGUID,
+                                                    deletedEntityGUIDs,
+                                                    forLineage,
+                                                    forDuplicateProcessing,
+                                                    effectiveTime,
+                                                    methodName);
+            }
+        }
+
+        return true;
+    }
+
+
+    /**
+     * Delete an entity from the repository.
+     *
+     * @param userId calling user
+     * @param externalSourceGUID guid of the software capability entity that represented the external source - null for local
+     * @param externalSourceName name of the software capability entity that represented the external source
+     * @param entityGUID unique identifier of object to update
+     * @param entityGUIDParameterName name of parameter supplying the GUID
+     * @param entityTypeGUID unique identifier of the entity's type
+     * @param entityTypeName unique name of the entity's type
+     * @param cascadedDelete     boolean indicating whether the delete request can cascade to dependent elements
+     * @param validatingPropertyName name of property to verify - or null if no verification is required
+     * @param validatingPropertyValue value of property to verify
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     * @throws InvalidParameterException one of the parameters is null or invalid.
+     * @throws PropertyServerException a problem removing the properties from the repositories.
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void deleteBeanInRepository(String       userId,
+                                       String       externalSourceGUID,
+                                       String       externalSourceName,
+                                       String       entityGUID,
+                                       String       entityGUIDParameterName,
+                                       String       entityTypeGUID,
+                                       String       entityTypeName,
+                                       boolean      cascadedDelete,
+                                       String       validatingPropertyName,
+                                       String       validatingPropertyValue,
+                                       boolean      forLineage,
+                                       boolean      forDuplicateProcessing,
+                                       Date         effectiveTime,
+                                       String       methodName) throws InvalidParameterException,
+                                                                       PropertyServerException,
+                                                                       UserNotAuthorizedException
+    {
+        /*
+         * A set rather than a list.  Every entity reached during the cascade is tested against this to decide
+         * whether it is anchored to something already being deleted, so a linear scan here made the whole
+         * traversal quadratic in the number of elements deleted - which is exactly the case that hurts, since
+         * it is the large deletes that are slow to begin with.  Insertion order is preserved so that the
+         * sequence remains readable when debugging.
+         */
+        Set<String> deletedEntityGUIDs = new LinkedHashSet<>();
+
+        this.deleteBeanInRepository(userId,
+                                    externalSourceGUID,
+                                    externalSourceName,
+                                    entityGUID,
+                                    entityGUIDParameterName,
+                                    entityTypeGUID,
+                                    entityTypeName,
+                                    cascadedDelete,
+                                    validatingPropertyName,
+                                    validatingPropertyValue,
+                                    deletedEntityGUIDs,
+                                    forLineage,
+                                    forDuplicateProcessing,
+                                    effectiveTime,
+                                    methodName);
+    }
+
+
+    /**
+     * Delete an entity from the repository as part of a cascade that may already have deleted other entities.
+     * <br>
+     * The set of deleted entities is shared with the caller so that an element reached from this entity's
+     * members - a connection anchored to a digital product, found through the product's asset - is recognised
+     * as belonging to an element that is being deleted even though the delete of that element has not yet
+     * registered it.  A fresh set at every level, which is what the cascade used to start with, loses that
+     * knowledge and leaves such elements behind with an anchor that no longer exists.
+     *
+     * @param userId calling user
+     * @param externalSourceGUID guid of the software capability entity that represented the external source - null for local
+     * @param externalSourceName name of the software capability entity that represented the external source
+     * @param entityGUID unique identifier of object to update
+     * @param entityGUIDParameterName name of parameter supplying the GUID
+     * @param entityTypeGUID unique identifier of the entity's type
+     * @param entityTypeName unique name of the entity's type
+     * @param cascadedDelete     boolean indicating whether the delete request can cascade to dependent elements
+     * @param validatingPropertyName name of property to verify - or null if no verification is required
+     * @param validatingPropertyValue value of property to verify
+     * @param deletedEntityGUIDs entities already deleted, or claimed for deletion, by the cascade this delete is part of
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     * @throws InvalidParameterException one of the parameters is null or invalid.
+     * @throws PropertyServerException a problem removing the properties from the repositories.
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    private void deleteBeanInRepository(String       userId,
+                                        String       externalSourceGUID,
+                                        String       externalSourceName,
+                                        String       entityGUID,
+                                        String       entityGUIDParameterName,
+                                        String       entityTypeGUID,
+                                        String       entityTypeName,
+                                        boolean      cascadedDelete,
+                                        String       validatingPropertyName,
+                                        String       validatingPropertyValue,
+                                        Set<String>  deletedEntityGUIDs,
+                                        boolean      forLineage,
+                                        boolean      forDuplicateProcessing,
+                                        Date         effectiveTime,
+                                        String       methodName) throws InvalidParameterException,
+                                                                        PropertyServerException,
+                                                                        UserNotAuthorizedException
+    {
+        invalidParameterHandler.validateUserId(userId, methodName);
+        invalidParameterHandler.validateGUID(entityGUID, entityGUIDParameterName, methodName);
+
+        EntityDetail  entity = repositoryHandler.getEntityByGUID(userId,
+                                                                 entityGUID,
+                                                                 entityGUIDParameterName,
+                                                                 entityTypeName,
+                                                                 forLineage,
+                                                                 forDuplicateProcessing,
+                                                                 effectiveTime,
+                                                                 methodName);
+
+        EntityDetail anchorEntity = this.validateEntityAndAnchorForRead(userId,
+                                                                        entityTypeName,
+                                                                        entity,
+                                                                        entityGUIDParameterName,
+                                                                        true,
+                                                                        false,
+                                                                        forLineage,
+                                                                        forDuplicateProcessing,
+                                                                        effectiveTime,
+                                                                        methodName);
+
+        deletedEntityGUIDs.add(entity.getGUID());
+
+        /*
+         * The call above has validated that the entity to delete exists.  The anchorEntity is null when the
+         * entity has no Anchors classification, and is the entity itself when it is its own anchor - which is
+         * the case for every element created through the handlers as an anchor, since they carry an Anchors
+         * classification that names no other element.  Both mean the entity is the anchor of its own graph.
+         * Only an entity anchored to something else is deleted as a member of that other element's graph.
+         */
+        if ((anchorEntity != null) && (! anchorEntity.getGUID().equals(entity.getGUID())))
+        {
+            this.deleteAnchoredBeanInRepository(userId,
+                                                externalSourceGUID,
+                                                externalSourceName,
+                                                entityGUID,
+                                                entityGUIDParameterName,
+                                                entityTypeGUID,
+                                                entityTypeName,
+                                                cascadedDelete,
+                                                validatingPropertyName,
+                                                validatingPropertyValue,
+                                                anchorEntity.getGUID(),
+                                                deletedEntityGUIDs,
+                                                forLineage,
+                                                forDuplicateProcessing,
+                                                effectiveTime,
+                                                methodName);
+        }
+        else
+        {
+            /*
+             * This entity is its own anchor, so anything anchored to it is being deleted with it.  Ask for
+             * those members directly - one query returns the whole anchored set, at any depth - rather than
+             * discovering them by descending through the relationships.  See deleteAnchoredMembersByQuery for
+             * why that matters and for what happens on a repository that cannot answer the query: it returns
+             * false, and the traversal below finds the members exactly as it always did.
+             */
+            this.deleteAnchoredMembersByQuery(userId,
+                                              externalSourceGUID,
+                                              externalSourceName,
+                                              entity.getGUID(),
+                                              cascadedDelete,
+                                              deletedEntityGUIDs,
+                                              forLineage,
+                                              forDuplicateProcessing,
+                                              effectiveTime,
+                                              methodName);
+
+            this.deleteAnchoredBeanInRepository(userId,
+                                                externalSourceGUID,
+                                                externalSourceName,
+                                                entityGUID,
+                                                entityGUIDParameterName,
+                                                entityTypeGUID,
+                                                entityTypeName,
+                                                cascadedDelete,
+                                                validatingPropertyName,
+                                                validatingPropertyValue,
+                                                entity.getGUID(),
+                                                deletedEntityGUIDs,
+                                                forLineage,
+                                                forDuplicateProcessing,
+                                                effectiveTime,
+                                                methodName);
+        }
+    }
+
+
+    /**
+     * Permanently remove an entity from the repository.  This is only possible on an entity that has already
+     * been soft-deleted - that is the classic OMRS lifecycle (soft-delete, then purge) enforced by
+     * repositoryHandler.purgeEntity()/the underlying repository connector.
+     * <br><br>
+     * The entity is retrieved "as of now" (rather than through the usual active-only lookup, which would reject
+     * an already-deleted entity outright) purely so its visibility/security can be checked before the purge is
+     * allowed to proceed.  entityTypeGUID/entityTypeName passed to purgeEntity() itself are expected to be a
+     * generic placeholder (eg OpenMetadataRoot) rather than the entity's own specific type, exactly as
+     * deleteBeanInRepository() already does, since purgeEntity()'s own type-compatibility check accepts any
+     * ancestor of the entity's real type.
+     *
+     * @param userId calling user
+     * @param entityGUID unique identifier of object to purge
+     * @param entityGUIDParameterName name of parameter supplying the GUID
+     * @param entityTypeGUID unique identifier of the entity's type (or a generic placeholder such as OpenMetadataRoot)
+     * @param entityTypeName unique name of the entity's type (or a generic placeholder such as OpenMetadataRoot)
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     * @throws InvalidParameterException one of the parameters is null or invalid.
+     * @throws PropertyServerException a problem removing the properties from the repositories, or the entity has
+     *                                  not already been deleted.
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void purgeBeanInRepository(String  userId,
+                                      String  entityGUID,
+                                      String  entityGUIDParameterName,
+                                      String  entityTypeGUID,
+                                      String  entityTypeName,
+                                      boolean forLineage,
+                                      boolean forDuplicateProcessing,
+                                      Date    effectiveTime,
+                                      String  methodName) throws InvalidParameterException,
+                                                                 PropertyServerException,
+                                                                 UserNotAuthorizedException
+    {
+        invalidParameterHandler.validateUserId(userId, methodName);
+        invalidParameterHandler.validateGUID(entityGUID, entityGUIDParameterName, methodName);
+
+        /*
+         * A purge removes an entity that has already been soft-deleted, so the entity it is about to
+         * remove has to be readable whatever its status.  This used to ask for the entity as of "now",
+         * which worked only because a point-in-time retrieval happened to return deleted entities; once
+         * that retrieval answers as at the time requested - where a deleted entity is not known - the
+         * purge could no longer see its own target and left the entity soft-deleted instead.
+         */
+        EntityDetail entity = repositoryHandler.getEntityIncludingDeleted(userId, entityGUID, methodName);
+
+        if (entity != null)
+        {
+            securityVerifier.validateUserForElementDelete(userId, entity, repositoryHelper, serviceName, methodName);
+        }
+
+        repositoryHandler.purgeEntity(userId, entityGUID, entityTypeGUID, entityTypeName, methodName);
+    }
+
+
+    /**
+     * Permanently remove a relationship from the repository.  This is only possible on a relationship that has
+     * already been soft-deleted - that is the classic OMRS lifecycle (soft-delete, then purge) enforced by
+     * repositoryHandler.purgeRelationship()/the underlying repository connector.
+     * <br><br>
+     * purgeRelationship() needs the relationship's actual type (it validates the supplied type against the
+     * stored relationship's own type, and there is no generic "any relationship" type to substitute, unlike
+     * entity purges which can use OpenMetadataRoot), so the relationship is retrieved "as of now" first.
+     *
+     * @param userId calling user
+     * @param relationshipGUID unique identifier of the relationship to purge
+     * @param relationshipGUIDParameterName name of parameter supplying the GUID
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     * @throws InvalidParameterException one of the parameters is null or invalid, or the relationship is not known.
+     * @throws PropertyServerException a problem removing the relationship from the repositories, or the
+     *                                  relationship has not already been deleted.
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void purgeRelationshipInRepository(String userId,
+                                              String relationshipGUID,
+                                              String relationshipGUIDParameterName,
+                                              Date   effectiveTime,
+                                              String methodName) throws InvalidParameterException,
+                                                                        PropertyServerException,
+                                                                        UserNotAuthorizedException
+    {
+        invalidParameterHandler.validateUserId(userId, methodName);
+        invalidParameterHandler.validateGUID(relationshipGUID, relationshipGUIDParameterName, methodName);
+
+        /*
+         * A purge removes a relationship that has already been soft-deleted, so its target has to be
+         * readable whatever its status - see the note in purgeBeanInRepository() above.
+         */
+        Relationship relationship = repositoryHandler.getRelationshipIncludingDeleted(userId, relationshipGUID, methodName);
+
+        if (relationship == null)
+        {
+            /*
+             * Not held at all.  Going through the ordinary retrieval raises the "relationship not known"
+             * error that a caller purging something that does not exist should get.
+             */
+            relationship = repositoryHandler.getRelationshipByGUID(userId,
+                                                                   relationshipGUID,
+                                                                   relationshipGUIDParameterName,
+                                                                   null,
+                                                                   null,
+                                                                   effectiveTime,
+                                                                   methodName);
+        }
+
+        repositoryHandler.purgeRelationship(userId,
+                                            relationship.getType().getTypeDefGUID(),
+                                            relationship.getType().getTypeDefName(),
+                                            relationshipGUID,
+                                            methodName);
+    }
+
+
+    /**
+     * Delete an entity from the repository and all elements anchored to it, and any element anchored to the anchored elements
+     * that are deleted.
+     *
+     * @param userId calling user
+     * @param externalSourceGUID guid of the software capability entity that represented the external source - null for local
+     * @param externalSourceName name of the software capability entity that represented the external source
+     * @param entityGUID unique identifier of object to update
+     * @param entityGUIDParameterName name of parameter supplying the GUID
+     * @param entityTypeGUID unique identifier of the entity's type
+     * @param entityTypeName unique name of the entity's type
+     * @param cascadedDelete     boolean indicating whether the delete request can cascade to dependent elements
+     * @param validatingPropertyName name of property to verify - null if no verification is required
+     * @param validatingPropertyValue value of property to verify
+     * @param anchorEntityGUID unique identifier of the anchor entity
+     * @param deletedEntityGUIDs entities that have already been deleted in this cascade
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     * @throws InvalidParameterException one of the parameters is null or invalid.
+     * @throws PropertyServerException a problem removing the properties from the repository.
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void deleteAnchoredBeanInRepository(String       userId,
+                                               String       externalSourceGUID,
+                                               String       externalSourceName,
+                                               String       entityGUID,
+                                               String       entityGUIDParameterName,
+                                               String       entityTypeGUID,
+                                               String       entityTypeName,
+                                               boolean      cascadedDelete,
+                                               String       validatingPropertyName,
+                                               String       validatingPropertyValue,
+                                               String       anchorEntityGUID,
+                                               Set<String>  deletedEntityGUIDs,
+                                               boolean      forLineage,
+                                               boolean      forDuplicateProcessing,
+                                               Date         effectiveTime,
+                                               String       methodName) throws InvalidParameterException,
+                                                                               PropertyServerException,
+                                                                               UserNotAuthorizedException
+    {
+        invalidParameterHandler.validateUserId(userId, methodName);
+        invalidParameterHandler.validateGUID(entityGUID, entityGUIDParameterName, methodName);
+
+        EntityDetail startingEntity = repositoryHandler.getEntityByGUID(userId,
+                                                                        entityGUID,
+                                                                        entityGUIDParameterName,
+                                                                        entityTypeName,
+                                                                        forLineage,
+                                                                        forDuplicateProcessing,
+                                                                        effectiveTime,
+                                                                        methodName);
+
+        EntityDetail anchorEntity = validateEntityAndAnchorForRead(userId, entityTypeName, startingEntity, entityGUIDParameterName, true, true, forLineage, forDuplicateProcessing, effectiveTime, methodName);
+
+        if ((anchorEntity != null) && (anchorEntity.getGUID().equals(startingEntity.getGUID())))
+        {
+            securityVerifier.validateUserForElementDelete(userId,
+                                                          startingEntity,
+                                                          repositoryHelper,
+                                                          serviceName,
+                                                          methodName);
+        }
+        else
+        {
+            securityVerifier.validateUserForAnchorMemberDelete(userId,
+                                                               anchorEntity,
+                                                               startingEntity,
+                                                               repositoryHelper,
+                                                               serviceName,
+                                                               methodName);
+        }
+
+
+        /*
+         * Registered before the cascade to the dependent elements begins, so that an element anchored to this
+         * one but reached through a dependent element - a digital product's connection, found through its
+         * asset - is recognised as part of this delete.  If the delete is refused below the exception abandons
+         * the whole cascade, so an entry for an entity that was not deleted is never acted upon.
+         */
+        deletedEntityGUIDs.add(entityGUID);
+
+        /*
+         * Check that the cascaded delete option is true or there are no protected relationships present.
+         */
+        validateCascadedDelete(userId, externalSourceGUID, externalSourceName, startingEntity, cascadedDelete, deletedEntityGUIDs, forLineage, forDuplicateProcessing, effectiveTime);
+
+        /*
+         * Retrieve the entities attached to this element.  Any entity that is anchored, directly or indirectly, to the anchor entity is deleted.
+         * (This is why we explicitly delete the relationship to the parent element before calling this method).
+         */
+        /*
+         * The page size is deliberately smaller than the server's maximum.  This traversal is recursive - the
+         * entity at the far end of each relationship may itself be anchored, and deleting it re-enters this
+         * method - so the iterator at every level of the recursion is holding a page of relationships, with
+         * their properties, for as long as the levels beneath it are running.  Sized at the server maximum,
+         * the memory held is (depth x maxPageSize) relationships, which is how a delete of a large anchored
+         * graph exhausts the heap.  A smaller page costs more round trips for the same total work and bounds
+         * what is held at each level.
+         */
+        RepositoryRelationshipsIterator iterator = new RepositoryRelationshipsIterator(repositoryHandler,
+                                                                                       invalidParameterHandler,
+                                                                                       userId,
+                                                                                       startingEntity,
+                                                                                       entityTypeName,
+                                                                                       null,
+                                                                                       null,
+                                                                                       0,
+                                                                                       null,
+                                                                                       null,
+                                                                                       SequencingOrder.CREATION_DATE_RECENT,
+                                                                                       null,
+                                                                                       forLineage,
+                                                                                       forDuplicateProcessing,
+                                                                                       0,
+                                                                                       cascadeTraversalPageSize,
+                                                                                       effectiveTime,
+                                                                                       methodName);
+
+        while (iterator.moreToReceive())
+        {
+            Relationship relationship = iterator.getNext();
+
+            repositoryHandler.removeRelationship(userId,
+                                                 externalSourceGUID,
+                                                 externalSourceName,
+                                                 relationship,
+                                                 methodName);
+
+            /*
+             * Ascertain if the entity at the other end of the relationship should be deleted
+             */
+            this.deleteIfAppropriatelyAnchoredEntity(anchorEntityGUID,
+                                                     deletedEntityGUIDs,
+                                                     externalSourceGUID,
+                                                     externalSourceName,
+                                                     repositoryHandler.getOtherEnd(startingEntity.getGUID(),
+                                                                                   entityTypeName,
+                                                                                   relationship,
+                                                                                   0,
+                                                                                   methodName),
+                                                     cascadedDelete,
+                                                     forLineage,
+                                                     forDuplicateProcessing,
+                                                     effectiveTime,
+                                                     methodName);
+        }
+
+        /*
+         * This method explicitly removes all relationships attached to the entity before it deleted the entity.  This ensures that repository
+         * events are created for all the relationships.  This is why the code above needs to deal with the nested entities first.
+         */
+        repositoryHandler.removeEntity(userId,
+                                       externalSourceGUID,
+                                       externalSourceName,
+                                       entityGUID,
+                                       entityGUIDParameterName,
+                                       entityTypeGUID,
+                                       entityTypeName,
+                                       validatingPropertyName,
+                                       validatingPropertyValue,
+                                       null,
+                                       null,
+                                       SequencingOrder.CREATION_DATE_RECENT,
+                                       null,
+                                       forLineage,
+                                       forDuplicateProcessing,
+                                       effectiveTime,
+                                       methodName);
+    }
+
+
+    /**
+     * Check for relationships that would prevent a simple (non-cascaded) delete
+     *
+     * @param userId calling user
+     * @param externalSourceGUID guid of the software capability entity that represented the external source - null for local
+     * @param externalSourceName name of the software capability entity that represented the external source
+     * @param startingEntity     starting entity
+     * @param cascadedDelete     boolean indicating whether the delete request can cascade to dependent elements
+     * @param deletedEntityGUIDs entities already deleted, or claimed for deletion, by the cascade this delete is part of
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @throws InvalidParameterException delete not allowed
+     * @throws PropertyServerException problem with repository
+     * @throws UserNotAuthorizedException problem with access
+     */
+    private void validateCascadedDelete(String       userId,
+                                        String       externalSourceGUID,
+                                        String       externalSourceName,
+                                        EntityDetail startingEntity,
+                                        boolean      cascadedDelete,
+                                        Set<String>  deletedEntityGUIDs,
+                                        boolean      forLineage,
+                                        boolean      forDuplicateProcessing,
+                                        Date         effectiveTime) throws InvalidParameterException,
+                                                                           PropertyServerException,
+                                                                           UserNotAuthorizedException
+    {
+        if (cascadedDelete)
+        {
+            if (repositoryHelper.isTypeOf(serviceName, startingEntity.getType().getTypeDefName(), OpenMetadataType.DATABASE.typeName))
+            {
+                this.removeLinkedDatabaseSchemas(userId, externalSourceGUID, externalSourceName, startingEntity.getGUID(), deletedEntityGUIDs, forLineage, forDuplicateProcessing, effectiveTime);
+            }
+            else if (repositoryHelper.isTypeOf(serviceName, startingEntity.getType().getTypeDefName(), OpenMetadataType.FILE_FOLDER.typeName))
+            {
+                this.removeFolderContents(userId, externalSourceGUID, externalSourceName, startingEntity.getGUID(), deletedEntityGUIDs, forLineage, forDuplicateProcessing, effectiveTime);
+            }
+            else if (repositoryHelper.isTypeOf(serviceName, startingEntity.getType().getTypeDefName(), OpenMetadataType.IT_INFRASTRUCTURE.typeName))
+            {
+                this.removeDeployedAssets(userId, externalSourceGUID, externalSourceName, startingEntity.getGUID(), deletedEntityGUIDs, forLineage, forDuplicateProcessing, effectiveTime);
+            }
+            else if (repositoryHelper.isTypeOf(serviceName, startingEntity.getType().getTypeDefName(), OpenMetadataType.DATA_STRUCTURE.typeName))
+            {
+                this.removeDataStructureMembers(userId, externalSourceGUID, externalSourceName, startingEntity.getGUID(), deletedEntityGUIDs, forLineage, forDuplicateProcessing, effectiveTime);
+            }
+            else if (repositoryHelper.isTypeOf(serviceName, startingEntity.getType().getTypeDefName(), OpenMetadataType.DATA_FIELD.typeName))
+            {
+                this.removeNestedDataFields(userId, externalSourceGUID, externalSourceName, startingEntity.getGUID(), deletedEntityGUIDs, forLineage, forDuplicateProcessing, effectiveTime);
+            }
+            else if (repositoryHelper.isTypeOf(serviceName, startingEntity.getType().getTypeDefName(), OpenMetadataType.DATA_CLASS.typeName))
+            {
+                this.removeLinkedDataClasses(userId, externalSourceGUID, externalSourceName, startingEntity.getGUID(), deletedEntityGUIDs, forLineage, forDuplicateProcessing, effectiveTime);
+            }
+            else if (repositoryHelper.isTypeOf(serviceName, startingEntity.getType().getTypeDefName(), OpenMetadataType.COMMENT.typeName))
+            {
+                this.removeNestedComments(userId, externalSourceGUID, externalSourceName, startingEntity.getGUID(), deletedEntityGUIDs, forLineage, forDuplicateProcessing, effectiveTime);
+            }
+            else if (repositoryHelper.isTypeOf(serviceName, startingEntity.getType().getTypeDefName(), OpenMetadataType.COLLECTION.typeName))
+            {
+                this.removeCollectionMembers(userId, externalSourceGUID, externalSourceName, startingEntity.getGUID(), deletedEntityGUIDs, forLineage, forDuplicateProcessing, effectiveTime);
+            }
+
+            return;
+        }
+
+        if (repositoryHelper.isTypeOf(serviceName, startingEntity.getType().getTypeDefName(), OpenMetadataType.ASSET.typeName))
+        {
+            /*
+             * Note this is a special case because there is no equivalent remove method for DataSetContent relationship.
+             */
+            validateNoDataSetContent(userId, startingEntity, forLineage, forDuplicateProcessing, effectiveTime);
+
+            if (repositoryHelper.isTypeOf(serviceName, startingEntity.getType().getTypeDefName(), OpenMetadataType.DEPLOYED_DATABASE_SCHEMA.typeName))
+            {
+                validateEmptyDatabaseSchema(userId, startingEntity, forLineage, forDuplicateProcessing, effectiveTime);
+            }
+            else if (repositoryHelper.isTypeOf(serviceName, startingEntity.getType().getTypeDefName(), OpenMetadataType.FILE_FOLDER.typeName))
+            {
+                validateEmptyFolder(userId, startingEntity, forLineage, forDuplicateProcessing, effectiveTime);
+            }
+            else if (repositoryHelper.isTypeOf(serviceName, startingEntity.getType().getTypeDefName(), OpenMetadataType.IT_INFRASTRUCTURE.typeName))
+            {
+                validateNoDeployedAssets(userId, startingEntity, forLineage, forDuplicateProcessing, effectiveTime);
+            }
+        }
+        else if (repositoryHelper.isTypeOf(serviceName, startingEntity.getType().getTypeDefName(), OpenMetadataType.COMMENT.typeName))
+        {
+            validateNoNestedComments(userId, startingEntity, forLineage, forDuplicateProcessing, effectiveTime);
+        }
+        else if (repositoryHelper.isTypeOf(serviceName, startingEntity.getType().getTypeDefName(), OpenMetadataType.COLLECTION.typeName))
+        {
+            validateNoCollectionMembers(userId, startingEntity, forLineage, forDuplicateProcessing, effectiveTime);
+        }
+        else if (repositoryHelper.isTypeOf(serviceName, startingEntity.getType().getTypeDefName(), OpenMetadataType.DATA_STRUCTURE.typeName))
+        {
+            validateNoMemberDataFields(userId, startingEntity, forLineage, forDuplicateProcessing, effectiveTime);
+        }
+        else if (repositoryHelper.isTypeOf(serviceName, startingEntity.getType().getTypeDefName(), OpenMetadataType.DATA_FIELD.typeName))
+        {
+            validateNoNestedDataFields(userId, startingEntity, forLineage, forDuplicateProcessing, effectiveTime);
+        }
+        else if (repositoryHelper.isTypeOf(serviceName, startingEntity.getType().getTypeDefName(), OpenMetadataType.DATA_CLASS.typeName))
+        {
+            validateNoDependentDataClasses(userId, startingEntity, forLineage, forDuplicateProcessing, effectiveTime);
+        }
+    }
+
+
+    /**
+     * Remove any database schemas connected to the database asset by the DataSetContent relationship.
+     * This is because the database schemas are not anchored to the database
+     *
+     * @param userId calling user
+     * @param externalSourceGUID unique identifier of software capability representing the caller
+     * @param externalSourceName unique name of software capability representing the caller
+     * @param databaseGUID unique identifier for database asset
+     * @param deletedEntityGUIDs entities already deleted, or claimed for deletion, by the cascade this delete is part of
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     *
+     * @throws InvalidParameterException one of the parameters is null or invalid.
+     * @throws PropertyServerException a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    private void removeLinkedDatabaseSchemas(String  userId,
+                                            String  externalSourceGUID,
+                                            String  externalSourceName,
+                                            String  databaseGUID,
+                                            Set<String> deletedEntityGUIDs,
+                                            boolean forLineage,
+                                            boolean forDuplicateProcessing,
+                                            Date    effectiveTime) throws InvalidParameterException,
+                                                                          PropertyServerException,
+                                                                          UserNotAuthorizedException
+    {
+        final String methodName = "removeLinkedDatabaseSchemas";
+
+        RepositoryRelationshipsIterator iterator = new RepositoryRelationshipsIterator(repositoryHandler,
+                                                                                       invalidParameterHandler,
+                                                                                       userId,
+                                                                                       databaseGUID,
+                                                                                       OpenMetadataType.DATABASE.typeName,
+                                                                                       OpenMetadataType.DATA_SET_CONTENT_RELATIONSHIP.typeGUID,
+                                                                                       OpenMetadataType.DATA_SET_CONTENT_RELATIONSHIP.typeName,
+                                                                                       1,
+                                                                                       null,
+                                                                                       null,
+                                                                                       SequencingOrder.CREATION_DATE_RECENT,
+                                                                                       null,
+                                                                                       forLineage,
+                                                                                       forDuplicateProcessing,
+                                                                                       0,
+                                                                                       0,
+                                                                                       effectiveTime,
+                                                                                       methodName);
+
+        while (iterator.moreToReceive())
+        {
+            Relationship relationship = iterator.getNext();
+
+            if ((relationship != null) && (repositoryHelper.isTypeOf(serviceName,
+                                                                     relationship.getEntityOneProxy().getType().getTypeDefName(),
+                                                                     OpenMetadataType.DEPLOYED_DATABASE_SCHEMA.typeName)))
+            {
+                final String elementGUIDParameterName = "relationship.getEntityOneProxy().getGUID()";
+
+                this.deleteBeanInRepository(userId,
+                                            externalSourceGUID,
+                                            externalSourceName,
+                                            relationship.getEntityOneProxy().getGUID(),
+                                            elementGUIDParameterName,
+                                            OpenMetadataType.DEPLOYED_DATABASE_SCHEMA.typeGUID,
+                                            OpenMetadataType.DEPLOYED_DATABASE_SCHEMA.typeName,
+                                            true,
+                                            null,
+                                            null,
+                                            deletedEntityGUIDs,
+                                            forLineage,
+                                            forDuplicateProcessing,
+                                            effectiveTime,
+                                            methodName);
+            }
+        }
+    }
+
+
+    /**
+     * Remove any data classes connected to the data class by the DataClassComposition or DataClassHierarchy relationships.
+     *
+     * @param userId calling user
+     * @param externalSourceGUID unique identifier of software capability representing the caller
+     * @param externalSourceName unique name of software capability representing the caller
+     * @param dataClassGUID unique identifier for glossary
+     * @param deletedEntityGUIDs entities already deleted, or claimed for deletion, by the cascade this delete is part of
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     *
+     * @throws InvalidParameterException one of the parameters is null or invalid.
+     * @throws PropertyServerException a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    private void removeLinkedDataClasses(String  userId,
+                                        String  externalSourceGUID,
+                                        String  externalSourceName,
+                                        String  dataClassGUID,
+                                        Set<String> deletedEntityGUIDs,
+                                        boolean forLineage,
+                                        boolean forDuplicateProcessing,
+                                        Date    effectiveTime) throws InvalidParameterException,
+                                                                          PropertyServerException,
+                                                                          UserNotAuthorizedException
+    {
+        final String methodName = "removeLinkedDataClasses";
+
+        RepositoryRelationshipsIterator iterator = new RepositoryRelationshipsIterator(repositoryHandler,
+                                                                                       invalidParameterHandler,
+                                                                                       userId,
+                                                                                       dataClassGUID,
+                                                                                       OpenMetadataType.DATA_CLASS.typeName,
+                                                                                       OpenMetadataType.DATA_CLASS_COMPOSITION_RELATIONSHIP.typeGUID,
+                                                                                       OpenMetadataType.DATA_CLASS_COMPOSITION_RELATIONSHIP.typeName,
+                                                                                       2,
+                                                                                       null,
+                                                                                       null,
+                                                                                       SequencingOrder.CREATION_DATE_RECENT,
+                                                                                       null,
+                                                                                       forLineage,
+                                                                                       forDuplicateProcessing,
+                                                                                       0,
+                                                                                       0,
+                                                                                       effectiveTime,
+                                                                                       methodName);
+
+        while (iterator.moreToReceive())
+        {
+            Relationship relationship = iterator.getNext();
+
+            if (relationship != null)
+            {
+                final String elementGUIDParameterName = "dataClass.getGUID()";
+
+                this.deleteBeanInRepository(userId,
+                                            externalSourceGUID,
+                                            externalSourceName,
+                                            relationship.getEntityTwoProxy().getGUID(),
+                                            elementGUIDParameterName,
+                                            OpenMetadataType.DATA_CLASS.typeGUID,
+                                            OpenMetadataType.DATA_CLASS.typeName,
+                                            true,
+                                            null,
+                                            null,
+                                            deletedEntityGUIDs,
+                                            forLineage,
+                                            forDuplicateProcessing,
+                                            effectiveTime,
+                                            methodName);
+            }
+        }
+
+        iterator = new RepositoryRelationshipsIterator(repositoryHandler,
+                                                       invalidParameterHandler,
+                                                       userId,
+                                                       dataClassGUID,
+                                                       OpenMetadataType.DATA_CLASS.typeName,
+                                                       OpenMetadataType.DATA_VALUE_HIERARCHY_RELATIONSHIP.typeGUID,
+                                                       OpenMetadataType.DATA_VALUE_HIERARCHY_RELATIONSHIP.typeName,
+                                                       2,
+                                                       null,
+                                                       null,
+                                                       SequencingOrder.CREATION_DATE_RECENT,
+                                                       null,
+                                                       forLineage,
+                                                       forDuplicateProcessing,
+                                                       0,
+                                                       0,
+                                                       effectiveTime,
+                                                       methodName);
+
+        while (iterator.moreToReceive())
+        {
+            Relationship relationship = iterator.getNext();
+
+            if (relationship != null)
+            {
+                final String elementGUIDParameterName = "dataClass.getGUID()";
+
+                this.deleteBeanInRepository(userId,
+                                            externalSourceGUID,
+                                            externalSourceName,
+                                            relationship.getEntityTwoProxy().getGUID(),
+                                            elementGUIDParameterName,
+                                            OpenMetadataType.DATA_CLASS.typeGUID,
+                                            OpenMetadataType.DATA_CLASS.typeName,
+                                            true,
+                                            null,
+                                            null,
+                                            deletedEntityGUIDs,
+                                            forLineage,
+                                            forDuplicateProcessing,
+                                            effectiveTime,
+                                            methodName);
+            }
+        }
+    }
+
+
+    /**
+     * Remove any files and folders connected to the folder by the NestedFile or FolderHierarchy relationships.
+     *
+     * @param userId calling user
+     * @param externalSourceGUID unique identifier of software capability representing the caller
+     * @param externalSourceName unique name of software capability representing the caller
+     * @param glossaryGUID unique identifier for glossary
+     * @param deletedEntityGUIDs entities already deleted, or claimed for deletion, by the cascade this delete is part of
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     *
+     * @throws InvalidParameterException one of the parameters is null or invalid.
+     * @throws PropertyServerException a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    private void removeFolderContents(String  userId,
+                                     String  externalSourceGUID,
+                                     String  externalSourceName,
+                                     String  glossaryGUID,
+                                     Set<String> deletedEntityGUIDs,
+                                     boolean forLineage,
+                                     boolean forDuplicateProcessing,
+                                     Date    effectiveTime) throws InvalidParameterException,
+                                                                   PropertyServerException,
+                                                                   UserNotAuthorizedException
+    {
+        final String methodName = "removeFolderContents";
+
+        RepositoryRelationshipsIterator iterator = new RepositoryRelationshipsIterator(repositoryHandler,
+                                                                                       invalidParameterHandler,
+                                                                                       userId,
+                                                                                       glossaryGUID,
+                                                                                       OpenMetadataType.FILE_FOLDER.typeName,
+                                                                                       OpenMetadataType.NESTED_FILE_RELATIONSHIP.typeGUID,
+                                                                                       OpenMetadataType.NESTED_FILE_RELATIONSHIP.typeName,
+                                                                                       2,
+                                                                                       null,
+                                                                                       null,
+                                                                                       SequencingOrder.CREATION_DATE_RECENT,
+                                                                                       null,
+                                                                                       forLineage,
+                                                                                       forDuplicateProcessing,
+                                                                                       0,
+                                                                                       0,
+                                                                                       effectiveTime,
+                                                                                       methodName);
+
+        while (iterator.moreToReceive())
+        {
+            Relationship relationship = iterator.getNext();
+
+            if (relationship != null)
+            {
+                final String elementGUIDParameterName = "file.getGUID()";
+
+                this.deleteBeanInRepository(userId,
+                                            externalSourceGUID,
+                                            externalSourceName,
+                                            relationship.getEntityTwoProxy().getGUID(),
+                                            elementGUIDParameterName,
+                                            OpenMetadataType.DATA_FILE.typeGUID,
+                                            OpenMetadataType.DATA_FILE.typeName,
+                                            true,
+                                            null,
+                                            null,
+                                            deletedEntityGUIDs,
+                                            forLineage,
+                                            forDuplicateProcessing,
+                                            effectiveTime,
+                                            methodName);
+            }
+        }
+
+        iterator = new RepositoryRelationshipsIterator(repositoryHandler,
+                                                       invalidParameterHandler,
+                                                       userId,
+                                                       glossaryGUID,
+                                                       OpenMetadataType.FILE_FOLDER.typeName,
+                                                       OpenMetadataType.FOLDER_HIERARCHY_RELATIONSHIP.typeGUID,
+                                                       OpenMetadataType.FOLDER_HIERARCHY_RELATIONSHIP.typeName,
+                                                       2,
+                                                       null,
+                                                       null,
+                                                       SequencingOrder.CREATION_DATE_RECENT,
+                                                       null,
+                                                       forLineage,
+                                                       forDuplicateProcessing,
+                                                       0,
+                                                       0,
+                                                       effectiveTime,
+                                                       methodName);
+
+        while (iterator.moreToReceive())
+        {
+            Relationship relationship = iterator.getNext();
+
+            if (relationship != null)
+            {
+                final String elementGUIDParameterName = "folder.getGUID()";
+
+                this.deleteBeanInRepository(userId,
+                                            externalSourceGUID,
+                                            externalSourceName,
+                                            relationship.getEntityTwoProxy().getGUID(),
+                                            elementGUIDParameterName,
+                                            OpenMetadataType.FILE_FOLDER.typeGUID,
+                                            OpenMetadataType.FILE_FOLDER.typeName,
+                                            true,
+                                            null,
+                                            null,
+                                            deletedEntityGUIDs,
+                                            forLineage,
+                                            forDuplicateProcessing,
+                                            effectiveTime,
+                                            methodName);
+            }
+        }
+    }
+
+
+    /**
+     * Remove any members connected to the collection by the CollectionMembership  relationship.
+     *
+     * @param userId calling user
+     * @param externalSourceGUID unique identifier of software capability representing the caller
+     * @param externalSourceName unique name of software capability representing the caller
+     * @param collectionGUID unique identifier for glossary
+     * @param deletedEntityGUIDs entities already deleted, or claimed for deletion, by the cascade this delete is part of
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     *
+     * @throws InvalidParameterException one of the parameters is null or invalid.
+     * @throws PropertyServerException a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    private void removeCollectionMembers(String  userId,
+                                        String  externalSourceGUID,
+                                        String  externalSourceName,
+                                        String  collectionGUID,
+                                        Set<String> deletedEntityGUIDs,
+                                        boolean forLineage,
+                                        boolean forDuplicateProcessing,
+                                        Date    effectiveTime) throws InvalidParameterException,
+                                                                      PropertyServerException,
+                                                                      UserNotAuthorizedException
+    {
+        final String methodName = "removeCollectionMembers";
+
+        RepositoryRelationshipsIterator iterator = new RepositoryRelationshipsIterator(repositoryHandler,
+                                                                                       invalidParameterHandler,
+                                                                                       userId,
+                                                                                       collectionGUID,
+                                                                                       OpenMetadataType.COLLECTION.typeName,
+                                                                                       OpenMetadataType.COLLECTION_MEMBERSHIP_RELATIONSHIP.typeGUID,
+                                                                                       OpenMetadataType.COLLECTION_MEMBERSHIP_RELATIONSHIP.typeName,
+                                                                                       2,
+                                                                                       null,
+                                                                                       null,
+                                                                                       SequencingOrder.CREATION_DATE_RECENT,
+                                                                                       null,
+                                                                                       forLineage,
+                                                                                       forDuplicateProcessing,
+                                                                                       0,
+                                                                                       0,
+                                                                                       effectiveTime,
+                                                                                       methodName);
+
+        while (iterator.moreToReceive())
+        {
+            Relationship relationship = iterator.getNext();
+
+            if (relationship != null)
+            {
+                final String elementGUIDParameterName = "member.getGUID()";
+
+                this.deleteBeanInRepository(userId,
+                                            externalSourceGUID,
+                                            externalSourceName,
+                                            relationship.getEntityTwoProxy().getGUID(),
+                                            elementGUIDParameterName,
+                                            OpenMetadataType.REFERENCEABLE.typeGUID,
+                                            OpenMetadataType.REFERENCEABLE.typeName,
+                                            true,
+                                            null,
+                                            null,
+                                            deletedEntityGUIDs,
+                                            forLineage,
+                                            forDuplicateProcessing,
+                                            effectiveTime,
+                                            methodName);
+            }
+        }
+
+    }
+
+
+    /**
+     * Remove any members connected to the collection by the CollectionMembership  relationship.
+     *
+     * @param userId calling user
+     * @param externalSourceGUID unique identifier of software capability representing the caller
+     * @param externalSourceName unique name of software capability representing the caller
+     * @param dataStructureGUID unique identifier for data structure
+     * @param deletedEntityGUIDs entities already deleted, or claimed for deletion, by the cascade this delete is part of
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     *
+     * @throws InvalidParameterException one of the parameters is null or invalid.
+     * @throws PropertyServerException a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    private void removeDataStructureMembers(String  userId,
+                                           String  externalSourceGUID,
+                                           String  externalSourceName,
+                                           String  dataStructureGUID,
+                                           Set<String> deletedEntityGUIDs,
+                                           boolean forLineage,
+                                           boolean forDuplicateProcessing,
+                                           Date    effectiveTime) throws InvalidParameterException,
+                                                                         PropertyServerException,
+                                                                         UserNotAuthorizedException
+    {
+        final String methodName = "removeDataStructureMembers";
+
+        RepositoryRelationshipsIterator iterator = new RepositoryRelationshipsIterator(repositoryHandler,
+                                                                                       invalidParameterHandler,
+                                                                                       userId,
+                                                                                       dataStructureGUID,
+                                                                                       OpenMetadataType.DATA_STRUCTURE.typeName,
+                                                                                       OpenMetadataType.MEMBER_DATA_FIELD_RELATIONSHIP.typeGUID,
+                                                                                       OpenMetadataType.MEMBER_DATA_FIELD_RELATIONSHIP.typeName,
+                                                                                       2,
+                                                                                       null,
+                                                                                       null,
+                                                                                       SequencingOrder.CREATION_DATE_RECENT,
+                                                                                       null,
+                                                                                       forLineage,
+                                                                                       forDuplicateProcessing,
+                                                                                       0,
+                                                                                       0,
+                                                                                       effectiveTime,
+                                                                                       methodName);
+
+        while (iterator.moreToReceive())
+        {
+            Relationship relationship = iterator.getNext();
+
+            if (relationship != null)
+            {
+                final String elementGUIDParameterName = "member.getGUID()";
+
+                this.deleteBeanInRepository(userId,
+                                            externalSourceGUID,
+                                            externalSourceName,
+                                            relationship.getEntityTwoProxy().getGUID(),
+                                            elementGUIDParameterName,
+                                            OpenMetadataType.DATA_FIELD.typeGUID,
+                                            OpenMetadataType.DATA_FIELD.typeName,
+                                            true,
+                                            null,
+                                            null,
+                                            deletedEntityGUIDs,
+                                            forLineage,
+                                            forDuplicateProcessing,
+                                            effectiveTime,
+                                            methodName);
+            }
+        }
+
+    }
+
+
+    /**
+     * Remove any data fields connected to the data field by the NestedDataFile  relationship.
+     *
+     * @param userId calling user
+     * @param externalSourceGUID unique identifier of software capability representing the caller
+     * @param externalSourceName unique name of software capability representing the caller
+     * @param dataFieldGUID unique identifier for data field
+     * @param deletedEntityGUIDs entities already deleted, or claimed for deletion, by the cascade this delete is part of
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     *
+     * @throws InvalidParameterException one of the parameters is null or invalid.
+     * @throws PropertyServerException a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    private void removeNestedDataFields(String  userId,
+                                       String  externalSourceGUID,
+                                       String  externalSourceName,
+                                       String  dataFieldGUID,
+                                       Set<String> deletedEntityGUIDs,
+                                       boolean forLineage,
+                                       boolean forDuplicateProcessing,
+                                       Date    effectiveTime) throws InvalidParameterException,
+                                                                         PropertyServerException,
+                                                                         UserNotAuthorizedException
+    {
+        final String methodName = "removeNestedDataFields";
+
+        RepositoryRelationshipsIterator iterator = new RepositoryRelationshipsIterator(repositoryHandler,
+                                                                                       invalidParameterHandler,
+                                                                                       userId,
+                                                                                       dataFieldGUID,
+                                                                                       OpenMetadataType.DATA_FIELD.typeName,
+                                                                                       OpenMetadataType.NESTED_DATA_FIELD_RELATIONSHIP.typeGUID,
+                                                                                       OpenMetadataType.NESTED_DATA_FIELD_RELATIONSHIP.typeName,
+                                                                                       2,
+                                                                                       null,
+                                                                                       null,
+                                                                                       SequencingOrder.CREATION_DATE_RECENT,
+                                                                                       null,
+                                                                                       forLineage,
+                                                                                       forDuplicateProcessing,
+                                                                                       0,
+                                                                                       0,
+                                                                                       effectiveTime,
+                                                                                       methodName);
+
+        while (iterator.moreToReceive())
+        {
+            Relationship relationship = iterator.getNext();
+
+            if (relationship != null)
+            {
+                final String elementGUIDParameterName = "nestedDataField.getGUID()";
+
+                this.deleteBeanInRepository(userId,
+                                            externalSourceGUID,
+                                            externalSourceName,
+                                            relationship.getEntityTwoProxy().getGUID(),
+                                            elementGUIDParameterName,
+                                            OpenMetadataType.DATA_FIELD.typeGUID,
+                                            OpenMetadataType.DATA_FIELD.typeName,
+                                            true,
+                                            null,
+                                            null,
+                                            deletedEntityGUIDs,
+                                            forLineage,
+                                            forDuplicateProcessing,
+                                            effectiveTime,
+                                            methodName);
+            }
+        }
+    }
+
+
+    /**
+     * Remove any comments connected to the comment by the AttachedComment relationship.
+     *
+     * @param userId calling user
+     * @param externalSourceGUID unique identifier of software capability representing the caller
+     * @param externalSourceName unique name of software capability representing the caller
+     * @param commentGUID unique identifier for comment
+     * @param deletedEntityGUIDs entities already deleted, or claimed for deletion, by the cascade this delete is part of
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     *
+     * @throws InvalidParameterException one of the parameters is null or invalid.
+     * @throws PropertyServerException a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    private void removeNestedComments(String  userId,
+                                     String  externalSourceGUID,
+                                     String  externalSourceName,
+                                     String  commentGUID,
+                                     Set<String> deletedEntityGUIDs,
+                                     boolean forLineage,
+                                     boolean forDuplicateProcessing,
+                                     Date    effectiveTime) throws InvalidParameterException,
+                                                                   PropertyServerException,
+                                                                   UserNotAuthorizedException
+    {
+        final String methodName = "removeNestedComments";
+
+        RepositoryRelationshipsIterator iterator = new RepositoryRelationshipsIterator(repositoryHandler,
+                                                                                       invalidParameterHandler,
+                                                                                       userId,
+                                                                                       commentGUID,
+                                                                                       OpenMetadataType.COMMENT.typeName,
+                                                                                       OpenMetadataType.ATTACHED_COMMENT_RELATIONSHIP.typeGUID,
+                                                                                       OpenMetadataType.ATTACHED_COMMENT_RELATIONSHIP.typeName,
+                                                                                       2,
+                                                                                       null,
+                                                                                       null,
+                                                                                       SequencingOrder.CREATION_DATE_RECENT,
+                                                                                       null,
+                                                                                       forLineage,
+                                                                                       forDuplicateProcessing,
+                                                                                       0,
+                                                                                       0,
+                                                                                       effectiveTime,
+                                                                                       methodName);
+
+        while (iterator.moreToReceive())
+        {
+            Relationship relationship = iterator.getNext();
+
+            if (relationship != null)
+            {
+                final String elementGUIDParameterName = "comment.getGUID()";
+
+                this.deleteBeanInRepository(userId,
+                                            externalSourceGUID,
+                                            externalSourceName,
+                                            relationship.getEntityTwoProxy().getGUID(),
+                                            elementGUIDParameterName,
+                                            OpenMetadataType.COMMENT.typeGUID,
+                                            OpenMetadataType.COMMENT.typeName,
+                                            true,
+                                            null,
+                                            null,
+                                            deletedEntityGUIDs,
+                                            forLineage,
+                                            forDuplicateProcessing,
+                                            effectiveTime,
+                                            methodName);
+            }
+        }
+    }
+
+
+    /**
+     * Remove any assets connected to the infrastructure by the DeployedOn relationship.
+     *
+     * @param userId calling user
+     * @param externalSourceGUID unique identifier of software capability representing the caller
+     * @param externalSourceName unique name of software capability representing the caller
+     * @param itInfrastructureGUID unique identifier for infrastructure
+     * @param deletedEntityGUIDs entities already deleted, or claimed for deletion, by the cascade this delete is part of
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     *
+     * @throws InvalidParameterException one of the parameters is null or invalid.
+     * @throws PropertyServerException a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    private void removeDeployedAssets(String  userId,
+                                     String  externalSourceGUID,
+                                     String  externalSourceName,
+                                     String  itInfrastructureGUID,
+                                     Set<String> deletedEntityGUIDs,
+                                     boolean forLineage,
+                                     boolean forDuplicateProcessing,
+                                     Date    effectiveTime) throws InvalidParameterException,
+                                                                   PropertyServerException,
+                                                                   UserNotAuthorizedException
+    {
+        final String methodName = "removeDeployedAssets";
+
+        RepositoryRelationshipsIterator iterator = new RepositoryRelationshipsIterator(repositoryHandler,
+                                                                                       invalidParameterHandler,
+                                                                                       userId,
+                                                                                       itInfrastructureGUID,
+                                                                                       OpenMetadataType.IT_INFRASTRUCTURE.typeName,
+                                                                                       OpenMetadataType.DEPLOYED_ON_RELATIONSHIP.typeGUID,
+                                                                                       OpenMetadataType.DEPLOYED_ON_RELATIONSHIP.typeName,
+                                                                                       1,
+                                                                                       null,
+                                                                                       null,
+                                                                                       SequencingOrder.CREATION_DATE_RECENT,
+                                                                                       null,
+                                                                                       forLineage,
+                                                                                       forDuplicateProcessing,
+                                                                                       0,
+                                                                                       0,
+                                                                                       effectiveTime,
+                                                                                       methodName);
+
+        while (iterator.moreToReceive())
+        {
+            Relationship relationship = iterator.getNext();
+
+            if (relationship != null)
+            {
+                final String elementGUIDParameterName = "asset.getGUID()";
+
+                this.deleteBeanInRepository(userId,
+                                            externalSourceGUID,
+                                            externalSourceName,
+                                            relationship.getEntityTwoProxy().getGUID(),
+                                            elementGUIDParameterName,
+                                            OpenMetadataType.ASSET.typeGUID,
+                                            OpenMetadataType.ASSET.typeName,
+                                            true,
+                                            null,
+                                            null,
+                                            deletedEntityGUIDs,
+                                            forLineage,
+                                            forDuplicateProcessing,
+                                            effectiveTime,
+                                            methodName);
+            }
+        }
+    }
+
+
+    /**
+     * Check that a database schema has no tables defined.
+     *
+     * @param userId calling user
+     * @param startingEntity     starting entity
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @throws InvalidParameterException delete not allowed
+     * @throws PropertyServerException problem with repository
+     * @throws UserNotAuthorizedException problem with access
+     */
+    private void validateEmptyDatabaseSchema(String       userId,
+                                             EntityDetail startingEntity,
+                                             boolean      forLineage,
+                                             boolean      forDuplicateProcessing,
+                                             Date         effectiveTime) throws InvalidParameterException,
+                                                                                PropertyServerException,
+                                                                                UserNotAuthorizedException
+    {
+        final String methodName = "validateEmptyDatabaseSchema";
+
+        Relationship schemaTypeRelationship = repositoryHandler.getUniqueRelationshipByType(userId,
+                                                                                            startingEntity.getGUID(),
+                                                                                            startingEntity.getType().getTypeDefName(),
+                                                                                            OpenMetadataType.SCHEMA_RELATIONSHIP.typeGUID,
+                                                                                            OpenMetadataType.SCHEMA_RELATIONSHIP.typeName,
+                                                                                            2,
+                                                                                            null,
+                                                                                            null,
+                                                                                            SequencingOrder.CREATION_DATE_RECENT,
+                                                                                            null,
+                                                                                            forLineage,
+                                                                                            forDuplicateProcessing,
+                                                                                            effectiveTime,
+                                                                                            methodName);
+
+        if (schemaTypeRelationship != null)
+        {
+            List<Relationship> relationships = repositoryHandler.getRelationshipsByType(userId,
+                                                                                        schemaTypeRelationship.getEntityTwoProxy().getGUID(),
+                                                                                        schemaTypeRelationship.getEntityTwoProxy().getType().getTypeDefName(),
+                                                                                        OpenMetadataType.ATTRIBUTE_FOR_SCHEMA_RELATIONSHIP.typeGUID,
+                                                                                        OpenMetadataType.ATTRIBUTE_FOR_SCHEMA_RELATIONSHIP.typeName,
+                                                                                        2,
+                                                                                        null,
+                                                                                        null,
+                                                                                        SequencingOrder.CREATION_DATE_RECENT,
+                                                                                        null,
+                                                                                        forLineage,
+                                                                                        forDuplicateProcessing,
+                                                                                        0, 0,
+                                                                                        effectiveTime,
+                                                                                        methodName);
+            if (relationships != null)
+            {
+                for (Relationship dataContentRelationship : relationships)
+                {
+                    if (dataContentRelationship != null)
+                    {
+                        throw new InvalidParameterException(GenericHandlersErrorCode.DEPENDENT_ELEMENTS_FOUND.getMessageDefinition(startingEntity.getType().getTypeDefName(),
+                                                                                                                                   startingEntity.getGUID(),
+                                                                                                                                   dataContentRelationship.getEntityTwoProxy().getType().getTypeDefName(),
+                                                                                                                                   dataContentRelationship.getEntityTwoProxy().getGUID()),
+                                                            this.getClass().getName(),
+                                                            "relationship: " + dataContentRelationship.getGUID(),
+                                                            methodName);
+                    }
+                }
+            }
+        }
+    }
+
+
+    /**
+     * Check that an asset is not supplying data for a data set
+     *
+     * @param userId calling user
+     * @param startingEntity     starting entity
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @throws InvalidParameterException delete not allowed
+     * @throws PropertyServerException problem with repository
+     * @throws UserNotAuthorizedException problem with access
+     */
+    private void validateNoDataSetContent(String       userId,
+                                          EntityDetail startingEntity,
+                                          boolean      forLineage,
+                                          boolean      forDuplicateProcessing,
+                                          Date         effectiveTime) throws InvalidParameterException,
+                                                                              PropertyServerException,
+                                                                              UserNotAuthorizedException
+    {
+        final String methodName = "validateNoDataSetContent";
+
+        List<Relationship> relationships = repositoryHandler.getRelationshipsByType(userId,
+                                                                                    startingEntity.getGUID(),
+                                                                                    startingEntity.getType().getTypeDefName(),
+                                                                                    OpenMetadataType.DATA_SET_CONTENT_RELATIONSHIP.typeGUID,
+                                                                                    OpenMetadataType.DATA_SET_CONTENT_RELATIONSHIP.typeName,
+                                                                                    1,
+                                                                                    null,
+                                                                                    null,
+                                                                                    SequencingOrder.CREATION_DATE_RECENT,
+                                                                                    null,
+                                                                                    forLineage,
+                                                                                    forDuplicateProcessing,
+                                                                                    0, 0,
+                                                                                    effectiveTime,
+                                                                                    methodName);
+        if (relationships != null)
+        {
+            for (Relationship dataContentRelationship : relationships)
+            {
+                if (dataContentRelationship != null)
+                {
+                    throw new InvalidParameterException(GenericHandlersErrorCode.DATA_STORE_IN_USE.getMessageDefinition(startingEntity.getType().getTypeDefName(),
+                                                                                                                        startingEntity.getGUID(),
+                                                                                                                        dataContentRelationship.getEntityOneProxy().getType().getTypeDefName(),
+                                                                                                                        dataContentRelationship.getEntityOneProxy().getGUID()),
+                                                        this.getClass().getName(),
+                                                        "relationship: " + dataContentRelationship.getGUID(),
+                                                        methodName);
+                }
+            }
+        }
+    }
+
+
+    /**
+     * Check that a comment is has no nested comments.
+     *
+     * @param userId calling user
+     * @param startingEntity     starting entity
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @throws InvalidParameterException delete not allowed
+     * @throws PropertyServerException problem with repository
+     * @throws UserNotAuthorizedException problem with access
+     */
+    private void validateNoNestedComments(String       userId,
+                                          EntityDetail startingEntity,
+                                          boolean      forLineage,
+                                          boolean      forDuplicateProcessing,
+                                          Date         effectiveTime) throws InvalidParameterException,
+                                                                                  PropertyServerException,
+                                                                                  UserNotAuthorizedException
+    {
+        final String methodName = "validateNoNestedComments";
+
+        List<Relationship> relationships = repositoryHandler.getRelationshipsByType(userId,
+                                                                                    startingEntity.getGUID(),
+                                                                                    startingEntity.getType().getTypeDefName(),
+                                                                                    OpenMetadataType.ATTACHED_COMMENT_RELATIONSHIP.typeGUID,
+                                                                                    OpenMetadataType.ATTACHED_COMMENT_RELATIONSHIP.typeName,
+                                                                                    2,
+                                                                                    null,
+                                                                                    null,
+                                                                                    SequencingOrder.CREATION_DATE_RECENT,
+                                                                                    null,
+                                                                                    forLineage,
+                                                                                    forDuplicateProcessing,
+                                                                                    0, 0,
+                                                                                    effectiveTime,
+                                                                                    methodName);
+        if (relationships != null)
+        {
+            for (Relationship relationship : relationships)
+            {
+                if (relationship != null)
+                {
+                    throw new InvalidParameterException(GenericHandlersErrorCode.DEPENDENT_ELEMENTS_FOUND.getMessageDefinition(startingEntity.getType().getTypeDefName(),
+                                                                                                                               startingEntity.getGUID(),
+                                                                                                                               relationship.getEntityTwoProxy().getType().getTypeDefName(),
+                                                                                                                               relationship.getEntityTwoProxy().getGUID()),
+                                                        this.getClass().getName(),
+                                                        "relationship: " + relationship.getGUID(),
+                                                        methodName);
+                }
+            }
+        }
+    }
+
+
+    /**
+     * Check that an infrastructure asset has no other assets deployed on it.
+     *
+     * @param userId calling user
+     * @param startingEntity     starting entity
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @throws InvalidParameterException delete not allowed
+     * @throws PropertyServerException problem with repository
+     * @throws UserNotAuthorizedException problem with access
+     */
+    private void validateNoDeployedAssets(String       userId,
+                                          EntityDetail startingEntity,
+                                          boolean      forLineage,
+                                          boolean      forDuplicateProcessing,
+                                          Date         effectiveTime) throws InvalidParameterException,
+                                                                             PropertyServerException,
+                                                                             UserNotAuthorizedException
+    {
+        final String methodName = "validateNoDeployedAssets";
+
+        List<Relationship> relationships = repositoryHandler.getRelationshipsByType(userId,
+                                                                                    startingEntity.getGUID(),
+                                                                                    startingEntity.getType().getTypeDefName(),
+                                                                                    OpenMetadataType.DEPLOYED_ON_RELATIONSHIP.typeGUID,
+                                                                                    OpenMetadataType.DEPLOYED_ON_RELATIONSHIP.typeName,
+                                                                                    1,
+                                                                                    null,
+                                                                                    null,
+                                                                                    SequencingOrder.CREATION_DATE_RECENT,
+                                                                                    null,
+                                                                                    forLineage,
+                                                                                    forDuplicateProcessing,
+                                                                                    0, 0,
+                                                                                    effectiveTime,
+                                                                                    methodName);
+        if (relationships != null)
+        {
+            for (Relationship relationship : relationships)
+            {
+                if (relationship != null)
+                {
+                    throw new InvalidParameterException(GenericHandlersErrorCode.DEPENDENT_ELEMENTS_FOUND.getMessageDefinition(startingEntity.getType().getTypeDefName(),
+                                                                                                                               startingEntity.getGUID(),
+                                                                                                                               relationship.getEntityTwoProxy().getType().getTypeDefName(),
+                                                                                                                               relationship.getEntityTwoProxy().getGUID()),
+                                                        this.getClass().getName(),
+                                                        "relationship: " + relationship.getGUID(),
+                                                        methodName);
+                }
+            }
+        }
+    }
+
+
+    /**
+     * Check that a collection is has no members.
+     *
+     * @param userId calling user
+     * @param startingEntity     starting entity
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @throws InvalidParameterException delete not allowed
+     * @throws PropertyServerException problem with repository
+     * @throws UserNotAuthorizedException problem with access
+     */
+    private void validateNoCollectionMembers(String       userId,
+                                             EntityDetail startingEntity,
+                                             boolean      forLineage,
+                                             boolean      forDuplicateProcessing,
+                                             Date         effectiveTime) throws InvalidParameterException,
+                                                                                PropertyServerException,
+                                                                                UserNotAuthorizedException
+    {
+        final String methodName = "validateNoCollectionMembers";
+
+        List<Relationship> relationships = repositoryHandler.getRelationshipsByType(userId,
+                                                                                    startingEntity.getGUID(),
+                                                                                    startingEntity.getType().getTypeDefName(),
+                                                                                    OpenMetadataType.COLLECTION_MEMBERSHIP_RELATIONSHIP.typeGUID,
+                                                                                    OpenMetadataType.COLLECTION_MEMBERSHIP_RELATIONSHIP.typeName,
+                                                                                    2,
+                                                                                    null,
+                                                                                    null,
+                                                                                    SequencingOrder.CREATION_DATE_RECENT,
+                                                                                    null,
+                                                                                    forLineage,
+                                                                                    forDuplicateProcessing,
+                                                                                    0, 0,
+                                                                                    effectiveTime,
+                                                                                    methodName);
+        if (relationships != null)
+        {
+            for (Relationship relationship : relationships)
+            {
+                if (relationship != null)
+                {
+                    throw new InvalidParameterException(GenericHandlersErrorCode.DEPENDENT_ELEMENTS_FOUND.getMessageDefinition(startingEntity.getType().getTypeDefName(),
+                                                                                                                               startingEntity.getGUID(),
+                                                                                                                               relationship.getEntityTwoProxy().getType().getTypeDefName(),
+                                                                                                                               relationship.getEntityTwoProxy().getGUID()),
+                                                        this.getClass().getName(),
+                                                        "relationship: " + relationship.getGUID(),
+                                                        methodName);
+                }
+            }
+        }
+    }
+
+
+    /**
+     * Check that a data structure is has no nested data fields.
+     *
+     * @param userId calling user
+     * @param startingEntity     starting entity
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @throws InvalidParameterException delete not allowed
+     * @throws PropertyServerException problem with repository
+     * @throws UserNotAuthorizedException problem with access
+     */
+    private void validateNoMemberDataFields(String       userId,
+                                            EntityDetail startingEntity,
+                                            boolean      forLineage,
+                                            boolean      forDuplicateProcessing,
+                                            Date         effectiveTime) throws InvalidParameterException,
+                                                                               PropertyServerException,
+                                                                               UserNotAuthorizedException
+    {
+        final String methodName = "validateNoMemberDataFields";
+
+        List<Relationship> relationships = repositoryHandler.getRelationshipsByType(userId,
+                                                                                    startingEntity.getGUID(),
+                                                                                    startingEntity.getType().getTypeDefName(),
+                                                                                    OpenMetadataType.MEMBER_DATA_FIELD_RELATIONSHIP.typeGUID,
+                                                                                    OpenMetadataType.MEMBER_DATA_FIELD_RELATIONSHIP.typeName,
+                                                                                    2,
+                                                                                    null,
+                                                                                    null,
+                                                                                    SequencingOrder.CREATION_DATE_RECENT,
+                                                                                    null,
+                                                                                    forLineage,
+                                                                                    forDuplicateProcessing,
+                                                                                    0, 0,
+                                                                                    effectiveTime,
+                                                                                    methodName);
+        if (relationships != null)
+        {
+            for (Relationship relationship : relationships)
+            {
+                if (relationship != null)
+                {
+                    throw new InvalidParameterException(GenericHandlersErrorCode.DEPENDENT_ELEMENTS_FOUND.getMessageDefinition(startingEntity.getType().getTypeDefName(),
+                                                                                                                               startingEntity.getGUID(),
+                                                                                                                               relationship.getEntityTwoProxy().getType().getTypeDefName(),
+                                                                                                                               relationship.getEntityTwoProxy().getGUID()),
+                                                        this.getClass().getName(),
+                                                        "relationship: " + relationship.getGUID(),
+                                                        methodName);
+                }
+            }
+        }
+    }
+
+
+
+    /**
+     * Check that a data class has no nested or specialized data classes linked off of it
+     *
+     * @param userId calling user
+     * @param startingEntity     starting entity
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @throws InvalidParameterException delete not allowed
+     * @throws PropertyServerException problem with repository
+     * @throws UserNotAuthorizedException problem with access
+     */
+    private void validateNoDependentDataClasses(String       userId,
+                                                EntityDetail startingEntity,
+                                                boolean      forLineage,
+                                                boolean      forDuplicateProcessing,
+                                                Date         effectiveTime) throws InvalidParameterException,
+                                                                                   PropertyServerException,
+                                                                                   UserNotAuthorizedException
+    {
+        final String methodName = "validateNoDependentDataClasses";
+
+        List<Relationship> relationships = repositoryHandler.getRelationshipsByType(userId,
+                                                                                    startingEntity.getGUID(),
+                                                                                    startingEntity.getType().getTypeDefName(),
+                                                                                    OpenMetadataType.DATA_VALUE_HIERARCHY_RELATIONSHIP.typeGUID,
+                                                                                    OpenMetadataType.DATA_VALUE_HIERARCHY_RELATIONSHIP.typeName,
+                                                                                    2,
+                                                                                    null,
+                                                                                    null,
+                                                                                    SequencingOrder.CREATION_DATE_RECENT,
+                                                                                    null,
+                                                                                    forLineage,
+                                                                                    forDuplicateProcessing,
+                                                                                    0, 0,
+                                                                                    effectiveTime,
+                                                                                    methodName);
+        if (relationships != null)
+        {
+            for (Relationship relationship : relationships)
+            {
+                if (relationship != null)
+                {
+                    throw new InvalidParameterException(GenericHandlersErrorCode.DEPENDENT_ELEMENTS_FOUND.getMessageDefinition(startingEntity.getType().getTypeDefName(),
+                                                                                                                               startingEntity.getGUID(),
+                                                                                                                               relationship.getEntityTwoProxy().getType().getTypeDefName(),
+                                                                                                                               relationship.getEntityTwoProxy().getGUID()),
+                                                        this.getClass().getName(),
+                                                        "relationship: " + relationship.getGUID(),
+                                                        methodName);
+                }
+            }
+        }
+
+        relationships = repositoryHandler.getRelationshipsByType(userId,
+                                                                 startingEntity.getGUID(),
+                                                                 startingEntity.getType().getTypeDefName(),
+                                                                 OpenMetadataType.DATA_CLASS_COMPOSITION_RELATIONSHIP.typeGUID,
+                                                                 OpenMetadataType.DATA_CLASS_COMPOSITION_RELATIONSHIP.typeName,
+                                                                 2,
+                                                                 null,
+                                                                 null,
+                                                                 SequencingOrder.CREATION_DATE_RECENT,
+                                                                 null,
+                                                                 forLineage,
+                                                                 forDuplicateProcessing,
+                                                                 0, 0,
+                                                                 effectiveTime,
+                                                                 methodName);
+        if (relationships != null)
+        {
+            for (Relationship relationship : relationships)
+            {
+                if (relationship != null)
+                {
+                    throw new InvalidParameterException(GenericHandlersErrorCode.DEPENDENT_ELEMENTS_FOUND.getMessageDefinition(startingEntity.getType().getTypeDefName(),
+                                                                                                                               startingEntity.getGUID(),
+                                                                                                                               relationship.getEntityTwoProxy().getType().getTypeDefName(),
+                                                                                                                               relationship.getEntityTwoProxy().getGUID()),
+                                                        this.getClass().getName(),
+                                                        "relationship: " + relationship.getGUID(),
+                                                        methodName);
+                }
+            }
+        }
+    }
+
+
+    /**
+     * Check that a data field is has no nested data fields.
+     *
+     * @param userId calling user
+     * @param startingEntity     starting entity
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @throws InvalidParameterException delete not allowed
+     * @throws PropertyServerException problem with repository
+     * @throws UserNotAuthorizedException problem with access
+     */
+    private void validateNoNestedDataFields(String       userId,
+                                            EntityDetail startingEntity,
+                                            boolean      forLineage,
+                                            boolean      forDuplicateProcessing,
+                                            Date         effectiveTime) throws InvalidParameterException,
+                                                                               PropertyServerException,
+                                                                               UserNotAuthorizedException
+    {
+        final String methodName = "validateNoNestedDataFields";
+
+        List<Relationship> relationships = repositoryHandler.getRelationshipsByType(userId,
+                                                                                    startingEntity.getGUID(),
+                                                                                    startingEntity.getType().getTypeDefName(),
+                                                                                    OpenMetadataType.NESTED_DATA_FIELD_RELATIONSHIP.typeGUID,
+                                                                                    OpenMetadataType.NESTED_DATA_FIELD_RELATIONSHIP.typeName,
+                                                                                    2,
+                                                                                    null,
+                                                                                    null,
+                                                                                    SequencingOrder.CREATION_DATE_RECENT,
+                                                                                    null,
+                                                                                    forLineage,
+                                                                                    forDuplicateProcessing,
+                                                                                    0, 0,
+                                                                                    effectiveTime,
+                                                                                    methodName);
+        if (relationships != null)
+        {
+            for (Relationship relationship : relationships)
+            {
+                if (relationship != null)
+                {
+                    throw new InvalidParameterException(GenericHandlersErrorCode.DEPENDENT_ELEMENTS_FOUND.getMessageDefinition(startingEntity.getType().getTypeDefName(),
+                                                                                                                               startingEntity.getGUID(),
+                                                                                                                               relationship.getEntityTwoProxy().getType().getTypeDefName(),
+                                                                                                                               relationship.getEntityTwoProxy().getGUID()),
+                                                        this.getClass().getName(),
+                                                        "relationship: " + relationship.getGUID(),
+                                                        methodName);
+                }
+            }
+        }
+    }
+
+
+    /**
+     * Check that a folder is empty
+     *
+     * @param userId calling user
+     * @param startingEntity     starting entity
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @throws InvalidParameterException delete not allowed
+     * @throws PropertyServerException problem with repository
+     * @throws UserNotAuthorizedException problem with access
+     */
+    private void validateEmptyFolder(String       userId,
+                                     EntityDetail startingEntity,
+                                     boolean      forLineage,
+                                     boolean      forDuplicateProcessing,
+                                     Date         effectiveTime) throws InvalidParameterException,
+                                                                        PropertyServerException,
+                                                                        UserNotAuthorizedException
+    {
+        final String methodName = "validateEmptyFolder";
+
+        List<Relationship> relationships = repositoryHandler.getRelationshipsByType(userId,
+                                                                                    startingEntity.getGUID(),
+                                                                                    startingEntity.getType().getTypeDefName(),
+                                                                                    OpenMetadataType.NESTED_FILE_RELATIONSHIP.typeGUID,
+                                                                                    OpenMetadataType.NESTED_FILE_RELATIONSHIP.typeName,
+                                                                                    2,
+                                                                                    null,
+                                                                                    null,
+                                                                                    SequencingOrder.CREATION_DATE_RECENT,
+                                                                                    null,
+                                                                                    forLineage,
+                                                                                    forDuplicateProcessing,
+                                                                                    0, 0,
+                                                                                    effectiveTime,
+                                                                                    methodName);
+        if (relationships != null)
+        {
+            for (Relationship relationship : relationships)
+            {
+                if (relationship != null)
+                {
+                    throw new InvalidParameterException(GenericHandlersErrorCode.DEPENDENT_ELEMENTS_FOUND.getMessageDefinition(startingEntity.getType().getTypeDefName(),
+                                                                                                                               startingEntity.getGUID(),
+                                                                                                                               relationship.getEntityTwoProxy().getType().getTypeDefName(),
+                                                                                                                               relationship.getEntityTwoProxy().getGUID()),
+                                                        this.getClass().getName(),
+                                                        "relationship: " + relationship.getGUID(),
+                                                        methodName);
+                }
+            }
+        }
+
+        relationships = repositoryHandler.getRelationshipsByType(userId,
+                                                                 startingEntity.getGUID(),
+                                                                 startingEntity.getType().getTypeDefName(),
+                                                                 OpenMetadataType.FOLDER_HIERARCHY_RELATIONSHIP.typeGUID,
+                                                                 OpenMetadataType.FOLDER_HIERARCHY_RELATIONSHIP.typeName,
+                                                                 2,
+                                                                 null,
+                                                                 null,
+                                                                 SequencingOrder.CREATION_DATE_RECENT,
+                                                                 null,
+                                                                 forLineage,
+                                                                 forDuplicateProcessing,
+                                                                 0, 0,
+                                                                 effectiveTime,
+                                                                 methodName);
+        if (relationships != null)
+        {
+            for (Relationship relationship : relationships)
+            {
+                if (relationship != null)
+                {
+                    throw new InvalidParameterException(GenericHandlersErrorCode.DEPENDENT_ELEMENTS_FOUND.getMessageDefinition(startingEntity.getType().getTypeDefName(),
+                                                                                                                               startingEntity.getGUID(),
+                                                                                                                               relationship.getEntityTwoProxy().getType().getTypeDefName(),
+                                                                                                                               relationship.getEntityTwoProxy().getGUID()),
+                                                        this.getClass().getName(),
+                                                        "relationship: " + relationship.getGUID(),
+                                                        methodName);
+                }
+            }
+        }
+    }
+
+
+    /**
+     * Update the effectivity dates of a specific relationship.
+     * The effectivity dates control the visibility of the relationship through specific APIs.
+     *
+     * @param userId calling user
+     * @param externalSourceGUID guid of the software capability entity that represented the external source - null for local
+     * @param externalSourceName name of the software capability entity that represented the external source
+     * @param relationshipGUID unique identifier of the entity in the repositories
+     * @param relationshipGUIDParameterName parameter name that passed the relationshipGUID
+     * @param relationshipGUIDTypeName type of relationship
+     * @param effectiveFrom the date when this element is active - null for active now
+     * @param effectiveTo the date when this element becomes inactive - null for active until deleted
+     * @param forLineage return elements marked with the Memento classification?
+     * @param forDuplicateProcessing do not merge elements marked as duplicates?
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     *
+     * @throws InvalidParameterException either the unique identifier or the status are invalid in some way
+     * @throws UserNotAuthorizedException the user is not allowed to perform this action
+     * @throws PropertyServerException a problem with the metadata store
+     */
+    public void updateRelationshipEffectivityDates(String       userId,
+                                                   String       externalSourceGUID,
+                                                   String       externalSourceName,
+                                                   String       relationshipGUID,
+                                                   String       relationshipGUIDParameterName,
+                                                   String       relationshipGUIDTypeName,
+                                                   Date         effectiveFrom,
+                                                   Date         effectiveTo,
+                                                   boolean      forLineage,
+                                                   boolean      forDuplicateProcessing,
+                                                   Date         effectiveTime,
+                                                   String       methodName) throws InvalidParameterException,
+                                                                                   UserNotAuthorizedException,
+                                                                                   PropertyServerException
+    {
+        final String relationshipTypeParameterName = "relationshipGUIDTypeName";
+
+        invalidParameterHandler.validateUserId(userId, methodName);
+        invalidParameterHandler.validateGUID(relationshipGUID, relationshipGUIDParameterName, methodName);
+        invalidParameterHandler.validateName(relationshipGUIDTypeName, relationshipTypeParameterName, methodName);
+
+        Relationship relationship = repositoryHandler.getRelationshipByGUID(userId,
+                                                                            relationshipGUID,
+                                                                            relationshipGUIDParameterName,
+                                                                            relationshipGUIDTypeName,
+                                                                            effectiveTime,
+                                                                            methodName);
+
+        if (relationship != null)
+        {
+            InstanceProperties newProperties = this.setUpEffectiveDates(relationship.getProperties(), effectiveFrom, effectiveTo);
+
+            this.validateRelationshipChange(userId,
+                                            relationship,
+                                            false,
+                                            forLineage,
+                                            forDuplicateProcessing,
+                                            effectiveTime,
+                                            methodName);
+
+            /*
+             * User has permission to proceed
+             */
+            repositoryHandler.updateRelationshipProperties(userId,
+                                                           externalSourceGUID,
+                                                           externalSourceName,
+                                                           relationshipGUID,
+                                                           newProperties,
+                                                           methodName);
+
+        }
+    }
+
+
+    /**
+     * Validate that a relationship can be returned to the caller.
+     *
+     * @param userId calling user
+     * @param relationship relationship to test
+     * @param validatedAnchorGUIDs the anchor GUIDs that have been validated (don't want to do this many times).
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     * @throws InvalidParameterException one of the search parameters is invalid
+     * @throws UserNotAuthorizedException the governance action service is not able to access the elements
+     * @throws PropertyServerException a problem accessing the metadata store
+
+     */
+    protected void validateRelationship(String       userId,
+                                        Relationship relationship,
+                                        List<String> validatedAnchorGUIDs,
+                                        boolean      forLineage,
+                                        boolean      forDuplicateProcessing,
+                                        Date         effectiveTime,
+                                        String       methodName) throws InvalidParameterException,
+                                                                        PropertyServerException,
+                                                                        UserNotAuthorizedException
+    {
+        final String entityOneParameterName = "relationship.getEntityOneProxy().getGUID()";
+        final String entityTwoParameterName = "relationship.getEntityTwoProxy().getGUID()";
+
+        validateEntityProxyAnchor(userId,
+                                  relationship.getEntityOneProxy(),
+                                  entityOneParameterName,
+                                  validatedAnchorGUIDs,
+                                  forLineage,
+                                  forDuplicateProcessing,
+                                  effectiveTime,
+                                  methodName);
+
+        validateEntityProxyAnchor(userId,
+                                  relationship.getEntityTwoProxy(),
+                                  entityTwoParameterName,
+                                  validatedAnchorGUIDs,
+                                  forLineage,
+                                  forDuplicateProcessing,
+                                  effectiveTime,
+                                  methodName);
+    }
+
+
+    /**
+     * Check that a relationship returned from the repository is linked to entities that
+     * are visible to the caller.
+     *
+     * @param userId caller
+     * @param entityProxy linked entity
+     * @param entityProxyParameterName name of the parameter for this end
+     * @param validatedAnchorGUIDs the anchor GUIDs that have been validated (don't want to do this many times).
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     * @throws InvalidParameterException one of the search parameters is invalid
+     * @throws UserNotAuthorizedException the governance action service is not able to access the elements
+     * @throws PropertyServerException a problem accessing the metadata store
+     */
+    private void validateEntityProxyAnchor(String       userId,
+                                           EntityProxy  entityProxy,
+                                           String       entityProxyParameterName,
+                                           List<String> validatedAnchorGUIDs,
+                                           boolean      forLineage,
+                                           boolean      forDuplicateProcessing,
+                                           Date         effectiveTime,
+                                           String       methodName) throws InvalidParameterException,
+                                                                           PropertyServerException,
+                                                                           UserNotAuthorizedException
+    {
+        AnchorIdentifiers anchorIdentifiers = this.getAnchorsFromAnchorsClassification(entityProxy, methodName);
+
+        if (anchorIdentifiers == null)
+        {
+            EntityDetail connectToEntity = repositoryHandler.getEntityByGUID(userId,
+                                                                             entityProxy.getGUID(),
+                                                                             entityProxyParameterName,
+                                                                             OpenMetadataType.OPEN_METADATA_ROOT.typeName,
+                                                                             forLineage,
+                                                                             forDuplicateProcessing,
+                                                                             effectiveTime,
+                                                                             methodName);
+
+            anchorIdentifiers = this.getAnchorsFromAnchorsClassification(entityProxy, methodName);
+
+            if ((anchorIdentifiers == null) || (anchorIdentifiers.anchorGUID == null) || (! validatedAnchorGUIDs.contains(anchorIdentifiers.anchorGUID)))
+            {
+                this.validateEntityAndAnchorForRead(userId,
+                                                    connectToEntity.getType().getTypeDefName(),
+                                                    connectToEntity,
+                                                    entityProxyParameterName,
+                                                    false,
+                                                    false,
+                                                    forLineage,
+                                                    forDuplicateProcessing,
+                                                    effectiveTime,
+                                                    methodName);
+
+                if ((anchorIdentifiers != null) && (anchorIdentifiers.anchorGUID != null))
+                {
+                    validatedAnchorGUIDs.add(anchorIdentifiers.anchorGUID);
+                }
+            }
+        }
+        else
+        {
+            if ((anchorIdentifiers.anchorGUID == null) || (! validatedAnchorGUIDs.contains(anchorIdentifiers.anchorGUID)))
+            {
+                this.validateEntityAndAnchorForRead(userId,
+                                                    entityProxy.getGUID(),
+                                                    entityProxyParameterName,
+                                                    OpenMetadataType.OPEN_METADATA_ROOT.typeName,
+                                                    false,
+                                                    false,
+                                                    forLineage,
+                                                    forDuplicateProcessing,
+                                                    effectiveTime,
+                                                    methodName);
+
+                if (anchorIdentifiers.anchorGUID != null)
+                {
+                    validatedAnchorGUIDs.add(anchorIdentifiers.anchorGUID);
+                }
+            }
+        }
+    }
+
+
+    /**
+     * Thrown an exception if the user does not have permission to proceed with the update to a relationship.
+     *
+     * @param userId calling user
+     * @param relationship retrieved relationship
+     * @param isDelete is the action to delete
+     * @param forLineage return elements marked with the Memento classification?
+     * @param forDuplicateProcessing do not merge elements marked as duplicates?
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     *
+     * @throws InvalidParameterException either the unique identifier or the status are invalid in some way
+     * @throws UserNotAuthorizedException the user is not allowed to perform this action
+     * @throws PropertyServerException a problem with the metadata store
+     */
+    private void validateRelationshipChange(String       userId,
+                                            Relationship relationship,
+                                            boolean      isDelete,
+                                            boolean      forLineage,
+                                            boolean      forDuplicateProcessing,
+                                            Date         effectiveTime,
+                                            String       methodName) throws InvalidParameterException,
+                                                                            PropertyServerException,
+                                                                            UserNotAuthorizedException
+    {
+        final String entityOneParameterName = "relationship.getEntityOneProxy().getGUID()";
+        final String entityTwoParameterName = "relationship.getEntityTwoProxy().getGUID()";
+
+        String relationshipGUIDTypeName = relationship.getType().getTypeDefName();
+
+        /*
+         * Retrieve the end entities using the repository handler as calls to validate the anchor
+         * via the security verifier are done here.
+         */
+        EntityDetail bean1Entity = repositoryHandler.getEntityByGUID(userId,
+                                                                     relationship.getEntityOneProxy().getGUID(),
+                                                                     entityOneParameterName,
+                                                                     OpenMetadataType.OPEN_METADATA_ROOT.typeName,
+                                                                     forLineage,
+                                                                     forDuplicateProcessing,
+                                                                     effectiveTime,
+                                                                     methodName);
+
+        EntityDetail anchor1Entity = this.validateEntityAndAnchorForRead(userId,
+                                                                         OpenMetadataType.OPEN_METADATA_ROOT.typeName,
+                                                                         bean1Entity,
+                                                                         entityOneParameterName,
+                                                                         true,
+                                                                         false,
+                                                                         forLineage,
+                                                                         forDuplicateProcessing,
+                                                                         effectiveTime,
+                                                                         methodName);
+
+        EntityDetail bean2Entity = repositoryHandler.getEntityByGUID(userId,
+                                                                     relationship.getEntityTwoProxy().getGUID(),
+                                                                     entityTwoParameterName,
+                                                                     OpenMetadataType.OPEN_METADATA_ROOT.typeName,
+                                                                     forLineage,
+                                                                     forDuplicateProcessing,
+                                                                     effectiveTime,
+                                                                     methodName);
+
+        EntityDetail anchor2Entity = this.validateEntityAndAnchorForRead(userId,
+                                                                         OpenMetadataType.OPEN_METADATA_ROOT.typeName,
+                                                                         bean2Entity,
+                                                                         entityTwoParameterName,
+                                                                         true,
+                                                                         false,
+                                                                         forLineage,
+                                                                         forDuplicateProcessing,
+                                                                         effectiveTime,
+                                                                         methodName);
+
+        if ((repositoryHelper.isTypeOf(serviceName, relationshipGUIDTypeName, OpenMetadataType.ATTACHED_COMMENT_RELATIONSHIP.typeName)) ||
+                (repositoryHelper.isTypeOf(serviceName, relationshipGUIDTypeName, OpenMetadataType.ATTACHED_LIKE_RELATIONSHIP.typeName)) ||
+                (repositoryHelper.isTypeOf(serviceName, relationshipGUIDTypeName, OpenMetadataType.ATTACHED_TAG_RELATIONSHIP.typeName)) ||
+                (repositoryHelper.isTypeOf(serviceName, relationshipGUIDTypeName, OpenMetadataType.ATTACHED_RATING_RELATIONSHIP.typeName)))
+        {
+            if (anchor1Entity != null)
+            {
+                if (isDelete)
+                {
+                    securityVerifier.validateUserForAnchorDeleteFeedback(userId,
+                                                                         anchor1Entity,
+                                                                         bean2Entity,
+                                                                         repositoryHelper,
+                                                                         serviceName,
+                                                                         methodName);
+                }
+                else
+                {
+                    securityVerifier.validateUserForAnchorAddFeedback(userId,
+                                                                      anchor1Entity,
+                                                                      bean2Entity,
+                                                                      repositoryHelper,
+                                                                      serviceName,
+                                                                      methodName);
+                }
+            }
+            else
+            {
+                if (isDelete)
+                {
+                    securityVerifier.validateUserForElementDeleteFeedback(userId,
+                                                                          bean1Entity,
+                                                                          bean2Entity,
+                                                                          repositoryHelper,
+                                                                          serviceName,
+                                                                          methodName);
+                }
+                else
+                {
+                    securityVerifier.validateUserForElementAddFeedback(userId,
+                                                                       bean1Entity,
+                                                                       bean2Entity,
+                                                                       repositoryHelper,
+                                                                       serviceName,
+                                                                       methodName);
+                }
+            }
+        }
+        else if (anchor1Entity != null)
+        {
+            if ((anchor2Entity != null) && (anchor1Entity.getGUID().equals(anchor2Entity.getGUID())))
+            {
+                /*
+                 * Both ends of the relationship have the same anchor, so they are members of the anchor
+                 */
+                securityVerifier.validateUserForAnchorMemberUpdate(userId,
+                                                                   anchor1Entity,
+                                                                   repositoryHelper,
+                                                                   serviceName,
+                                                                   methodName);
+            }
+            else
+            {
+                if (isDelete)
+                {
+                    securityVerifier.validateUserForAnchorDetach(userId,
+                                                                 anchor1Entity,
+                                                                 bean2Entity,
+                                                                 relationshipGUIDTypeName,
+                                                                 repositoryHelper,
+                                                                 serviceName,
+                                                                 methodName);
+                }
+                else
+                {
+                    securityVerifier.validateUserForAnchorAttach(userId,
+                                                                 anchor1Entity,
+                                                                 bean2Entity,
+                                                                 relationshipGUIDTypeName,
+                                                                 repositoryHelper,
+                                                                 serviceName,
+                                                                 methodName);
+                }
+            }
+        }
+        else if (anchor2Entity == null)
+        {
+            if (isDelete)
+            {
+                securityVerifier.validateUserForElementDetach(userId,
+                                                              bean1Entity,
+                                                              bean2Entity,
+                                                              relationshipGUIDTypeName,
+                                                              repositoryHelper,
+                                                              serviceName,
+                                                              methodName);
+            }
+            else
+            {
+                securityVerifier.validateUserForElementAttach(userId,
+                                                              bean1Entity,
+                                                              bean2Entity,
+                                                              relationshipGUIDTypeName,
+                                                              repositoryHelper,
+                                                              serviceName,
+                                                              methodName);
+            }
+        }
+        else // anchor1 is null but anchor2 is not
+        {
+            if (isDelete)
+            {
+                securityVerifier.validateUserForAnchorDetach(userId,
+                                                             anchor2Entity,
+                                                             bean1Entity,
+                                                             relationshipGUIDTypeName,
+                                                             repositoryHelper,
+                                                             serviceName,
+                                                             methodName);
+            }
+            else
+            {
+                securityVerifier.validateUserForAnchorAttach(userId,
+                                                             anchor2Entity,
+                                                             bean1Entity,
+                                                             relationshipGUIDTypeName,
+                                                             repositoryHelper,
+                                                             serviceName,
+                                                             methodName);
+            }
+        }
+
+        /*
+         * User has permission to proceed
+         */
+    }
+
+
+    /**
+     * Update the properties associated with a relationship.  Effectivity dates are unchanged.
+     *
+     * @param userId caller's userId
+     * @param externalSourceGUID guid of the software capability entity that represented the external source - null for local
+     * @param externalSourceName name of the software capability entity that represented the external source
+     * @param relationshipGUID unique identifier of the relationship to update
+     * @param relationshipGUIDParameterName  name of the parameter supplying the relationshipGUID
+     * @param relationshipTypeName type name of relationship if known (null is ok)
+     * @param isMergeUpdate should the supplied updateProperties be merged with existing properties (true) by replacing just the properties with
+     *                      matching names, or should the entire properties of the instance be replaced?
+     * @param relationshipProperties new properties for the relationship
+     * @param forLineage return elements marked with the Memento classification?
+     * @param forDuplicateProcessing do not merge elements marked as duplicates?
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     *
+     * @throws InvalidParameterException the unique identifier of the relationship is null or invalid in some way; the properties are
+     *                                    not valid for this type of relationship
+     * @throws UserNotAuthorizedException the user is not allowed to perform this action
+     * @throws PropertyServerException a problem with the metadata store
+     */
+    public void updateRelationshipProperties(String             userId,
+                                             String             externalSourceGUID,
+                                             String             externalSourceName,
+                                             String             relationshipGUID,
+                                             String             relationshipGUIDParameterName,
+                                             String             relationshipTypeName,
+                                             boolean            isMergeUpdate,
+                                             InstanceProperties relationshipProperties,
+                                             boolean            forLineage,
+                                             boolean            forDuplicateProcessing,
+                                             Date               effectiveTime,
+                                             String             methodName) throws InvalidParameterException,
+                                                                                   UserNotAuthorizedException,
+                                                                                   PropertyServerException
+    {
+        invalidParameterHandler.validateUserId(userId, methodName);
+        invalidParameterHandler.validateGUID(relationshipGUID, relationshipGUIDParameterName, methodName);
+
+        Relationship relationship = repositoryHandler.getRelationshipByGUID(userId,
+                                                                            relationshipGUID,
+                                                                            relationshipGUIDParameterName,
+                                                                            relationshipTypeName,
+                                                                            effectiveTime,
+                                                                            methodName);
+
+        if (relationship != null)
+        {
+            /*
+             * Sort out the properties
+             */
+            InstanceProperties newProperties = setUpNewProperties(isMergeUpdate,
+                                                                  relationshipProperties,
+                                                                  relationship.getProperties());
+
+            this.validateRelationshipChange(userId,
+                                            relationship,
+                                            false,
+                                            forLineage,
+                                            forDuplicateProcessing,
+                                            effectiveTime,
+                                            methodName);
+
+            /*
+             * If there are no properties to change then nothing more to do
+             */
+            if ((newProperties == null) && (relationship.getProperties() == null))
+            {
+                auditLog.logMessage(methodName,
+                                    GenericHandlersAuditCode.IGNORING_UNNECESSARY_RELATIONSHIP_UPDATE.getMessageDefinition(relationship.getType().getTypeDefName(),
+                                                                                                                           relationship.getGUID(),
+                                                                                                                           methodName,
+                                                                                                                           userId));
+                return;
+            }
+
+            /*
+             * If nothing has changed in the properties then nothing to do
+             */
+            if ((newProperties != null) && (newProperties.equals(relationship.getProperties())))
+            {
+                auditLog.logMessage(methodName,
+                                    GenericHandlersAuditCode.IGNORING_UNNECESSARY_RELATIONSHIP_UPDATE.getMessageDefinition(relationship.getType().getTypeDefName(),
+                                                                                                                           relationship.getGUID(),
+                                                                                                                           methodName,
+                                                                                                                           userId));
+                return;
+            }
+
+            repositoryHandler.updateRelationshipProperties(userId,
+                                                           externalSourceGUID,
+                                                           externalSourceName,
+                                                           relationship,
+                                                           newProperties,
+                                                           methodName);
+        }
+    }
+
+
+    /**
+     * Return a visible relationship retrieved by its GUID.
+     *
+     * @param userId calling user
+     * @param relationshipGUID unique identifier
+     * @param relationshipGUIDParameterName parameter passing the unique identifier
+     * @param relationshipTypeName type of relationship to be retrieved
+     * @param asOfTime Requests a historical query of the entity.  Null means return the present values.
+     * @param forLineage return elements marked with the Memento classification?
+     * @param forDuplicateProcessing do not merge elements marked as duplicates?
+     * @param effectiveTime time when the relationship is effective
+     * @param methodName calling method
+     * @return list of retrieved objects or null if none found
+     *
+     * @throws InvalidParameterException  the input properties are invalid
+     * @throws UserNotAuthorizedException the user is not authorized to issue this request
+     * @throws PropertyServerException    problem accessing the repositories
+     */
+    public Relationship getAttachmentLink(String       userId,
+                                          String       relationshipGUID,
+                                          String       relationshipGUIDParameterName,
+                                          String       relationshipTypeName,
+                                          Date         asOfTime,
+                                          boolean      forLineage,
+                                          boolean      forDuplicateProcessing,
+                                          Date         effectiveTime,
+                                          String       methodName) throws InvalidParameterException,
+                                                                    PropertyServerException,
+                                                                    UserNotAuthorizedException
+
+    {
+        Relationship relationship;
+
+        if (asOfTime == null)
+        {
+            relationship = repositoryHandler.getRelationshipByGUID(userId,
+                                                                   relationshipGUID,
+                                                                   relationshipGUIDParameterName,
+                                                                   relationshipTypeName,
+                                                                   effectiveTime,
+                                                                   methodName);
+        }
+        else
+        {
+            relationship = repositoryHandler.getRelationshipByGUID(userId,
+                                                                   relationshipGUID,
+                                                                   relationshipGUIDParameterName,
+                                                                   relationshipTypeName,
+                                                                   asOfTime,
+                                                                   effectiveTime,
+                                                                   methodName);
+        }
+
+        final String entityOneParameterName = "relationship.getEntityOneProxy().getGUID()";
+        final String entityTwoParameterName = "relationship.getEntityTwoProxy().getGUID()";
+
+        /*
+         * Check that both ends are readable
+         */
+        this.validateEntityAndAnchorForRead(userId,
+                                            relationship.getEntityOneProxy().getGUID(),
+                                            entityOneParameterName,
+                                            OpenMetadataType.OPEN_METADATA_ROOT.typeName,
+                                            true,
+                                            false,
+                                            forLineage,
+                                            forDuplicateProcessing,
+                                            effectiveTime,
+                                            methodName);
+
+        this.validateEntityAndAnchorForRead(userId,
+                                            relationship.getEntityTwoProxy().getGUID(),
+                                            entityTwoParameterName,
+                                            OpenMetadataType.OPEN_METADATA_ROOT.typeName,
+                                            true,
+                                            false,
+                                            forLineage,
+                                            forDuplicateProcessing,
+                                            effectiveTime,
+                                            methodName);
+
+        return relationship;
+    }
+
+
+    /**
+     * Return the relationship between the requested elements - there should be only one.  Note that the entities are not checked.
+     *
+     * @param userId     calling user
+     * @param startingGUID identifier for the entity that the identifier is attached to
+     * @param startingGUIDParameterName name of the parameter used to pass the guid
+     * @param startingTypeName type name for anchor
+     * @param attachmentRelationshipTypeGUID unique identifier of the relationship type connect to the attachment
+     * @param attachmentRelationshipTypeName unique name of the relationship type connect to the attachment
+     * @param attachmentEntityGUID unique identifier of the entity on the other end or null if unknown
+     * @param attachmentEntityTypeName unique name of the attached entity's type
+     * @param attachmentEntityEnd which relationship end should the attached entity be located? 0=either end; 1=end1; 2=end2
+     * @param limitResultsByStatus By default, relationships in all statuses (other than DELETE) are returned.  However, it is possible
+     *                             to specify a list of statuses (for example ACTIVE) to restrict the results to.  Null means all status values.
+     * @param asOfTime Requests a historical query of the entity.  Null means return the present values.
+     * @param sequencingProperty String name of the property that is to be used to sequence the results.
+     *                           Null means do not sequence on a property name (see SequencingOrder).
+     * @param sequencingOrder Enum defining how the results should be ordered.
+     * @param forLineage is this a lineage request
+     * @param forDuplicateProcessing is this processing part of duplicate processing?
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     *
+     * @return list of retrieved relationships or null if none found
+     *
+     * @throws InvalidParameterException  the input properties are invalid
+     * @throws UserNotAuthorizedException the user is not authorized to issue this request
+     * @throws PropertyServerException    problem accessing the repositories
+     */
+    public Relationship  getUniqueAttachmentLink(String               userId,
+                                                 String               startingGUID,
+                                                 String               startingGUIDParameterName,
+                                                 String               startingTypeName,
+                                                 String               attachmentRelationshipTypeGUID,
+                                                 String               attachmentRelationshipTypeName,
+                                                 String               attachmentEntityGUID,
+                                                 String               attachmentEntityTypeName,
+                                                 int                  attachmentEntityEnd,
+                                                 List<InstanceStatus> limitResultsByStatus,
+                                                 Date                 asOfTime,
+                                                 SequencingOrder      sequencingOrder,
+                                                 String               sequencingProperty,
+                                                 boolean              forLineage,
+                                                 boolean              forDuplicateProcessing,
+                                                 Date                 effectiveTime,
+                                                 String               methodName) throws InvalidParameterException,
+                                                                                         PropertyServerException,
+                                                                                         UserNotAuthorizedException
+    {
+        List<Relationship> relationships = this.getAttachmentLinks(userId,
+                                                                   startingGUID,
+                                                                   startingGUIDParameterName,
+                                                                   startingTypeName,
+                                                                   attachmentRelationshipTypeGUID,
+                                                                   attachmentRelationshipTypeName,
+                                                                   attachmentEntityGUID,
+                                                                   attachmentEntityTypeName,
+                                                                   attachmentEntityEnd,
+                                                                   limitResultsByStatus,
+                                                                   asOfTime,
+                                                                   sequencingOrder,
+                                                                   sequencingProperty,
+                                                                   forLineage,
+                                                                   forDuplicateProcessing,
+                                                                   0,
+                                                                   invalidParameterHandler.getMaxPagingSize(),
+                                                                   effectiveTime,
+                                                                   methodName);
+
+        if ((relationships == null) || (relationships.isEmpty()))
+        {
+            return null;
+        }
+        else if (relationships.size() == 1)
+        {
+            return relationships.get(0);
+        }
+        else
+        {
+            errorHandler.handleAmbiguousRelationships(startingGUID,
+                                                      startingTypeName,
+                                                      attachmentRelationshipTypeName,
+                                                      relationships,
+                                                      methodName);
+
+            return null;
+        }
+    }
+
+
+    /**
+     * Return all relationships attached to a specific entity.
+     *
+     * @param userId     calling user
+     * @param startingGUID identifier for the entity that the identifier is attached to
+     * @param startingGUIDParameterName name of the parameter used to pass the guid
+     * @param startingTypeName type name for anchor
+     * @param limitResultsByStatus By default, relationships in all statuses (other than DELETE) are returned.  However, it is possible
+     *                             to specify a list of statuses (for example ACTIVE) to restrict the results to.  Null means all status values.
+     * @param asOfTime Requests a historical query of the entity.  Null means return the present values.
+     * @param sequencingProperty String name of the property that is to be used to sequence the results.
+     *                           Null means do not sequence on a property name (see SequencingOrder).
+     * @param sequencingOrder Enum defining how the results should be ordered.
+     * @param forLineage is this a lineage request
+     * @param forDuplicateProcessing is this processing part of duplicate processing?
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     *
+     * @return list of retrieved relationships or null if none found
+     *
+     * @throws InvalidParameterException  the input properties are invalid
+     * @throws UserNotAuthorizedException the user is not authorized to issue this request
+     * @throws PropertyServerException    problem accessing the repositories
+     */
+    public List<Relationship>  getAllAttachmentLinks(String               userId,
+                                                     String               startingGUID,
+                                                     String               startingGUIDParameterName,
+                                                     String               startingTypeName,
+                                                     List<InstanceStatus> limitResultsByStatus,
+                                                     Date                 asOfTime,
+                                                     SequencingOrder      sequencingOrder,
+                                                     String               sequencingProperty,
+                                                     boolean              forLineage,
+                                                     boolean              forDuplicateProcessing,
+                                                     Date                 effectiveTime,
+                                                     String               methodName) throws InvalidParameterException,
+                                                                                             PropertyServerException,
+                                                                                             UserNotAuthorizedException
+    {
+        int startFrom = 0;
+
+        List<Relationship> relationships = this.getAttachmentLinks(userId,
+                                                                   startingGUID,
+                                                                   startingGUIDParameterName,
+                                                                   startingTypeName,
+                                                                   null,
+                                                                   null,
+                                                                   null,
+                                                                   null,
+                                                                   0,
+                                                                   limitResultsByStatus,
+                                                                   asOfTime,
+                                                                   sequencingOrder,
+                                                                   sequencingProperty,
+                                                                   forLineage,
+                                                                   forDuplicateProcessing,
+                                                                   startFrom,
+                                                                   invalidParameterHandler.getMaxPagingSize(),
+                                                                   effectiveTime,
+                                                                   methodName);
+
+        if (relationships != null)
+        {
+            List<Relationship> fullRelationshipList = new ArrayList<>();
+
+            while (relationships != null)
+            {
+                /*
+                 * Save the retrieved relationships.
+                 */
+                fullRelationshipList.addAll(relationships);
+
+                /*
+                 * Get the next set of relationships.
+                 */
+                startFrom = startFrom + invalidParameterHandler.getMaxPagingSize();
+
+                relationships = this.getAttachmentLinks(userId,
+                                                        startingGUID,
+                                                        startingGUIDParameterName,
+                                                        startingTypeName,
+                                                        null,
+                                                        null,
+                                                        null,
+                                                        null,
+                                                        0,
+                                                        limitResultsByStatus,
+                                                        asOfTime,
+                                                        sequencingOrder,
+                                                        sequencingProperty,
+                                                        forLineage,
+                                                        forDuplicateProcessing,
+                                                        startFrom,
+                                                        invalidParameterHandler.getMaxPagingSize(),
+                                                        effectiveTime,
+                                                        methodName);
+            }
+
+            return fullRelationshipList;
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Return the relationships to required elements attached to a specific entity.  Note that the entities are not checked.
+     *
+     * @param userId     calling user
+     * @param startingGUID identifier for the entity that the identifier is attached to
+     * @param startingGUIDParameterName name of the parameter used to pass the guid
+     * @param startingTypeName type name for anchor
+     * @param attachmentRelationshipTypeGUID unique identifier of the relationship type connect to the attachment
+     * @param attachmentRelationshipTypeName unique name of the relationship type connect to the attachment
+     * @param attachmentEntityGUID unique identifier of the entity on the other end or null if unknown
+     * @param attachmentEntityTypeName unique name of the attached entity's type
+     * @param attachmentEntityEnd which relationship end should the attached entity be located? 0=either end; 1=end1; 2=end2
+     * @param limitResultsByStatus By default, relationships in all statuses (other than DELETE) are returned.  However, it is possible
+     *                             to specify a list of statuses (for example ACTIVE) to restrict the results to.  Null means all status values.
+     * @param asOfTime Requests a historical query of the entity.  Null means return the present values.
+     * @param sequencingProperty String name of the property that is to be used to sequence the results.
+     *                           Null means do not sequence on a property name (see SequencingOrder).
+     * @param sequencingOrder Enum defining how the results should be ordered.
+     * @param forLineage is this a lineage request
+     * @param forDuplicateProcessing is this processing part of duplicate processing?
+     * @param startingFrom start position for results
+     * @param pageSize     maximum number of results
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     *
+     * @return list of retrieved relationships or null if none found
+     *
+     * @throws InvalidParameterException  the input properties are invalid
+     * @throws UserNotAuthorizedException the user is not authorized to issue this request
+     * @throws PropertyServerException    problem accessing the repositories
+     */
+    public List<Relationship>  getAttachmentLinks(String               userId,
+                                                  String               startingGUID,
+                                                  String               startingGUIDParameterName,
+                                                  String               startingTypeName,
+                                                  String               attachmentRelationshipTypeGUID,
+                                                  String               attachmentRelationshipTypeName,
+                                                  String               attachmentEntityGUID,
+                                                  String               attachmentEntityTypeName,
+                                                  int                  attachmentEntityEnd,
+                                                  List<InstanceStatus> limitResultsByStatus,
+                                                  Date                 asOfTime,
+                                                  SequencingOrder      sequencingOrder,
+                                                  String               sequencingProperty,
+                                                  boolean              forLineage,
+                                                  boolean              forDuplicateProcessing,
+                                                  int                  startingFrom,
+                                                  int                  pageSize,
+                                                  Date                 effectiveTime,
+                                                  String               methodName) throws InvalidParameterException,
+                                                                                          PropertyServerException,
+                                                                                          UserNotAuthorizedException
+    {
+        invalidParameterHandler.validateUserId(userId, methodName);
+        invalidParameterHandler.validateGUID(startingGUID, startingGUIDParameterName, methodName);
+
+        EntityDetail startingEntity = this.getEntityFromRepository(userId,
+                                                                   startingGUID,
+                                                                   startingGUIDParameterName,
+                                                                   startingTypeName,
+                                                                   null,
+                                                                   null,
+                                                                   forLineage,
+                                                                   forDuplicateProcessing,
+                                                                   effectiveTime,
+                                                                   methodName);
+        
+        return getAttachmentLinks(userId,
+                                  startingEntity,
+                                  startingGUIDParameterName,
+                                  startingTypeName,
+                                  attachmentRelationshipTypeGUID,
+                                  attachmentRelationshipTypeName,
+                                  attachmentEntityGUID,
+                                  attachmentEntityTypeName,
+                                  attachmentEntityEnd,
+                                  limitResultsByStatus,
+                                  asOfTime,
+                                  sequencingOrder,
+                                  sequencingProperty,
+                                  forLineage,
+                                  forDuplicateProcessing,
+                                  startingFrom,
+                                  pageSize,
+                                  effectiveTime,
+                                  methodName);
+    }
+
+
+    /**
+     * Return the relationships to required elements attached to a specific entity.  Note that the entities are not checked.
+     *
+     * @param userId     calling user
+     * @param startingEntity  the entity that the identifier is attached to
+     * @param startingGUIDParameterName name of the parameter used to pass the guid
+     * @param startingTypeName type name for anchor
+     * @param attachmentRelationshipTypeGUID unique identifier of the relationship type connect to the attachment
+     * @param attachmentRelationshipTypeName unique name of the relationship type connect to the attachment
+     * @param attachmentEntityGUID unique identifier of the entity on the other end or null if unknown
+     * @param attachmentEntityTypeName unique name of the attached entity's type
+     * @param attachmentEntityEnd which relationship end should the attached entity be located? 0=either end; 1=end1; 2=end2
+     * @param limitResultsByStatus By default, relationships in all statuses (other than DELETE) are returned.  However, it is possible
+     *                             to specify a list of statuses (for example ACTIVE) to restrict the results to.  Null means all status values.
+     * @param asOfTime Requests a historical query of the entity.  Null means return the present values.
+     * @param sequencingProperty String name of the property that is to be used to sequence the results.
+     *                           Null means do not sequence on a property name (see SequencingOrder).
+     * @param sequencingOrder Enum defining how the results should be ordered.
+     * @param forLineage is this a lineage request
+     * @param forDuplicateProcessing is this processing part of duplicate processing?
+     * @param startingFrom start position for results
+     * @param pageSize     maximum number of results
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     *
+     * @return list of retrieved relationships or null if none found
+     *
+     * @throws InvalidParameterException  the input properties are invalid
+     * @throws UserNotAuthorizedException the user is not authorized to issue this request
+     * @throws PropertyServerException    problem accessing the repositories
+     */
+    public List<Relationship>  getAttachmentLinks(String               userId,
+                                                  EntityDetail         startingEntity,
+                                                  String               startingGUIDParameterName,
+                                                  String               startingTypeName,
+                                                  String               attachmentRelationshipTypeGUID,
+                                                  String               attachmentRelationshipTypeName,
+                                                  String               attachmentEntityGUID,
+                                                  String               attachmentEntityTypeName,
+                                                  int                  attachmentEntityEnd,
+                                                  List<InstanceStatus> limitResultsByStatus,
+                                                  Date                 asOfTime,
+                                                  SequencingOrder      sequencingOrder,
+                                                  String               sequencingProperty,
+                                                  boolean              forLineage,
+                                                  boolean              forDuplicateProcessing,
+                                                  int                  startingFrom,
+                                                  int                  pageSize,
+                                                  Date                 effectiveTime,
+                                                  String               methodName) throws InvalidParameterException,
+                                                                                          PropertyServerException,
+                                                                                          UserNotAuthorizedException
+    {
+        invalidParameterHandler.validateUserId(userId, methodName);
+        invalidParameterHandler.validateObject(startingEntity, startingGUIDParameterName, methodName);
+
+        int queryPageSize = invalidParameterHandler.validatePaging(startingFrom, pageSize, methodName);
+
+        List<Relationship> retrievedRelationships = repositoryHandler.getRelationshipsByType(userId,
+                                                                                             startingEntity,
+                                                                                             startingTypeName,
+                                                                                             attachmentRelationshipTypeGUID,
+                                                                                             attachmentRelationshipTypeName,
+                                                                                             attachmentEntityEnd,
+                                                                                             limitResultsByStatus,
+                                                                                             asOfTime,
+                                                                                             sequencingOrder,
+                                                                                             sequencingProperty,
+                                                                                             forLineage,
+                                                                                             forDuplicateProcessing,
+                                                                                             startingFrom,
+                                                                                             queryPageSize,
+                                                                                             effectiveTime,
+                                                                                             methodName);
+
+        if (retrievedRelationships == null)
+        {
+            return null;
+        }
+
+        /*
+         * Retrieve all of the entities linked to the relationships.  This is done as a single retrieve
+         * to minimise the calls to the repositories.  It also performs security checks
+         */
+        Map<String, EntityDetail> retrievedEntities = this.getValidatedEntities(userId,
+                                                                                startingEntity.getGUID(),
+                                                                                startingEntity.getType().getTypeDefName(),
+                                                                                retrievedRelationships,
+                                                                                attachmentEntityTypeName,
+                                                                                null,
+                                                                                null,
+                                                                                0,
+                                                                                forLineage,
+                                                                                forDuplicateProcessing,
+                                                                                effectiveTime,
+                                                                                methodName);
+
+        List<Relationship> results = new ArrayList<>();
+
+        if (retrievedEntities != null)
+        {
+            retrievedEntities.put(startingEntity.getGUID(), startingEntity);
+
+            /*
+             * Only return relationships that link to approved entities.
+             */
+            for (Relationship relationship : retrievedRelationships)
+            {
+                if (relationship != null)
+                {
+                    EntityProxy otherEnd = repositoryHandler.getOtherEnd(startingEntity.getGUID(), startingTypeName, relationship, attachmentEntityEnd, methodName);
+
+                    /*
+                     * Does the relationship point to an appropriate type of entity?
+                     */
+                    if (repositoryHelper.isTypeOf(serviceName, otherEnd.getType().getTypeDefName(), attachmentEntityTypeName))
+                    {
+                        if ((attachmentEntityGUID == null) || (attachmentEntityGUID.equals(otherEnd.getGUID())))
+                        {
+                            /*
+                             * Only return the relationship if the entity is visible to the caller.
+                             */
+                            EntityDetail retrievedEntity = retrievedEntities.get(otherEnd.getGUID());
+
+                            if (retrievedEntity != null)
+                            {
+                                log.debug("Accepting relationship: " + relationship.getGUID());
+                                results.add(relationship);
+                            }
+                            else
+                            {
+                                log.debug("Ignoring relationship as other end is not authorized: " + relationship.getGUID());
+                            }
+                        }
+                        else
+                        {
+                            log.debug("Ignoring relationship based on entity instance: " + relationship.getGUID());
+                        }
+                    }
+                    else
+                    {
+                        log.debug("Ignoring relationship based on type of attachment: " + relationship.getGUID());
+                    }
+                }
+            }
+        }
+
+        return results;
+    }
+
+
+    /**
+     * Retrieve the list of versions for the relationship.
+     *
+     * @param userId calling user
+     * @param guid unique identifier of object to update
+     * @param guidParameterName name of parameter supplying the GUID
+     * @param fromTime starting time
+     * @param toTime ending time
+     * @param startingFrom paging start point
+     * @param pageSize maximum results that can be returned
+     * @param sequencingOrder order of the results
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     * @return list of beans
+     *
+     * @throws InvalidParameterException one of the parameters is null or invalid.
+     * @throws PropertyServerException a problem removing the properties from the repositories.
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public List<Relationship> getRelationshipHistory(String                 userId,
+                                                     String                 guid,
+                                                     String                 guidParameterName,
+                                                     Date                   fromTime,
+                                                     Date                   toTime,
+                                                     int                    startingFrom,
+                                                     int                    pageSize,
+                                                     HistorySequencingOrder sequencingOrder,
+                                                     boolean                forLineage,
+                                                     boolean                forDuplicateProcessing,
+                                                     Date                   effectiveTime,
+                                                     String                 methodName) throws InvalidParameterException,
+                                                                                               PropertyServerException,
+                                                                                               UserNotAuthorizedException
+    {
+        invalidParameterHandler.validateUserId(userId, methodName);
+        invalidParameterHandler.validateGUID(guid, guidParameterName, methodName);
+
+        List<Relationship> relationships = repositoryHandler.getRelationshipHistory(userId,
+                                                                                    guid,
+                                                                                    fromTime,
+                                                                                    toTime,
+                                                                                    startingFrom,
+                                                                                    pageSize,
+                                                                                    sequencingOrder,
+                                                                                    methodName);
+
+        if (relationships != null)
+        {
+            for (Relationship relationship : relationships)
+            {
+                if (relationship != null)
+                {
+                    validateRelationship(userId,
+                                         relationship,
+                                         new ArrayList<>(),
+                                         forLineage,
+                                         forDuplicateProcessing,
+                                         effectiveTime,
+                                         methodName);
+                    /*
+                     * Only need to validate one
+                     */
+                    break;
+                }
+            }
+        }
+
+        return relationships;
+    }
+
+
+    /**
+     * Return a list of relationships that match the supplied criteria.  The results can be returned over many pages.
+     * Note: the visibility of the relationship and both entities is checked before returning a relationship to the caller.
+     *
+     * @param userId caller's userId
+     * @param relationshipTypeName type of interest (null means any element type)
+     * @param relationshipSubtypeNames optional list of the names for subtypes of the requested type to include in
+     *                                 (or, if skipSubtypes is true, exclude from) the search results.
+     * @param skipSubtypes if true, relationshipSubtypeNames is treated as the list of subtypes to exclude from the
+     *                     search results rather than the only subtypes to include.  Ignored if relationshipSubtypeNames is null.
+     * @param end1EntityGUIDs optional list of entity guids used to match end 1 of the relationships.
+     * @param end1EntityTypeGUID optional unique identifier of the type that the entity at end 1 must
+     *                           belong to.  Subtypes of the named type match too.  This is independent of
+     *                           end1EntityGUIDs: supplying the type on its own, with the guids left null,
+     *                           asks for the relationships that start at any entity of that type.
+     * @param end2EntityGUIDs optional list of entity guids used to match end 2 of the relationships.
+     * @param end2EntityTypeGUID optional unique identifier of the type that the entity at end 2 must
+     *                           belong to.  Subtypes of the named type match too.  This is independent of
+     *                           end2EntityGUIDs: supplying the type on its own, with the guids left null,
+     *                           asks for the relationships that end at any entity of that type.
+     * @param endMatchCriteria criteria for matching the ends of the relationships.
+     * @param searchProperties Optional list of entity property conditions to match.
+     * @param limitResultsByStatus By default, relationships in all statuses (other than DELETE) are returned.  However, it is possible
+     *                             to specify a list of statuses (eg ACTIVE) to restrict the results.  Null means all status values.
+     * @param asOfTime Requests a historical query of the entity.  Null means return the present values.
+     * @param sequencingProperty String name of the property that is to be used to sequence the results.
+     *                           Null means do not sequence on a property name (see SequencingOrder).
+     * @param sequencingOrder Enum defining how the results should be ordered.
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param startingFrom paging start point
+     * @param pageSize maximum results that can be returned
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     *
+     * @return a list of elements matching the supplied criteria; null means no matching elements in the metadata store.
+     * @throws InvalidParameterException one of the search parameters is invalid
+     * @throws UserNotAuthorizedException the governance action service is not able to access the elements
+     * @throws PropertyServerException a problem accessing the metadata store
+     */
+    public List<Relationship> findAttachmentLinks(String                userId,
+                                                  String                relationshipTypeName,
+                                                  List<String>          relationshipSubtypeNames,
+                                                  boolean               skipSubtypes,
+                                                  List<String>          end1EntityGUIDs,
+                                                  String                end1EntityTypeGUID,
+                                                  List<String>          end2EntityGUIDs,
+                                                  String                end2EntityTypeGUID,
+                                                  EndMatchCriteria      endMatchCriteria,
+                                                  SearchProperties      searchProperties,
+                                                  List<InstanceStatus>  limitResultsByStatus,
+                                                  Date                  asOfTime,
+                                                  String                sequencingProperty,
+                                                  SequencingOrder       sequencingOrder,
+                                                  boolean               forLineage,
+                                                  boolean               forDuplicateProcessing,
+                                                  int                   startingFrom,
+                                                  int                   pageSize,
+                                                  Date                  effectiveTime,
+                                                  String                methodName) throws InvalidParameterException,
+                                                                                           UserNotAuthorizedException,
+                                                                                           PropertyServerException
+    {
+        invalidParameterHandler.validateUserId(userId, methodName);
+
+        int queryPageSize = invalidParameterHandler.validatePaging(startingFrom, pageSize, methodName);
+
+        String relationshipTypeGUID = null;
+
+        if (relationshipTypeName != null)
+        {
+            relationshipTypeGUID = invalidParameterHandler.validateTypeName(relationshipTypeName,
+                                                                            null,
+                                                                            serviceName,
+                                                                            methodName,
+                                                                            repositoryHelper);
+        }
+
+        List<String> relationshipSubtypeGUIDs = null;
+
+        if (relationshipSubtypeNames != null)
+        {
+            relationshipSubtypeGUIDs = new ArrayList<>();
+
+            for (String subTypeName : relationshipSubtypeNames)
+            {
+                if (subTypeName != null)
+                {
+                    String subTypeGUID = invalidParameterHandler.validateTypeName(subTypeName,
+                                                                                   relationshipTypeName,
+                                                                                   serviceName,
+                                                                                   methodName,
+                                                                                   repositoryHelper);
+
+                    if (subTypeGUID != null)
+                    {
+                        relationshipSubtypeGUIDs.add(subTypeGUID);
+                    }
+                }
+            }
+        }
+
+        List<Relationship> retrievedRelationships = repositoryHandler.findRelationships(userId,
+                                                                                        relationshipTypeGUID,
+                                                                                        relationshipSubtypeGUIDs,
+                                                                                        skipSubtypes,
+                                                                                        end1EntityGUIDs,
+                                                                                        end1EntityTypeGUID,
+                                                                                        end2EntityGUIDs,
+                                                                                        end2EntityTypeGUID,
+                                                                                        endMatchCriteria,
+                                                                                        searchProperties,
+                                                                                        limitResultsByStatus,
+                                                                                        asOfTime,
+                                                                                        sequencingProperty,
+                                                                                        sequencingOrder,
+                                                                                        forDuplicateProcessing,
+                                                                                        startingFrom,
+                                                                                        queryPageSize,
+                                                                                        effectiveTime,
+                                                                                        methodName);
+
+        if (retrievedRelationships != null)
+        {
+            List<Relationship> results              = new ArrayList<>();
+            List<String>       validatedAnchorGUIDs = new ArrayList<>();
+
+            for (Relationship relationship : retrievedRelationships)
+            {
+                try
+                {
+                    validateRelationship(userId,
+                                         relationship,
+                                         validatedAnchorGUIDs,
+                                         forLineage,
+                                         forDuplicateProcessing,
+                                         effectiveTime,
+                                         methodName);
+
+                    results.add(relationship);
+                }
+                catch (Exception error)
+                {
+                    // ignore an element that is not visible to the caller
+                }
+            }
+
+            return results;
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Return a count of the relationships that match the supplied criteria.  This has the same search semantics
+     * as findAttachmentLinks(), but returns the number of matching relationships rather than the relationships
+     * themselves.  Note that, unlike findAttachmentLinks(), the count returned is not passed through the
+     * per-relationship visibility check, since applying that check would require fetching every matching
+     * relationship, which defeats the purpose of an efficient count.
+     *
+     * @param userId caller's userId
+     * @param relationshipTypeName type of interest (null means any element type)
+     * @param relationshipSubtypeNames optional list of the names for subtypes of the requested type to include in
+     *                                 (or, if skipSubtypes is true, exclude from) the search results.
+     * @param skipSubtypes if true, relationshipSubtypeNames is treated as the list of subtypes to exclude from the
+     *                     search results rather than the only subtypes to include.  Ignored if relationshipSubtypeNames is null.
+     * @param end1EntityGUIDs optional list of entity guids used to match end 1 of the relationships.
+     * @param end1EntityTypeGUID optional unique identifier of the type that the entity at end 1 must
+     *                           belong to.  Subtypes of the named type match too.  This is independent of
+     *                           end1EntityGUIDs: supplying the type on its own, with the guids left null,
+     *                           asks for the relationships that start at any entity of that type.
+     * @param end2EntityGUIDs optional list of entity guids used to match end 2 of the relationships.
+     * @param end2EntityTypeGUID optional unique identifier of the type that the entity at end 2 must
+     *                           belong to.  Subtypes of the named type match too.  This is independent of
+     *                           end2EntityGUIDs: supplying the type on its own, with the guids left null,
+     *                           asks for the relationships that end at any entity of that type.
+     * @param endMatchCriteria criteria for matching the ends of the relationships.
+     * @param searchProperties Optional list of entity property conditions to match.
+     * @param limitResultsByStatus By default, relationships in all statuses (other than DELETE) are returned.  However, it is possible
+     *                             to specify a list of statuses (eg ACTIVE) to restrict the results.  Null means all status values.
+     * @param asOfTime Requests a historical query of the entity.  Null means return the present values.
+     * @param forLineage not used - accepted for call-site parity with findAttachmentLinks().
+     * @param forDuplicateProcessing not used - accepted for call-site parity with findAttachmentLinks().
+     * @param effectiveTime not used - accepted for call-site parity with findAttachmentLinks().
+     * @param methodName calling method
+     *
+     * @return the number of elements matching the supplied criteria.
+     * @throws InvalidParameterException one of the search parameters is invalid
+     * @throws UserNotAuthorizedException the governance action service is not able to access the elements
+     * @throws PropertyServerException a problem accessing the metadata store
+     */
+    public long countAttachmentLinks(String                userId,
+                                     String                relationshipTypeName,
+                                     List<String>          relationshipSubtypeNames,
+                                     boolean               skipSubtypes,
+                                     List<String>          end1EntityGUIDs,
+                                     String                end1EntityTypeGUID,
+                                     List<String>          end2EntityGUIDs,
+                                     String                end2EntityTypeGUID,
+                                     EndMatchCriteria      endMatchCriteria,
+                                     SearchProperties      searchProperties,
+                                     List<InstanceStatus>  limitResultsByStatus,
+                                     Date                  asOfTime,
+                                     boolean               forLineage,
+                                     boolean               forDuplicateProcessing,
+                                     Date                  effectiveTime,
+                                     String                methodName) throws InvalidParameterException,
+                                                                              UserNotAuthorizedException,
+                                                                              PropertyServerException
+    {
+        return this.countAttachmentLinks(userId,
+                                         relationshipTypeName,
+                                         relationshipSubtypeNames,
+                                         skipSubtypes,
+                                         end1EntityGUIDs,
+                                         end1EntityTypeGUID,
+                                         end2EntityGUIDs,
+                                         end2EntityTypeGUID,
+                                         endMatchCriteria,
+                                         searchProperties,
+                                         limitResultsByStatus,
+                                         asOfTime,
+                                         forLineage,
+                                         forDuplicateProcessing,
+                                         effectiveTime,
+                                         true,
+                                         methodName);
+    }
+
+
+    /**
+     * Return a count of the relationships that match the supplied criteria.
+     * <br><br>
+     * The two ways of answering this do not always agree, and pushDown chooses between them.
+     * <br><br>
+     * With pushDown true the repository counts the matching rows itself.  That is fast - it never
+     * materialises the relationships - but it is the count of what matches the search, not of what a caller
+     * would be given: findAttachmentLinks() puts every relationship it retrieves through a visibility check
+     * on the entities at both ends, and silently drops the ones whose anchor the caller cannot read.  Where
+     * any matching relationship has an end like that, the count comes out higher than the list, which is
+     * exactly the discrepancy this parameter exists to let a caller resolve.
+     * <br><br>
+     * With pushDown false the relationships are retrieved and counted, so the answer agrees with the list by
+     * construction - at the cost of reading every one of them.  Speed or agreement: the caller decides which
+     * matters for what they are doing.
+     *
+     * @param userId caller's userId
+     * @param relationshipTypeName type of interest (null means any element type)
+     * @param relationshipSubtypeNames optional list of the names for subtypes of the requested type to include in
+     *                                 (or, if skipSubtypes is true, exclude from) the search results.
+     * @param skipSubtypes if true, relationshipSubtypeNames is treated as the list of subtypes to exclude from the
+     *                     search results rather than the only subtypes to include.
+     * @param end1EntityGUIDs optional list of entity guids used to match end 1 of the relationships.
+     * @param end1EntityTypeGUID optional unique identifier of the type that the entity at end 1 must belong to.
+     * @param end2EntityGUIDs optional list of entity guids used to match end 2 of the relationships.
+     * @param end2EntityTypeGUID optional unique identifier of the type that the entity at end 2 must belong to.
+     * @param endMatchCriteria criteria for matching the ends of the relationships.
+     * @param searchProperties Optional list of entity property conditions to match.
+     * @param limitResultsByStatus By default, relationships in all statuses (other than DELETE) are returned.
+     * @param asOfTime Requests a historical query of the entity.  Null means return the present values.
+     * @param forLineage used only when pushDown is false, where the retrieval applies it - the repository count
+     *                   does not.
+     * @param forDuplicateProcessing used only when pushDown is false, for the same reason.
+     * @param effectiveTime used only when pushDown is false, for the same reason.
+     * @param pushDown true to count in the repository, false to count what a retrieval would actually return
+     * @param methodName calling method
+     *
+     * @return the number of elements matching the supplied criteria.
+     * @throws InvalidParameterException one of the search parameters is invalid
+     * @throws UserNotAuthorizedException the governance action service is not able to access the elements
+     * @throws PropertyServerException a problem accessing the metadata store
+     */
+    public long countAttachmentLinks(String                userId,
+                                     String                relationshipTypeName,
+                                     List<String>          relationshipSubtypeNames,
+                                     boolean               skipSubtypes,
+                                     List<String>          end1EntityGUIDs,
+                                     String                end1EntityTypeGUID,
+                                     List<String>          end2EntityGUIDs,
+                                     String                end2EntityTypeGUID,
+                                     EndMatchCriteria      endMatchCriteria,
+                                     SearchProperties      searchProperties,
+                                     List<InstanceStatus>  limitResultsByStatus,
+                                     Date                  asOfTime,
+                                     boolean               forLineage,
+                                     boolean               forDuplicateProcessing,
+                                     Date                  effectiveTime,
+                                     boolean               pushDown,
+                                     String                methodName) throws InvalidParameterException,
+                                                                              UserNotAuthorizedException,
+                                                                              PropertyServerException
+    {
+        invalidParameterHandler.validateUserId(userId, methodName);
+
+        if (! pushDown)
+        {
+            /*
+             * Count what findAttachmentLinks() would actually hand back, by paging through it.  This costs a
+             * read of every matching relationship, and of the entities at their ends, which is what the
+             * repository count exists to avoid - but it is the only way to return a number that agrees with
+             * the list.
+             */
+            long count     = 0;
+            int  startFrom = 0;
+            int  pageSize  = invalidParameterHandler.getMaxPagingSize();
+
+            while (true)
+            {
+                List<Relationship> page = this.findAttachmentLinks(userId,
+                                                                    relationshipTypeName,
+                                                                    relationshipSubtypeNames,
+                                                                    skipSubtypes,
+                                                                    end1EntityGUIDs,
+                                                                    end1EntityTypeGUID,
+                                                                    end2EntityGUIDs,
+                                                                    end2EntityTypeGUID,
+                                                                    endMatchCriteria,
+                                                                    searchProperties,
+                                                                    limitResultsByStatus,
+                                                                    asOfTime,
+                                                                    null,
+                                                                    SequencingOrder.GUID,
+                                                                    forLineage,
+                                                                    forDuplicateProcessing,
+                                                                    startFrom,
+                                                                    pageSize,
+                                                                    effectiveTime,
+                                                                    methodName);
+
+                if (page == null)
+                {
+                    /*
+                     * Null ends the traversal.  An empty list does not - it means this batch was entirely
+                     * removed by the visibility check, and the next one may still hold something.
+                     */
+                    break;
+                }
+
+                count     += page.size();
+                startFrom += pageSize;
+            }
+
+            return count;
+        }
+
+        String relationshipTypeGUID = null;
+
+        if (relationshipTypeName != null)
+        {
+            relationshipTypeGUID = invalidParameterHandler.validateTypeName(relationshipTypeName,
+                                                                            null,
+                                                                            serviceName,
+                                                                            methodName,
+                                                                            repositoryHelper);
+        }
+
+        List<String> relationshipSubtypeGUIDs = null;
+
+        if (relationshipSubtypeNames != null)
+        {
+            relationshipSubtypeGUIDs = new ArrayList<>();
+
+            for (String subTypeName : relationshipSubtypeNames)
+            {
+                if (subTypeName != null)
+                {
+                    String subTypeGUID = invalidParameterHandler.validateTypeName(subTypeName,
+                                                                                   relationshipTypeName,
+                                                                                   serviceName,
+                                                                                   methodName,
+                                                                                   repositoryHelper);
+
+                    if (subTypeGUID != null)
+                    {
+                        relationshipSubtypeGUIDs.add(subTypeGUID);
+                    }
+                }
+            }
+        }
+
+        return repositoryHandler.countRelationships(userId,
+                                                     relationshipTypeGUID,
+                                                     relationshipSubtypeGUIDs,
+                                                     skipSubtypes,
+                                                     end1EntityGUIDs,
+                                                     end1EntityTypeGUID,
+                                                     end2EntityGUIDs,
+                                                     end2EntityTypeGUID,
+                                                     endMatchCriteria,
+                                                     searchProperties,
+                                                     limitResultsByStatus,
+                                                     asOfTime,
+                                                     null,
+                                                     null,
+                                                     forDuplicateProcessing,
+                                                     effectiveTime,
+                                                     methodName);
+    }
+
+
+    /**
+     * Return the entity for the required relationship attached to a specific entity.  This method assumes the starting entity has
+     * a validated anchor
+     *
+     * @param userId     calling user
+     * @param startingElementGUID identifier for the entity that the identifier is attached to
+     * @param startingElementGUIDParameterName name of the parameter used to pass the guid
+     * @param startingElementTypeName type name for anchor
+     * @param relationshipTypeGUID unique identifier of the attachment's relationship type
+     * @param relationshipTypeName unique name of the attachment's relationship type
+     * @param resultingElementTypeName unique name of the attached entity's type
+     * @param attachmentEntityEnd which relationship end should the attached entity be located? 0=either end; 1=end1; 2=end2
+     * @param forLineage is this part of a lineage request?
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     *
+     * @return list of retrieved objects or null if none found
+     *
+     * @throws InvalidParameterException  the input properties are invalid
+     * @throws UserNotAuthorizedException the user is not authorized to issue this request
+     * @throws PropertyServerException    problem accessing the repositories
+     */
+    public EntityDetail getAttachedEntity(String       userId,
+                                          String       startingElementGUID,
+                                          String       startingElementGUIDParameterName,
+                                          String       startingElementTypeName,
+                                          String       relationshipTypeGUID,
+                                          String       relationshipTypeName,
+                                          String       resultingElementTypeName,
+                                          int          attachmentEntityEnd,
+                                          boolean      forLineage,
+                                          boolean      forDuplicateProcessing,
+                                          Date         effectiveTime,
+                                          String       methodName) throws InvalidParameterException,
+                                                                          PropertyServerException,
+                                                                          UserNotAuthorizedException
+    {
+        EntityDetail startingEntity = this.getEntityFromRepository(userId,
+                                                                   startingElementGUID,
+                                                                   startingElementGUIDParameterName,
+                                                                   startingElementTypeName,
+                                                                   null,
+                                                                   null,
+                                                                   forLineage,
+                                                                   forDuplicateProcessing,
+                                                                   effectiveTime,
+                                                                   methodName);
+
+        EntityDetail entity = repositoryHandler.getEntityForRelationshipType(userId,
+                                                                             startingEntity,
+                                                                             startingElementTypeName,
+                                                                             relationshipTypeGUID,
+                                                                             relationshipTypeName,
+                                                                             null,
+                                                                             0,
+                                                                             resultingElementTypeName,
+                                                                             attachmentEntityEnd,
+                                                                             null,
+                                                                             null,
+                                                                             SequencingOrder.CREATION_DATE_RECENT,
+                                                                             null,
+                                                                             forLineage,
+                                                                             forDuplicateProcessing,
+                                                                             effectiveTime,
+                                                                             methodName);
+
+        if (entity != null)
+        {
+            validateEntityAndAnchorForRead(userId,
+                                           resultingElementTypeName,
+                                           entity,
+                                           startingElementGUIDParameterName,
+                                           true,
+                                           false,
+                                           forLineage,
+                                           forDuplicateProcessing,
+                                           effectiveTime,
+                                           methodName);
+        }
+
+        return entity;
+    }
+
+
+    /**
+     * Return the entities for the required relationships attached to a specific entity.
+     *
+     * @param userId     calling user
+     * @param startingGUID identifier for the entity that the identifier is attached to
+     * @param startingGUIDParameterName name of the parameter used to pass the guid
+     * @param startingTypeName type name for anchor
+     * @param isExplicitGetRequest has the end user explicitly requested this entity?
+     * @param relationshipTypeGUID unique identifier of the attachment's relationship type
+     * @param relationshipTypeName unique name of the attachment's relationship type
+     * @param resultingElementTypeName unique name of the attached entity's type
+     * @param requiredClassificationName name of a classification that must be on the entity for a match
+     * @param omittedClassificationName name of a classification that must NOT be on the entity for a match
+     * @param attachmentEntityEnd which relationship end should the attached entity be located? 0=either end; 1=end1; 2=end2
+     * @param limitResultsByStatus By default, relationships in all statuses (other than DELETE) are returned.  However, it is possible
+     *                             to specify a list of statuses (for example ACTIVE) to restrict the results to.  Null means all status values.
+     * @param asOfTime Requests a historical query of the entity.  Null means return the present values.
+     * @param sequencingProperty String name of the property that is to be used to sequence the results.
+     *                           Null means do not sequence on a property name (see SequencingOrder).
+     * @param sequencingOrder Enum defining how the results should be ordered.
+     * @param forLineage is this part of a lineage request?
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param startingFrom start position for results
+     * @param pageSize     maximum number of results
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     *
+     * @return list of retrieved objects or null if none found
+     *
+     * @throws InvalidParameterException  the input properties are invalid
+     * @throws UserNotAuthorizedException the user is not authorized to issue this request
+     * @throws PropertyServerException    problem accessing the repositories
+     */
+    public List<EntityDetail> getAttachedEntities(String               userId,
+                                                  String               startingGUID,
+                                                  String               startingGUIDParameterName,
+                                                  String               startingTypeName,
+                                                  boolean              isExplicitGetRequest,
+                                                  String               relationshipTypeGUID,
+                                                  String               relationshipTypeName,
+                                                  String               resultingElementTypeName,
+                                                  String               requiredClassificationName,
+                                                  String               omittedClassificationName,
+                                                  int                  attachmentEntityEnd,
+                                                  List<InstanceStatus> limitResultsByStatus,
+                                                  Date                 asOfTime,
+                                                  SequencingOrder      sequencingOrder,
+                                                  String               sequencingProperty,
+                                                  boolean              forLineage,
+                                                  boolean              forDuplicateProcessing,
+                                                  int                  startingFrom,
+                                                  int                  pageSize,
+                                                  Date                 effectiveTime,
+                                                  String               methodName) throws InvalidParameterException,
+                                                                                          PropertyServerException,
+                                                                                          UserNotAuthorizedException
+    {
+        invalidParameterHandler.validateUserId(userId, methodName);
+        invalidParameterHandler.validateGUID(startingGUID, startingGUIDParameterName, methodName);
+
+        EntityDetail startingEntity = this.getEntityFromRepository(userId,
+                                                                   startingGUID,
+                                                                   startingGUIDParameterName,
+                                                                   startingTypeName,
+                                                                   null,
+                                                                   null,
+                                                                   forLineage,
+                                                                   forDuplicateProcessing,
+                                                                   effectiveTime,
+                                                                   methodName);
+
+        return this.getAttachedEntities(userId,
+                                        startingEntity,
+                                        startingGUIDParameterName,
+                                        startingTypeName,
+                                        relationshipTypeGUID,
+                                        relationshipTypeName,
+                                        resultingElementTypeName,
+                                        requiredClassificationName,
+                                        omittedClassificationName,
+                                        attachmentEntityEnd,
+                                        limitResultsByStatus,
+                                        asOfTime,
+                                        sequencingOrder,
+                                        sequencingProperty,
+                                        forLineage,
+                                        forDuplicateProcessing,
+                                        startingFrom,
+                                        pageSize,
+                                        effectiveTime,
+                                        methodName);
+    }
+
+
+    /**
+     * Return the entities for the required relationships attached to a specific entity.
+     *
+     * @param userId     calling user
+     * @param startingElement  the entity that the required element is attached to
+     * @param startingElementGUIDParameterName name of the parameter used to pass the guid
+     * @param startingElementTypeName type name for anchor
+     * @param relationshipTypeGUID unique identifier of the attachment's relationship type
+     * @param relationshipTypeName unique name of the attachment's relationship type
+     * @param resultingElementTypeName unique name of the attached entity's type
+     * @param requiredClassificationName name of a classification that must be on the entity for a match
+     * @param omittedClassificationName name of a classification that must NOT be on the entity for a match
+     * @param attachmentEntityEnd which relationship end should the attached entity be located? 0=either end; 1=end1; 2=end2
+     * @param limitResultsByStatus By default, relationships in all statuses (other than DELETE) are returned.  However, it is possible
+     *                             to specify a list of statuses (for example ACTIVE) to restrict the results to.  Null means all status values.
+     * @param asOfTime Requests a historical query of the entity.  Null means return the present values.
+     * @param sequencingProperty String name of the property that is to be used to sequence the results.
+     *                           Null means do not sequence on a property name (see SequencingOrder).
+     * @param sequencingOrder Enum defining how the results should be ordered.
+     * @param forLineage is this part of a lineage request?
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param startingFrom start position for results
+     * @param pageSize     maximum number of results
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     *
+     * @return list of retrieved objects or null if none found
+     *
+     * @throws InvalidParameterException  the input properties are invalid
+     * @throws UserNotAuthorizedException the user is not authorized to issue this request
+     * @throws PropertyServerException    problem accessing the repositories
+     */
+    public List<EntityDetail> getAttachedEntities(String               userId,
+                                                  EntityDetail         startingElement,
+                                                  String               startingElementGUIDParameterName,
+                                                  String               startingElementTypeName,
+                                                  String               relationshipTypeGUID,
+                                                  String               relationshipTypeName,
+                                                  String               resultingElementTypeName,
+                                                  String               requiredClassificationName,
+                                                  String               omittedClassificationName,
+                                                  int                  attachmentEntityEnd,
+                                                  List<InstanceStatus> limitResultsByStatus,
+                                                  Date                 asOfTime,
+                                                  SequencingOrder      sequencingOrder,
+                                                  String               sequencingProperty,
+                                                  boolean              forLineage,
+                                                  boolean              forDuplicateProcessing,
+                                                  int                  startingFrom,
+                                                  int                  pageSize,
+                                                  Date                 effectiveTime,
+                                                  String               methodName) throws InvalidParameterException,
+                                                                                          PropertyServerException,
+                                                                                          UserNotAuthorizedException
+    {
+        invalidParameterHandler.validateUserId(userId, methodName);
+        invalidParameterHandler.validateObject(startingElement, startingElementGUIDParameterName, methodName);
+
+        List<Relationship> relationships = repositoryHandler.getRelationshipsByType(userId,
+                                                                                    startingElement,
+                                                                                    startingElementTypeName,
+                                                                                    relationshipTypeGUID,
+                                                                                    relationshipTypeName,
+                                                                                    attachmentEntityEnd,
+                                                                                    limitResultsByStatus,
+                                                                                    asOfTime,
+                                                                                    sequencingOrder,
+                                                                                    sequencingProperty,
+                                                                                    forLineage,
+                                                                                    forDuplicateProcessing,
+                                                                                    startingFrom,
+                                                                                    pageSize,
+                                                                                    effectiveTime,
+                                                                                    methodName);
+
+        if (relationships == null)
+        {
+            return null;
+        }
+
+        /*
+         * Retrieve all of the entities linked to the relationships.  This is done as a single retrieve
+         * to minimise the calls to the repositories.
+         */
+        Map<String, EntityDetail> retrievedEntities = this.getValidatedEntities(userId,
+                                                                                startingElement.getGUID(),
+                                                                                startingElementTypeName,
+                                                                                relationships,
+                                                                                resultingElementTypeName,
+                                                                                requiredClassificationName,
+                                                                                omittedClassificationName,
+                                                                                attachmentEntityEnd,
+                                                                                forLineage,
+                                                                                forDuplicateProcessing,
+                                                                                effectiveTime,
+                                                                                methodName);
+
+        List<EntityDetail> visibleEntities = new ArrayList<>();
+
+        if (retrievedEntities != null)
+        {
+            retrievedEntities.put(startingElement.getGUID(), startingElement);
+
+            for (Relationship relationship : relationships)
+            {
+                if (relationship != null)
+                {
+                    EntityProxy entityProxy = repositoryHandler.getOtherEnd(startingElement.getGUID(), startingElementTypeName, relationship, attachmentEntityEnd, methodName);
+
+                    if ((entityProxy != null) && (entityProxy.getType() != null) &&
+                            (repositoryHelper.isTypeOf(serviceName, entityProxy.getType().getTypeDefName(), resultingElementTypeName)))
+                    {
+                        try
+                        {
+                            final String guidParameterName = "entityProxy.getGUID()";
+
+                            visibleEntities.add(this.getEntityFromRepository(userId,
+                                                                             entityProxy.getGUID(),
+                                                                             guidParameterName,
+                                                                             resultingElementTypeName,
+                                                                             requiredClassificationName,
+                                                                             omittedClassificationName,
+                                                                             forLineage,
+                                                                             forDuplicateProcessing,
+                                                                             effectiveTime,
+                                                                             methodName));
+                        }
+                        catch (InvalidParameterException | UserNotAuthorizedException |
+                               PropertyServerException inaccessibleEntity)
+                        {
+                            // skip entities that are not visible to this user
+                            if (log.isDebugEnabled())
+                            {
+                                log.debug("Skipping inaccessible entity: " + inaccessibleEntity);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return visibleEntities;
+    }
+
+
+    /**
+     * Return the elements of the requested type attached to an entity identified by the starting GUID.
+     *
+     * @param userId     calling user
+     * @param anchorGUID expected anchorGUID for this element
+     * @param anchorGUIDParameterName parameter supplying anchorGUID
+     * @param startingGUID identifier for the entity that the identifier is attached to
+     * @param startingGUIDParameterName name of parameter supplying the GUID
+     * @param startingTypeName name of the type of object being attached to
+     * @param attachmentRelationshipTypeGUID unique identifier of the relationship type connect to the attachment
+     * @param attachmentRelationshipTypeName unique name of the relationship type connect to the attachment
+     * @param attachmentEntityTypeName unique name of the attached entity's type
+     * @param requiredClassificationName  String the name of the classification that must be on the attached entity.
+     * @param omittedClassificationName   String the name of a classification that must not be on the attached entity.
+     * @param selectionEnd 0 means either end, 1 means only take from end 1, 2 means only take from end 2
+     * @param limitResultsByStatus By default, relationships in all statuses (other than DELETE) are returned.  However, it is possible
+     *                             to specify a list of statuses (for example ACTIVE) to restrict the results to.  Null means all status values.
+     * @param asOfTime Requests a historical query of the entity.  Null means return the present values.
+     * @param sequencingProperty String name of the property that is to be used to sequence the results.
+     *                           Null means do not sequence on a property name (see SequencingOrder).
+     * @param sequencingOrder Enum defining how the results should be ordered.
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param startingFrom start position for results
+     * @param pageSize     maximum number of results
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     *
+     * @return list of retrieved objects or null if none found
+     *
+     * @throws InvalidParameterException  the input properties are invalid
+     * @throws UserNotAuthorizedException the user is not authorized to issue this request
+     * @throws PropertyServerException    problem accessing the repositories
+     */
+    public   List<B> getAttachedElements(String               userId,
+                                         String               anchorGUID,
+                                         String               anchorGUIDParameterName,
+                                         String               startingGUID,
+                                         String               startingGUIDParameterName,
+                                         String               startingTypeName,
+                                         String               attachmentRelationshipTypeGUID,
+                                         String               attachmentRelationshipTypeName,
+                                         String               attachmentEntityTypeName,
+                                         String               requiredClassificationName,
+                                         String               omittedClassificationName,
+                                         int                  selectionEnd,
+                                         List<InstanceStatus> limitResultsByStatus,
+                                         Date                 asOfTime,
+                                         SequencingOrder      sequencingOrder,
+                                         String               sequencingProperty,
+                                         boolean              forLineage,
+                                         boolean              forDuplicateProcessing,
+                                         int                  startingFrom,
+                                         int                  pageSize,
+                                         Date                 effectiveTime,
+                                         String               methodName) throws InvalidParameterException,
+                                                                                 PropertyServerException,
+                                                                                 UserNotAuthorizedException
+    {
+        invalidParameterHandler.validateUserId(userId, methodName);
+        invalidParameterHandler.validateGUID(startingGUID, startingGUIDParameterName, methodName);
+
+        if (anchorGUID != null)
+        {
+            EntityDetail anchorEntity = this.validateEntityAndAnchorForRead(userId,
+                                                                            startingGUID,
+                                                                            startingGUIDParameterName,
+                                                                            startingTypeName,
+                                                                            true,
+                                                                            false,
+                                                                            forLineage,
+                                                                            forDuplicateProcessing,
+                                                                            effectiveTime,
+                                                                            methodName);
+
+            invalidParameterHandler.validateAnchorGUID(anchorGUID, anchorGUIDParameterName, anchorEntity, startingGUID, startingTypeName, methodName);
+        }
+
+        EntityDetail startingEntity = this.getEntityFromRepository(userId,
+                                                                   startingGUID,
+                                                                   startingGUIDParameterName,
+                                                                   startingTypeName,
+                                                                   null,
+                                                                   null,
+                                                                   forLineage,
+                                                                   forDuplicateProcessing,
+                                                                   effectiveTime,
+                                                                   methodName);
+
+        /*
+         * Get linked relationships
+         */
+        List<Relationship>  relationships = repositoryHandler.getRelationshipsByType(userId,
+                                                                                     startingEntity,
+                                                                                     startingTypeName,
+                                                                                     attachmentRelationshipTypeGUID,
+                                                                                     attachmentRelationshipTypeName,
+                                                                                     selectionEnd,
+                                                                                     limitResultsByStatus,
+                                                                                     asOfTime,
+                                                                                     sequencingOrder,
+                                                                                     sequencingProperty,
+                                                                                     forLineage,
+                                                                                     forDuplicateProcessing,
+                                                                                     startingFrom,
+                                                                                     pageSize,
+                                                                                     effectiveTime,
+                                                                                     methodName);
+
+        if (relationships == null)
+        {
+            return null;
+        }
+
+        /*
+         * Retrieve all of the entities linked to the relationships.  This is done as a single retrieve
+         * to minimise the calls to the repositories.
+         */
+        Map<String, EntityDetail> retrievedEntities = this.getValidatedEntities(userId,
+                                                                                startingGUID,
+                                                                                startingTypeName,
+                                                                                relationships,
+                                                                                attachmentEntityTypeName,
+                                                                                requiredClassificationName,
+                                                                                omittedClassificationName,
+                                                                                selectionEnd,
+                                                                                forLineage,
+                                                                                forDuplicateProcessing,
+                                                                                effectiveTime,
+                                                                                methodName);
+        List<B>  results = new ArrayList<>();
+
+        if (retrievedEntities != null)
+        {
+            retrievedEntities.put(startingEntity.getGUID(), startingEntity);
+
+            for (Relationship  relationship : relationships)
+            {
+                if (relationship != null)
+                {
+                    try
+                    {
+                        EntityProxy entityProxy = null;
+
+                        if (selectionEnd == 0)
+                        {
+                            entityProxy = repositoryHandler.getOtherEnd(startingGUID,
+                                                                        startingTypeName,
+                                                                        relationship,
+                                                                        selectionEnd,
+                                                                        methodName);
+                        }
+                        else if (selectionEnd == 1)
+                        {
+                            entityProxy = relationship.getEntityOneProxy();
+                        }
+                        else if (selectionEnd == 2)
+                        {
+                            entityProxy = relationship.getEntityTwoProxy();
+                        }
+
+                        if (entityProxy != null)
+                        {
+                            EntityDetail retrievedEntity = retrievedEntities.get(entityProxy.getGUID());
+
+                            if (retrievedEntity != null)
+                            {
+                                B bean = converter.getNewBean(beanClass, retrievedEntity, relationship, methodName);
+                                if (bean != null)
+                                {
+                                    results.add(bean);
+                                }
+                            }
+                        }
+                    }
+                    catch (InvalidParameterException  | PropertyServerException inaccessibleEntity)
+                    {
+                        // skip entities that are not visible to this user
+                        if (log.isDebugEnabled())
+                        {
+                            log.debug("Skipping inaccessible entity: " + inaccessibleEntity);
+                        }
+                    }
+                }
+            }
+        }
+
+        /*
+         * Be sure to return an empty list even if all of the entities have been filtered out.
+         * Null means no more to receive
+         */
+        return results;
+    }
+
+
+    /**
+     * Validates a list of entities retrieved from the repository as a result of a query.
+     * It validates supported zones read security and the anchor GUID.  It does not handle Mementos, effective dates
+     * and element status, since they are the responsibility of the repository handler.
+     *
+     * @param userId           userId of the user making the request.
+     * @param startingGUID identifier for the entity that the identifier is attached to
+     * @param startingTypeName name of the type of object being attached to
+     * @param retrievedRelationships  relationships retrieved from the repository
+     * @param attachmentEntityTypeName unique name of the attached entity's type
+     * @param requiredClassificationName  String the name of the classification that must be on the attached entity
+     * @param omittedClassificationName   String the name of a classification that must not be on the attached entity
+     * @param selectionEnd 0 means either end, 1 means only take from end 1, 2 means only take from end 2
+     * @param forLineage             the query is to support lineage retrieval
+     * @param forDuplicateProcessing the query is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName       calling method
+     *
+     * @return map of validated entities
+     */
+    public Map<String, EntityDetail> getValidatedEntities(String             userId,
+                                                          String             startingGUID,
+                                                          String             startingTypeName,
+                                                          List<Relationship> retrievedRelationships,
+                                                          String             attachmentEntityTypeName,
+                                                          String             requiredClassificationName,
+                                                          String             omittedClassificationName,
+                                                          int                selectionEnd,
+                                                          boolean            forLineage,
+                                                          boolean            forDuplicateProcessing,
+                                                          Date               effectiveTime,
+                                                          String             methodName) throws InvalidParameterException
+    {
+        if (retrievedRelationships != null)
+        {
+            final String guidParameterName = "relationship.end.guid";
+            final String connectToGUIDParameterName = "relationship.entityProxy.guid";
+
+            List<String>            extractedEntityGUIDs = new ArrayList<>();
+            List<PropertyCondition> entityRetrievalQuery = new ArrayList<>();
+
+            /*
+             * Identify the entities that need to be retrieved.  The aim is to build a query that retrieves all of the
+             * required entities in a single retrieve to minimize the calls to the repositories.
+             */
+            for (Relationship relationship : retrievedRelationships)
+            {
+                if (relationship != null)
+                {
+                    try
+                    {
+                        EntityProxy entityProxy = null;
+
+                        if (selectionEnd == 0)
+                        {
+                            entityProxy = repositoryHandler.getOtherEnd(startingGUID,
+                                                                        startingTypeName,
+                                                                        relationship,
+                                                                        selectionEnd,
+                                                                        methodName);
+                        }
+                        else if (selectionEnd == 1)
+                        {
+                            entityProxy = relationship.getEntityOneProxy();
+                        }
+                        else if (selectionEnd == 2)
+                        {
+                            entityProxy = relationship.getEntityTwoProxy();
+                        }
+
+                        if (entityProxy != null)
+                        {
+                            if (! extractedEntityGUIDs.contains(entityProxy.getGUID()))
+                            {
+                                /*
+                                 * Need to retrieve the entity for proxy so add to query
+                                 */
+                                PropertyCondition propertyCondition = new PropertyCondition();
+
+                                propertyCondition.setProperty(OpenMetadataProperty.GUID.name);
+                                propertyCondition.setOperator(PropertyComparisonOperator.EQ);
+
+                                PrimitivePropertyValue primitivePropertyValue = new PrimitivePropertyValue();
+
+                                primitivePropertyValue.setPrimitiveDefCategory(PrimitiveDefCategory.OM_PRIMITIVE_TYPE_STRING);
+                                primitivePropertyValue.setTypeGUID(PrimitiveDefCategory.OM_PRIMITIVE_TYPE_STRING.getGUID());
+                                primitivePropertyValue.setTypeName(PrimitiveDefCategory.OM_PRIMITIVE_TYPE_STRING.getName());
+                                primitivePropertyValue.setPrimitiveValue(entityProxy.getGUID());
+
+                                propertyCondition.setValue(primitivePropertyValue);
+
+                                entityRetrievalQuery.add(propertyCondition);
+
+                                extractedEntityGUIDs.add(entityProxy.getGUID());
+                            }
+                        }
+                    }
+                    catch (Exception invalidProxy)
+                    {
+                        // ignore this proxy because there is something wrong with it
+                    }
+                }
+            }
+
+            Map<String, EntityDetail> retrievedEntities = new HashMap<>();
+
+            if (! extractedEntityGUIDs.isEmpty())
+            {
+                /*
+                 * Retrieve the required entities
+                 */
+                if (attachmentEntityTypeName == null)
+                {
+                    retrievedEntities = this.getEntityList(userId,
+                                                           OpenMetadataType.OPEN_METADATA_ROOT.typeGUID,
+                                                           entityRetrievalQuery,
+                                                           forLineage,
+                                                           forDuplicateProcessing,
+                                                           effectiveTime,
+                                                           methodName);
+                }
+                else
+                {
+                    String typeGUID = invalidParameterHandler.validateTypeName(attachmentEntityTypeName,
+                                                                               OpenMetadataType.OPEN_METADATA_ROOT.typeName,
+                                                                               serviceName,
+                                                                               methodName,
+                                                                               repositoryHelper);
+                    retrievedEntities = this.getEntityList(userId,
+                                                           typeGUID,
+                                                           entityRetrievalQuery,
+                                                           forLineage,
+                                                           forDuplicateProcessing,
+                                                           effectiveTime,
+                                                           methodName);
+                }
+            }
+
+            /*
+             * Gather visible entities
+             */
+            List<String>              validatedAnchors = new ArrayList<>();
+            Map<String, EntityDetail> visibleEntities  = new HashMap<>();
+
+            for (EntityDetail retrievedEntity : retrievedEntities.values())
+            {
+                /*
+                 * Only process entities that are new.
+                 */
+                if ((retrievedEntity != null) && (!visibleEntities.containsKey(retrievedEntity.getGUID())))
+                {
+                    try
+                    {
+                        boolean beanValid = true;
+
+                        if (requiredClassificationName != null)
+                        {
+                            try
+                            {
+                                if (repositoryHelper.getClassificationFromEntity(serviceName, retrievedEntity, requiredClassificationName, methodName) == null)
+                                {
+                                    beanValid = false;
+                                }
+                            }
+                            catch (ClassificationErrorException error)
+                            {
+                                /*
+                                 * Since this classification is not supported, it can not be attached to the entity
+                                 */
+                                beanValid = false;
+                            }
+                        }
+
+                        if (omittedClassificationName != null)
+                        {
+                            try
+                            {
+                                if (repositoryHelper.getClassificationFromEntity(serviceName, retrievedEntity, omittedClassificationName, methodName) != null)
+                                {
+                                    beanValid = false;
+                                }
+                            }
+                            catch (ClassificationErrorException error)
+                            {
+                                /*
+                                 * Since this classification is not supported, it can not be attached to the entity
+                                 */
+                            }
+                        }
+
+                        if (beanValid)
+                        {
+                            /*
+                             * This first processing looks at the retrieved entity itself to ensure it is visible.
+                             * An exception is thrown if the entity is not visible.
+                             */
+                            validateRetrievedEntityIsVisible(userId,
+                                                             retrievedEntity,
+                                                             guidParameterName,
+                                                             attachmentEntityTypeName,
+                                                             false,
+                                                             methodName);
+
+                            /*
+                             * If an entity has an anchor, the unique identifier of the anchor should be in the Anchors classifications.
+                             * If the entity is not being managed by this handler, or something equivalent that
+                             * maintains the Anchors classification, it attempts to derive a new Anchors classification
+                             * and add to the retrieved entity.
+                             */
+                            AnchorIdentifiers anchorIdentifiers = this.getAnchorGUIDForEntity(retrievedEntity,
+                                                                                              guidParameterName,
+                                                                                              forLineage,
+                                                                                              forDuplicateProcessing,
+                                                                                              effectiveTime,
+                                                                                              methodName);
+
+                            if (anchorIdentifiers != null)
+                            {
+                                String anchorGUID = anchorIdentifiers.anchorGUID;
+
+                                if (anchorGUID == null)
+                                {
+                                    anchorGUID = retrievedEntity.getGUID();
+                                }
+
+                                /*
+                                 * Only check the anchor if it has not already been validated.
+                                 */
+                                if (!validatedAnchors.contains(anchorGUID))
+                                {
+                                    validatedAnchors.add(anchorGUID);
+
+                                    /*
+                                     * If an anchor GUID has been found, then validate it by retrieving the identified entity.
+                                     * Note - anchorIdentifiers may or may not be null if the connectToEntity is actually an anchor.
+                                     */
+                                    validateAnchorGUID(userId,
+                                                       retrievedEntity,
+                                                       anchorIdentifiers,
+                                                       false,
+                                                       false,
+                                                       forLineage,
+                                                       forDuplicateProcessing,
+                                                       effectiveTime,
+                                                       methodName);
+                                }
+                            }
+                            else
+                            {
+                                /*
+                                 * This first processing looks at the retrieved entity itself to ensure it is visible.
+                                 */
+                                validateRetrievedEntityIsVisible(userId,
+                                                                 retrievedEntity,
+                                                                 connectToGUIDParameterName,
+                                                                 retrievedEntity.getType().getTypeDefName(),
+                                                                 false,
+                                                                 methodName);
+                            }
+
+                            visibleEntities.put(retrievedEntity.getGUID(), retrievedEntity);
+                        }
+                    }
+                    catch (Exception unauthorizedEntity)
+                    {
+                        // ignore this entity since the user is not allowed to see it
+                    }
+                }
+            }
+
+            return visibleEntities;
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Return the entity for the supplied unique identifier (guid).  An exception is thrown if the entity does not exist.
+     *
+     * @param userId userId of the user making the request
+     * @param requestedEntityGUID unique identifier of the entity to retrieve from the repository
+     * @param requestedEntityGUIDParameterName name of the parameter supplying the GUID
+     * @param requestedEntityTypeName name of type of entity to retrieve
+     * @param requiredClassificationName  String the name of the classification that must be on the attached entity
+     * @param omittedClassificationName   String the name of a classification that must not be on the attached entity
+     * @param forLineage the query is to support lineage retrieval
+     * @param forDuplicateProcessing the query is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     *
+     * @return retrieved entity
+     * @throws InvalidParameterException the userId is null or invalid, the entity does not exist.
+     * @throws PropertyServerException a problem retrieving information from the repositories.
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public EntityDetail getEntityFromRepository(String       userId,
+                                                String       requestedEntityGUID,
+                                                String       requestedEntityGUIDParameterName,
+                                                String       requestedEntityTypeName,
+                                                String       requiredClassificationName,
+                                                String       omittedClassificationName,
+                                                boolean      forLineage,
+                                                boolean      forDuplicateProcessing,
+                                                Date         effectiveTime,
+                                                String       methodName) throws InvalidParameterException,
+                                                                                PropertyServerException,
+                                                                                UserNotAuthorizedException
+    {
+        return this.getEntityFromRepository(userId, requestedEntityGUID, requestedEntityGUIDParameterName, requestedEntityTypeName, requiredClassificationName, omittedClassificationName, forLineage, forDuplicateProcessing, null, effectiveTime, methodName);
+    }
+
+
+    /**
+     * Return the entity for the supplied unique identifier (guid).  An exception is thrown if the entity does not exist.
+     *
+     * @param userId userId of the user making the request
+     * @param requestedEntityGUID unique identifier of the entity to retrieve from the repository
+     * @param requestedEntityGUIDParameterName name of the parameter supplying the GUID
+     * @param requestedEntityTypeName name of type of entity to retrieve
+     * @param requiredClassificationName  String the name of the classification that must be on the attached entity
+     * @param omittedClassificationName   String the name of a classification that must not be on the attached entity
+     * @param forLineage the query is to support lineage retrieval
+     * @param forDuplicateProcessing the query is for duplicate processing and so must not deduplicate
+     * @param asOfTime Requests a historical query of the entity.  Null means return the present values.
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     *
+     * @return retrieved entity
+     * @throws InvalidParameterException the userId is null or invalid, the entity does not exist.
+     * @throws PropertyServerException a problem retrieving information from the repositories.
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public EntityDetail getEntityFromRepository(String       userId,
+                                                String       requestedEntityGUID,
+                                                String       requestedEntityGUIDParameterName,
+                                                String       requestedEntityTypeName,
+                                                String       requiredClassificationName,
+                                                String       omittedClassificationName,
+                                                boolean      forLineage,
+                                                boolean      forDuplicateProcessing,
+                                                Date         asOfTime,
+                                                Date         effectiveTime,
+                                                String       methodName) throws InvalidParameterException,
+                                                                                PropertyServerException,
+                                                                                UserNotAuthorizedException
+    {
+        invalidParameterHandler.validateUserId(userId, methodName);
+        invalidParameterHandler.validateGUID(requestedEntityGUID, requestedEntityGUIDParameterName, methodName);
+
+        EntityDetail  retrievedEntity = repositoryHandler.getEntityByGUID(userId,
+                                                                          requestedEntityGUID,
+                                                                          requestedEntityGUIDParameterName,
+                                                                          requestedEntityTypeName,
+                                                                          forLineage,
+                                                                          forDuplicateProcessing,
+                                                                          asOfTime,
+                                                                          effectiveTime,
+                                                                          methodName);
+
+        /*
+         * This method validates that the entity is visible to the calling user.
+         */
+        this.validateEntityAndAnchorForRead(userId,
+                                            requestedEntityTypeName,
+                                            retrievedEntity,
+                                            requestedEntityGUIDParameterName,
+                                            true,
+                                            false,
+                                            forLineage,
+                                            forDuplicateProcessing,
+                                            effectiveTime,
+                                            methodName);
+
+        boolean beanValid = true;
+
+        if (requiredClassificationName != null)
+        {
+            try
+            {
+                if (repositoryHelper.getClassificationFromEntity(serviceName, retrievedEntity, requiredClassificationName, methodName) == null)
+                {
+                    beanValid = false;
+                }
+            }
+            catch (ClassificationErrorException error)
+            {
+                /*
+                 * Since this classification is not supported, it can not be attached to the entity
+                 */
+                beanValid = false;
+            }
+        }
+
+        if (omittedClassificationName != null)
+        {
+            try
+            {
+                if (repositoryHelper.getClassificationFromEntity(serviceName, retrievedEntity, omittedClassificationName, methodName) != null)
+                {
+                    beanValid = false;
+                }
+            }
+            catch (ClassificationErrorException error)
+            {
+                /*
+                 * Since this classification is not supported, it can not be attached to the entity
+                 */
+            }
+        }
+
+        if (! beanValid)
+        {
+            return null;
+        }
+
+        return retrievedEntity;
+    }
+
+
+    /**
+     * Use the supplied unique identifier (guid) of an entity in the repository to retrieve its contents as a bean.
+     * The entity is checked to ensure it is of the required return type.
+     *
+     * @param userId calling user
+     * @param guid unique identifier of the entity to retrieve
+     * @param guidParameterName parameter supplying the unique identifier
+     * @param resultTypeName type of the retrieve entity
+     * @param methodName calling method
+     * @return B bean
+     * @throws InvalidParameterException  one of the properties (probably the GUID) is invalid
+     * @throws PropertyServerException    the repository services hit an unexpected problem
+     * @throws UserNotAuthorizedException the user is not permitted to access this entity
+     */
+    public B getBeanFromRepository(String userId,
+                                   String guid,
+                                   String guidParameterName,
+                                   String resultTypeName,
+                                   String methodName) throws InvalidParameterException,
+                                                             PropertyServerException,
+                                                             UserNotAuthorizedException
+    {
+        return this.getBeanFromRepository(userId,
+                                          guid,
+                                          guidParameterName,
+                                          resultTypeName,
+                                          false,
+                                          false,
+                                          new Date(),
+                                          methodName);
+    }
+
+
+    /**
+     * Return the bean for the supplied unique identifier (guid).  An exception occurs if the bean GUID is not known.
+     *
+     * @param userId userId of the user making the request
+     * @param guid unique identifier of the entity to retrieve from the repository
+     * @param guidParameterName name of the parameter supplying the GUID
+     * @param entityTypeName name of type of entity to retrieve
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     *
+     * @return new bean
+     * @throws InvalidParameterException the userId is null or invalid.
+     * @throws PropertyServerException a problem retrieving information from the repositories.
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public B getBeanFromRepository(String       userId,
+                                   String       guid,
+                                   String       guidParameterName,
+                                   String       entityTypeName,
+                                   boolean      forLineage,
+                                   boolean      forDuplicateProcessing,
+                                   Date         effectiveTime,
+                                   String       methodName) throws InvalidParameterException,
+                                                                   PropertyServerException,
+                                                                   UserNotAuthorizedException
+    {
+        invalidParameterHandler.validateUserId(userId, methodName);
+        invalidParameterHandler.validateGUID(guid, guidParameterName, methodName);
+
+        EntityDetail entity = this.getEntityFromRepository(userId,
+                                                           guid,
+                                                           guidParameterName,
+                                                           entityTypeName,
+                                                           null,
+                                                           null,
+                                                           forLineage,
+                                                           forDuplicateProcessing,
+                                                           effectiveTime,
+                                                           methodName);
+
+        if (entity != null)
+        {
+            return converter.getNewBean(beanClass, entity, methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Return the bean for the supplied unique identifier (guid).  An exception occurs if the bean GUID is not known.
+     *
+     * @param userId userId of the user making the request
+     * @param guid unique identifier of the entity to retrieve from the repository
+     * @param guidParameterName name of the parameter supplying the GUID
+     * @param entityTypeName name of type of entity to retrieve
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param asOfTime Requests a historical query of the entity.  Null means return the present values.
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     *
+     * @return new bean
+     * @throws InvalidParameterException the userId is null or invalid.
+     * @throws PropertyServerException a problem retrieving information from the repositories.
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public B getBeanFromRepository(String       userId,
+                                   String       guid,
+                                   String       guidParameterName,
+                                   String       entityTypeName,
+                                   boolean      forLineage,
+                                   boolean      forDuplicateProcessing,
+                                   Date         asOfTime,
+                                   Date         effectiveTime,
+                                   String       methodName) throws InvalidParameterException,
+                                                                   PropertyServerException,
+                                                                   UserNotAuthorizedException
+    {
+        invalidParameterHandler.validateUserId(userId, methodName);
+        invalidParameterHandler.validateGUID(guid, guidParameterName, methodName);
+
+        EntityDetail entity = this.getEntityFromRepository(userId,
+                                                           guid,
+                                                           guidParameterName,
+                                                           entityTypeName,
+                                                           null,
+                                                           null,
+                                                           forLineage,
+                                                           forDuplicateProcessing,
+                                                           asOfTime,
+                                                           effectiveTime,
+                                                           methodName);
+
+        if (entity != null)
+        {
+            return converter.getNewBean(beanClass, entity, methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * This method fills an instance properties object with the list of names properties, each with the supplied search value.
+     * It is used when searching for a specific value that may be located in multiple properties.
+     *
+     * @param searchValue property value to store in each named property
+     * @param specificMatchPropertyNames list of property names to
+     * @param methodName calling method
+     * @return instance properties object
+     */
+    private InstanceProperties getSearchInstanceProperties(String       searchValue,
+                                                           List<String> specificMatchPropertyNames,
+                                                           String       methodName)
+    {
+        InstanceProperties properties = new InstanceProperties();
+
+        for (String propertyName : specificMatchPropertyNames)
+        {
+            if (propertyName != null)
+            {
+                properties = repositoryHelper.addStringPropertyToInstance(serviceName,
+                                                                          properties,
+                                                                          propertyName,
+                                                                          searchValue,
+                                                                          methodName);
+            }
+        }
+
+        return properties;
+    }
+
+
+    /**
+     * Record the entities that have been detected as duplicates because they share a name that should be unique.
+     * They are linked together with PeerDuplicateLink relationships with a status of DISCOVERED, and no
+     * classifications are added.  This means the duplicates are marked for a steward to review, but the
+     * deduplication processing continues to ignore them: it only combines entities that carry the KnownDuplicate
+     * classification and are linked with a VALIDATED PeerDuplicateLink relationship.
+     * The oldest entity is used as the origin (end 1) of each new relationship, matching the definition of the
+     * relationship's ends.  Pairs that are already linked are left alone so that repeated requests do not build
+     * up multiple relationships between the same entities.
+     * This is a best-effort operation.  The caller is about to throw an exception to report the duplicates and
+     * that exception must not be replaced by a failure to record them.
+     *
+     * @param userId calling user - used if this server has no local server userId defined
+     * @param retrievedEntities the entities that share the name
+     * @param resultTypeName type of the entities that were requested
+     * @param name the duplicated name
+     * @param namePropertyName the open metadata property that the name was matched on
+     * @param methodName calling method
+     */
+    private void markDetectedDuplicates(String             userId,
+                                        List<EntityDetail> retrievedEntities,
+                                        String             resultTypeName,
+                                        String             name,
+                                        String             namePropertyName,
+                                        String             methodName)
+    {
+        final String localMethodName = "markDetectedDuplicates";
+
+        /*
+         * Remove null and repeated entries, and order the entities so that the oldest is first.
+         */
+        List<EntityDetail> duplicateEntities = new ArrayList<>();
+        Set<String>        duplicateGUIDs    = new HashSet<>();
+
+        if (retrievedEntities != null)
+        {
+            for (EntityDetail entity : retrievedEntities)
+            {
+                /*
+                 * Both ends of a PeerDuplicateLink relationship must be a Referenceable.
+                 */
+                if ((entity != null) && (entity.getType() != null) &&
+                        (repositoryHelper.isTypeOf(serviceName, entity.getType().getTypeDefName(), OpenMetadataType.REFERENCEABLE.typeName)) &&
+                        (duplicateGUIDs.add(entity.getGUID())))
+                {
+                    duplicateEntities.add(entity);
+                }
+            }
+        }
+
+        if (duplicateEntities.size() < 2)
+        {
+            return;
+        }
+
+        /*
+         * The oldest entity becomes the origin of each link.  Where two were created at the same moment -
+         * which is ordinary for elements that arrived in the same archive load - the identifier breaks the
+         * tie, so the same pair always links the same way round.  Without the tie-break the order can differ
+         * between calls, and a second link is created in the opposite direction to one that already exists.
+         */
+        duplicateEntities.sort(Comparator.comparing((EntityDetail entity) -> entity.getCreateTime(),
+                                                     Comparator.nullsLast(Comparator.naturalOrder()))
+                                          .thenComparing(EntityDetail::getGUID));
+
+        String       linkingUserId   = localServerUserId;
+        EntityDetail originEntity    = duplicateEntities.get(0);
+
+        if (linkingUserId == null)
+        {
+            linkingUserId = userId;
+        }
+
+        try
+        {
+            InstanceProperties relationshipProperties = repositoryHelper.addIntPropertyToInstance(serviceName,
+                                                                                                  null,
+                                                                                                  OpenMetadataProperty.STATUS_IDENTIFIER.name,
+                                                                                                  StatusIdentifier.DISCOVERED.getOrdinal(),
+                                                                                                  localMethodName);
+
+            relationshipProperties = repositoryHelper.addStringPropertyToInstance(serviceName,
+                                                                                  relationshipProperties,
+                                                                                  OpenMetadataProperty.SOURCE.name,
+                                                                                  serviceName + " running in server " + serverName,
+                                                                                  localMethodName);
+
+            relationshipProperties = repositoryHelper.addStringPropertyToInstance(serviceName,
+                                                                                  relationshipProperties,
+                                                                                  OpenMetadataProperty.NOTES.name,
+                                                                                  "Detected by method " + methodName + " because these " + resultTypeName +
+                                                                                          " entities share a " + namePropertyName + " of " + name,
+                                                                                  localMethodName);
+
+            for (EntityDetail duplicateEntity : duplicateEntities)
+            {
+                if (! originEntity.getGUID().equals(duplicateEntity.getGUID()))
+                {
+                    /*
+                     * The existing relationships are retrieved with forDuplicateProcessing set to true because the
+                     * repository handler removes duplicate links from the results of a normal retrieval request.
+                     * A null effective time means that a link that is not effective now still counts as a marker.
+                     */
+                    List<Relationship> existingLinks = repositoryHandler.getRelationshipsBetweenEntities(linkingUserId,
+                                                                                                         originEntity.getGUID(),
+                                                                                                         resultTypeName,
+                                                                                                         duplicateEntity.getGUID(),
+                                                                                                         OpenMetadataType.PEER_DUPLICATE_LINK.typeGUID,
+                                                                                                         OpenMetadataType.PEER_DUPLICATE_LINK.typeName,
+                                                                                                         0,
+                                                                                                         null,
+                                                                                                         null,
+                                                                                                         SequencingOrder.CREATION_DATE_RECENT,
+                                                                                                         null,
+                                                                                                         true,
+                                                                                                         true,
+                                                                                                         null,
+                                                                                                         localMethodName);
+
+                    if ((existingLinks == null) || (existingLinks.isEmpty()))
+                    {
+                        repositoryHandler.createRelationship(linkingUserId,
+                                                             OpenMetadataType.PEER_DUPLICATE_LINK.typeGUID,
+                                                             null,
+                                                             null,
+                                                             originEntity.getGUID(),
+                                                             duplicateEntity.getGUID(),
+                                                             relationshipProperties,
+                                                             localMethodName);
+                    }
+                }
+            }
+
+            if (auditLog != null)
+            {
+                auditLog.logMessage(methodName,
+                                    GenericHandlersAuditCode.DISCOVERED_DUPLICATES.getMessageDefinition(methodName,
+                                                                                                        resultTypeName,
+                                                                                                        namePropertyName,
+                                                                                                        name,
+                                                                                                        duplicateGUIDs.toString()));
+            }
+        }
+        catch (Exception error)
+        {
+            if (auditLog != null)
+            {
+                auditLog.logException(methodName,
+                                      GenericHandlersAuditCode.UNABLE_TO_MARK_DUPLICATES.getMessageDefinition(methodName,
+                                                                                                              duplicateGUIDs.toString(),
+                                                                                                              error.getClass().getName(),
+                                                                                                              error.getMessage()),
+                                      error);
+            }
+        }
+    }
+
+
+    /**
+     * Return the unique identifier of the entity that has the supplied unique name. An exception is thrown if
+     * multiple entities are found with this name.
+     *
+     * @param userId the calling user
+     * @param name  value to search
+     * @param nameParameterName parameter providing value
+     * @param namePropertyName open metadata property name to match on
+     * @param resultTypeGUID unique identifier of the type that the results should match with
+     * @param resultTypeName unique value of the type that the results should match with
+     * @param limitResultsByStatus By default, relationships in all statuses (other than DELETE) are returned.  However, it is possible
+     *                             to specify a list of statuses (for example ACTIVE) to restrict the results to.  Null means all status values.
+     * @param asOfTime Requests a historical query of the entity.  Null means return the present values.
+     * @param sequencingPropertyName String name of the property that is to be used to sequence the results.
+     *                           Null means do not sequence on a property name (see SequencingOrder).
+     * @param sequencingOrder Enum defining how the results should be ordered.
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     *
+     * @return unique identifier of the requested entity/bean
+     * @throws InvalidParameterException the userId is null or invalid.
+     * @throws PropertyServerException a problem retrieving information from the repositories.
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public String getBeanGUIDByUniqueName(String               userId,
+                                          String               name,
+                                          String               nameParameterName,
+                                          String               namePropertyName,
+                                          String               resultTypeGUID,
+                                          String               resultTypeName,
+                                          List<InstanceStatus> limitResultsByStatus,
+                                          Date                 asOfTime,
+                                          SequencingOrder      sequencingOrder,
+                                          String               sequencingPropertyName,
+                                          boolean              forLineage,
+                                          boolean              forDuplicateProcessing,
+                                          Date                 effectiveTime,
+                                          String               methodName) throws InvalidParameterException,
+                                                                                  PropertyServerException,
+                                                                                  UserNotAuthorizedException
+    {
+        invalidParameterHandler.validateUserId(userId, methodName);
+        invalidParameterHandler.validateName(name, nameParameterName, methodName);
+
+        int queryPageSize = invalidParameterHandler.getMaxPagingSize();
+
+        InstanceProperties matchProperties = repositoryHelper.addStringPropertyToInstance(serviceName,
+                                                                                          null,
+                                                                                          namePropertyName,
+                                                                                          name,
+                                                                                          methodName);
+
+        List<EntityDetail> retrievedEntities = repositoryHandler.getEntitiesByName(userId,
+                                                                                   matchProperties,
+                                                                                   resultTypeGUID,
+                                                                                   limitResultsByStatus,
+                                                                                   null,
+                                                                                   asOfTime,
+                                                                                   sequencingOrder,
+                                                                                   sequencingPropertyName,
+                                                                                   forLineage,
+                                                                                   forDuplicateProcessing,
+                                                                                   0,
+                                                                                   queryPageSize,
+                                                                                   effectiveTime,
+                                                                                   methodName);
+
+
+        /*
+         * The loop is necessary because some entities returned may not be visible to the calling user.
+         * Once they are filtered out, more entities need to be retrieved to fill the gaps.
+         */
+        String        guid = null;
+        Set<String>   duplicateEntities = new HashSet<>();
+        List<EntityDetail> visibleEntities = new ArrayList<>();
+        String        entityParameterName = "Entity from search of value " + name;
+
+        if (retrievedEntities != null)
+        {
+            for (EntityDetail entity : retrievedEntities)
+            {
+                if (entity != null)
+                {
+                    try
+                    {
+                        validateEntityAndAnchorForRead(userId,
+                                                       resultTypeName,
+                                                       entity,
+                                                       entityParameterName,
+                                                       true,
+                                                       false,
+                                                       forLineage,
+                                                       forDuplicateProcessing,
+                                                       effectiveTime,
+                                                       methodName);
+
+                        /*
+                         * Valid entity to return since no exception occurred.  Only an entity that is visible
+                         * counts as a duplicate: one whose anchor has gone is hidden from every search, and it
+                         * must not turn a lookup of the one remaining visible element into a failure.
+                         */
+                        duplicateEntities.add(entity.getGUID());
+                        visibleEntities.add(entity);
+
+                        if (guid == null)
+                        {
+                            guid = entity.getGUID();
+                        }
+                    }
+                    catch (InvalidParameterException | PropertyServerException | UserNotAuthorizedException invisibleEntity)
+                    {
+                        /*
+                         * Skipping entity
+                         */
+                    }
+                }
+            }
+        }
+
+        if (guid == null)
+        {
+            return null;
+        }
+        else if (duplicateEntities.size() == 1)
+        {
+            return guid;
+        }
+
+        /*
+         * Leave a marker for the steward that these entities have been detected as duplicates.
+         */
+        this.markDetectedDuplicates(userId, visibleEntities, resultTypeName, name, namePropertyName, methodName);
+
+        throw new PropertyServerException(GenericHandlersErrorCode.MULTIPLE_ENTITIES_FOUND.getMessageDefinition(resultTypeName,
+                                                                                                                name,
+                                                                                                                duplicateEntities.toString(),
+                                                                                                                methodName,
+                                                                                                                namePropertyName,
+                                                                                                                serverName),
+                                          this.getClass().getName(),
+                                          methodName);
+    }
+
+
+    /**
+     * Return the list of beans of the requested type that match the supplied value.
+     *
+     * @param userId the calling user
+     * @param name  value to search
+     * @param nameParameterName parameter providing value
+     * @param namePropertyName open metadata property name to match on
+     * @param resultTypeGUID unique identifier of the type that the results should match with
+     * @param resultTypeName unique value of the type that the results should match with
+     * @param limitResultsByStatus By default, relationships in all statuses (other than DELETE) are returned.  However, it is possible
+     *                             to specify a list of statuses (for example ACTIVE) to restrict the results to.  Null means all status values.
+     * @param asOfTime Requests a historical query of the entity.  Null means return the present values.
+     * @param sequencingPropertyName String name of the property that is to be used to sequence the results.
+     *                           Null means do not sequence on a property name (see SequencingOrder).
+     * @param sequencingOrder Enum defining how the results should be ordered.
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     *
+     * @return list of beans
+     * @throws InvalidParameterException the userId is null or invalid.
+     * @throws PropertyServerException a problem retrieving information from the repositories.
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public B getBeanByUniqueName(String               userId,
+                                 String               name,
+                                 String               nameParameterName,
+                                 String               namePropertyName,
+                                 String               resultTypeGUID,
+                                 String               resultTypeName,
+                                 List<InstanceStatus> limitResultsByStatus,
+                                 Date                 asOfTime,
+                                 SequencingOrder      sequencingOrder,
+                                 String               sequencingPropertyName,
+                                 boolean              forLineage,
+                                 boolean              forDuplicateProcessing,
+                                 Date                 effectiveTime,
+                                 String               methodName) throws InvalidParameterException,
+                                                                         PropertyServerException,
+                                                                         UserNotAuthorizedException
+    {
+        invalidParameterHandler.validateUserId(userId, methodName);
+        invalidParameterHandler.validateName(name, nameParameterName, methodName);
+
+        int queryPageSize = invalidParameterHandler.getMaxPagingSize();
+
+        InstanceProperties matchProperties = repositoryHelper.addStringPropertyToInstance(serviceName,
+                                                                                          null,
+                                                                                          namePropertyName,
+                                                                                          name,
+                                                                                          methodName);
+
+        List<EntityDetail> retrievedEntities = repositoryHandler.getEntitiesByName(userId,
+                                                                                   matchProperties,
+                                                                                   resultTypeGUID,
+                                                                                   limitResultsByStatus,
+                                                                                   null,
+                                                                                   asOfTime,
+                                                                                   sequencingOrder,
+                                                                                   sequencingPropertyName,
+                                                                                   forLineage,
+                                                                                   forDuplicateProcessing,
+                                                                                   0,
+                                                                                   queryPageSize,
+                                                                                   effectiveTime,
+                                                                                   methodName);
+
+        /*
+         * The loop is necessary because some entities returned may not be visible to the calling user.
+         * Once they are filtered out, more entities need to be retrieved to fill the gaps.
+         */
+        B            bean = null;
+        Set<String>  duplicateEntities = new HashSet<>();
+        List<EntityDetail> visibleEntities = new ArrayList<>();
+        String       entityParameterName = "Entity from search of value " + name;
+
+        if (retrievedEntities != null)
+        {
+            for (EntityDetail entity : retrievedEntities)
+            {
+                if (entity != null)
+                {
+                    try
+                    {
+                        validateEntityAndAnchorForRead(userId,
+                                                       resultTypeName,
+                                                       entity,
+                                                       entityParameterName,
+                                                       true,
+                                                       false,
+                                                       forLineage,
+                                                       forDuplicateProcessing,
+                                                       effectiveTime,
+                                                       methodName);
+
+                        /*
+                         * Valid entity to return since no exception occurred.  Only an entity that is visible
+                         * counts as a duplicate: one whose anchor has gone is hidden from every search, and it
+                         * must not turn a lookup of the one remaining visible element into a failure.
+                         */
+                        duplicateEntities.add(entity.getGUID());
+                        visibleEntities.add(entity);
+
+                        if (bean == null)
+                        {
+                            bean = converter.getNewBean(beanClass, entity, methodName);
+                        }
+                    }
+                    catch (InvalidParameterException | PropertyServerException | UserNotAuthorizedException invisibleEntity)
+                    {
+                        /*
+                         * Skipping entity
+                         */
+                    }
+                }
+            }
+        }
+
+        if (bean == null)
+        {
+            return null;
+        }
+        else if (duplicateEntities.size() == 1)
+        {
+            return bean;
+        }
+
+        /*
+         * Leave a marker for the steward that these entities have been detected as duplicates.
+         */
+        this.markDetectedDuplicates(userId, visibleEntities, resultTypeName, name, namePropertyName, methodName);
+
+        throw new PropertyServerException(GenericHandlersErrorCode.MULTIPLE_ENTITIES_FOUND.getMessageDefinition(resultTypeName,
+                                                                                                                name,
+                                                                                                                duplicateEntities.toString(),
+                                                                                                                methodName,
+                                                                                                                namePropertyName,
+                                                                                                                serverName),
+                                          this.getClass().getName(),
+                                          methodName);
+    }
+
+
+    /**
+     * Retrieve the version history for an entity.
+     *
+     * @param userId calling user
+     * @param guid unique identifier of object to update
+     * @param guidParameterName name of parameter supplying the GUID
+     * @param fromTime starting time
+     * @param toTime ending time
+     * @param entityTypeName unique name of the entity's type
+     * @param startingFrom paging start point
+     * @param pageSize maximum results that can be returned
+     * @param sequencingOrder order of the results
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     * @return list of beans
+     *
+     * @throws InvalidParameterException one of the parameters is null or invalid.
+     * @throws PropertyServerException a problem removing the properties from the repositories.
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public List<B> getBeanHistory(String                 userId,
+                                  String                 guid,
+                                  String                 guidParameterName,
+                                  String                 entityTypeName,
+                                  Date                   fromTime,
+                                  Date                   toTime,
+                                  int                    startingFrom,
+                                  int                    pageSize,
+                                  HistorySequencingOrder sequencingOrder,
+                                  boolean                forLineage,
+                                  boolean                forDuplicateProcessing,
+                                  Date                   effectiveTime,
+                                  String                 methodName) throws InvalidParameterException,
+                                                                            PropertyServerException,
+                                                                            UserNotAuthorizedException
+    {
+        invalidParameterHandler.validateUserId(userId, methodName);
+        invalidParameterHandler.validateGUID(guid, guidParameterName, methodName);
+
+        this.validateEntityAndAnchorForRead(userId,
+                                            guid,
+                                            guidParameterName,
+                                            entityTypeName,
+                                            true,
+                                            true,
+                                            forLineage,
+                                            forDuplicateProcessing,
+                                            effectiveTime,
+                                            methodName);
+
+        List<EntityDetail> entities = repositoryHandler.getEntityDetailHistory(userId,
+                                                                               guid,
+                                                                               fromTime,
+                                                                               toTime,
+                                                                               startingFrom,
+                                                                               pageSize,
+                                                                               sequencingOrder,
+                                                                               methodName);
+
+        if (entities != null)
+        {
+            List<B> results = new ArrayList<>();
+
+            for (EntityDetail entity : entities)
+            {
+                results.add(converter.getNewBean(beanClass, entity, methodName));
+            }
+
+            if (! results.isEmpty())
+            {
+                return results;
+            }
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Retrieve the version history for an entity's classification.
+     *
+     * @param userId calling user
+     * @param guid unique identifier of object to update
+     * @param guidParameterName name of parameter supplying the GUID
+     * @param fromTime starting time
+     * @param toTime ending time
+     * @param entityTypeName unique name of the entity's type
+     * @param classificationName name of the desired classification
+     * @param startingFrom paging start point
+     * @param pageSize maximum results that can be returned
+     * @param sequencingOrder order of the results
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     * @return list of beans
+     *
+     * @throws InvalidParameterException one of the parameters is null or invalid.
+     * @throws PropertyServerException a problem removing the properties from the repositories.
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public List<AttachedClassification> getClassificationHistory(String                 userId,
+                                                                 String                 guid,
+                                                                 String                 guidParameterName,
+                                                                 String                 entityTypeName,
+                                                                 String                 classificationName,
+                                                                 Date                   fromTime,
+                                                                 Date                   toTime,
+                                                                 int                    startingFrom,
+                                                                 int                    pageSize,
+                                                                 HistorySequencingOrder sequencingOrder,
+                                                                 boolean                forLineage,
+                                                                 boolean                forDuplicateProcessing,
+                                                                 Date                   effectiveTime,
+                                                                 String                 methodName) throws InvalidParameterException,
+                                                                                                           PropertyServerException,
+                                                                                                           UserNotAuthorizedException
+    {
+        final String classificationParameterName = "classificationName";
+
+        invalidParameterHandler.validateUserId(userId, methodName);
+        invalidParameterHandler.validateGUID(guid, guidParameterName, methodName);
+        invalidParameterHandler.validateName(classificationName, classificationParameterName, methodName);
+
+        this.validateEntityAndAnchorForRead(userId,
+                                            guid,
+                                            guidParameterName,
+                                            entityTypeName,
+                                            true,
+                                            true,
+                                            forLineage,
+                                            forDuplicateProcessing,
+                                            effectiveTime,
+                                            methodName);
+
+        return converter.getAttachedClassifications(repositoryHandler.getClassificationHistory(userId,
+                                                                                               guid,
+                                                                                               classificationName,
+                                                                                               fromTime,
+                                                                                               toTime,
+                                                                                               startingFrom,
+                                                                                               pageSize,
+                                                                                               sequencingOrder,
+                                                                                               methodName));
+    }
+
+
+    /**
+     * Return the bean that matches the requested value.
+     *
+     * @param userId identifier of calling user
+     * @param value  value to search
+     * @param valueParameterName parameter providing value
+     * @param resultTypeGUID unique identifier of the type that the results should match with
+     * @param resultTypeName unique value of the type that the results should match with
+     * @param specificMatchPropertyNames list of property value to look in - if null or empty list then all string properties are checked.
+     * @param limitResultsByStatus By default, relationships in all statuses (other than DELETE) are returned.  However, it is possible
+     *                             to specify a list of statuses (for example ACTIVE) to restrict the results to.  Null means all status values.
+     * @param asOfTime Requests a historical query of the entity.  Null means return the present values.
+     * @param sequencingPropertyName String name of the property that is to be used to sequence the results.
+     *                           Null means do not sequence on a property name (see SequencingOrder).
+     * @param sequencingOrder Enum defining how the results should be ordered.
+     * @param forLineage             the query is to support lineage retrieval
+     * @param forDuplicateProcessing the query is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     * @return matching bean.
+     *
+     * @throws InvalidParameterException one of the parameters is null or invalid.
+     * @throws UserNotAuthorizedException the user is not authorized to issue this request.
+     * @throws PropertyServerException problem retrieving the bean definition.
+     */
+    public  B getBeanByValue(String               userId,
+                             String               value,
+                             String               valueParameterName,
+                             String               resultTypeGUID,
+                             String               resultTypeName,
+                             List<String>         specificMatchPropertyNames,
+                             List<InstanceStatus> limitResultsByStatus,
+                             Date                 asOfTime,
+                             SequencingOrder      sequencingOrder,
+                             String               sequencingPropertyName,
+                             boolean              forLineage,
+                             boolean              forDuplicateProcessing,
+                             Date                 effectiveTime,
+                             String               methodName) throws InvalidParameterException,
+                                                                     UserNotAuthorizedException,
+                                                                     PropertyServerException
+    {
+        List<EntityDetail> results = this.getEntitiesByValue(userId,
+                                                             value,
+                                                             valueParameterName,
+                                                             resultTypeGUID,
+                                                             resultTypeName,
+                                                             specificMatchPropertyNames,
+                                                             false,
+                                                             false,
+                                                             null,
+                                                             null,
+                                                             limitResultsByStatus,
+                                                             asOfTime,
+                                                             sequencingOrder,
+                                                             sequencingPropertyName,
+                                                             forLineage,
+                                                             forDuplicateProcessing,
+                                                             0,
+                                                             invalidParameterHandler.getMaxPagingSize(),
+                                                             effectiveTime,
+                                                             methodName);
+
+
+        if ((results == null) || (results.isEmpty()))
+        {
+            return null;
+        }
+        else if (results.size() == 1)
+        {
+            return converter.getNewBean(beanClass, results.get(0), methodName);
+        }
+        else
+        {
+            errorHandler.handleAmbiguousEntityName(value,
+                                                   valueParameterName,
+                                                   resultTypeName,
+                                                   results,
+                                                   methodName);
+        }
+
+        return null;
+    }
+
+
+
+    /**
+     * Return the list of beans matching the supplied searchString.
+     *
+     * @param userId the searchString of the calling user.
+     * @param searchString searchString of endpoint.  This may include wild card characters.
+     * @param searchStringParameterName name of parameter providing search string
+     * @param resultTypeGUID unique identifier of the type that the results should match with
+     * @param resultTypeName unique value of the type that the results should match with
+     * @param limitResultsByStatus By default, relationships in all statuses (other than DELETE) are returned.  However, it is possible
+     *                             to specify a list of statuses (for example ACTIVE) to restrict the results to.  Null means all status values.
+     * @param asOfTime Requests a historical query of the entity.  Null means return the present values.
+     * @param sequencingPropertyName String name of the property that is to be used to sequence the results.
+     *                           Null means do not sequence on a property name (see SequencingOrder).
+     * @param sequencingOrder Enum defining how the results should be ordered.
+     * @param forDuplicateProcessing this request os for duplicate processing so do not deduplicate
+     * @param forLineage this request is for lineage so ignore Memento classifications
+     * @param startFrom  index of the list to start from (0 for start)
+     * @param pageSize   maximum number of elements to return.
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     *
+     * @return list of beans
+     * @throws InvalidParameterException the userId is null or invalid.
+     * @throws PropertyServerException a problem retrieving information from the repositories.
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public List<B> findBeans(String               userId,
+                             String               searchString,
+                             String               searchStringParameterName,
+                             String               resultTypeGUID,
+                             String               resultTypeName,
+                             List<InstanceStatus> limitResultsByStatus,
+                             Date                 asOfTime,
+                             SequencingOrder      sequencingOrder,
+                             String               sequencingPropertyName,
+                             boolean              forLineage,
+                             boolean              forDuplicateProcessing,
+                             int                  startFrom,
+                             int                  pageSize,
+                             Date                 effectiveTime,
+                             String               methodName) throws InvalidParameterException,
+                                                                     PropertyServerException,
+                                                                     UserNotAuthorizedException
+    {
+        return this.getBeansByValue(userId,
+                                    searchString,
+                                    searchStringParameterName,
+                                    resultTypeGUID,
+                                    resultTypeName,
+                                    null,
+                                    false,
+                                    null,
+                                    null,
+                                    limitResultsByStatus,
+                                    asOfTime,
+                                    sequencingOrder,
+                                    sequencingPropertyName,
+                                    forLineage,
+                                    forDuplicateProcessing,
+                                    startFrom,
+                                    pageSize,
+                                    effectiveTime,
+                                    methodName);
+    }
+
+
+    /**
+     * Return a list of metadata elements that match the supplied criteria.  The results can be returned over many pages.
+     *
+     * @param userId caller's userId
+     * @param metadataElementTypeName type of interest (null means any element type)
+     * @param metadataElementSubtypeName optional list of the subtypes of the metadataElementTypeName to
+     *                           include in the search results. Null means all subtypes.
+     * @param searchProperties Optional list of entity property conditions to match.
+     * @param limitResultsByStatus By default, entities in all statuses (other than DELETE) are returned.  However, it is possible
+     *                             to specify a list of statuses (eg ACTIVE) to restrict the results to.  Null means all status values.
+     * @param searchClassifications Optional list of classifications to match.
+     * @param asOfTime Requests a historical query of the entity.  Null means return the present values.
+     * @param sequencingProperty String name of the property that is to be used to sequence the results.
+     *                           Null means do not sequence on a property name (see SequencingOrder).
+     * @param sequencingOrder Enum defining how the results should be ordered.
+     * @param forLineage the retrieved element is for lineage processing so include archived elements
+     * @param forDuplicateProcessing the retrieved element is for duplicate processing so do not combine results from known duplicates.
+     * @param startingFrom paging start point
+     * @param pageSize maximum results that can be returned
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     *
+     * @return a list of elements matching the supplied criteria; null means no matching elements in the metadata store.
+     * @throws InvalidParameterException one of the search parameters is invalid
+     * @throws UserNotAuthorizedException the governance action service is not able to access the elements
+     * @throws PropertyServerException a problem accessing the metadata store
+     */
+    public List<B> findBeans(String                userId,
+                             String                metadataElementTypeName,
+                             List<String>          metadataElementSubtypeName,
+                             SearchProperties      searchProperties,
+                             List<InstanceStatus>  limitResultsByStatus,
+                             SearchClassifications searchClassifications,
+                             Date                  asOfTime,
+                             String                sequencingProperty,
+                             SequencingOrder       sequencingOrder,
+                             boolean               forLineage,
+                             boolean               forDuplicateProcessing,
+                             int                   startingFrom,
+                             int                   pageSize,
+                             Date                  effectiveTime,
+                             String                methodName) throws InvalidParameterException,
+                                                                      UserNotAuthorizedException,
+                                                                      PropertyServerException
+    {
+        return this.findBeans(userId,
+                              metadataElementTypeName,
+                              metadataElementSubtypeName,
+                              false,
+                              searchProperties,
+                              limitResultsByStatus,
+                              searchClassifications,
+                              asOfTime,
+                              sequencingProperty,
+                              sequencingOrder,
+                              forLineage,
+                              forDuplicateProcessing,
+                              startingFrom,
+                              pageSize,
+                              effectiveTime,
+                              methodName);
+    }
+
+
+    /**
+     * Return a list of metadata elements that match the supplied criteria.  The results can be returned over many pages.
+     *
+     * @param userId caller's userId
+     * @param metadataElementTypeName type of interest (null means any element type)
+     * @param metadataElementSubtypeName optional list of the subtypes of the metadataElementTypeName to
+     *                           include in (or, if skipSubtypes is true, exclude from) the search results. Null means all subtypes.
+     * @param skipSubtypes if true, metadataElementSubtypeName is treated as the list of subtypes to exclude from the
+     *                      search results rather than the only subtypes to include.  Ignored if metadataElementSubtypeName is null.
+     * @param searchProperties Optional list of entity property conditions to match.
+     * @param limitResultsByStatus By default, entities in all statuses (other than DELETE) are returned.  However, it is possible
+     *                             to specify a list of statuses (eg ACTIVE) to restrict the results to.  Null means all status values.
+     * @param searchClassifications Optional list of classifications to match.
+     * @param asOfTime Requests a historical query of the entity.  Null means return the present values.
+     * @param sequencingProperty String name of the property that is to be used to sequence the results.
+     *                           Null means do not sequence on a property name (see SequencingOrder).
+     * @param sequencingOrder Enum defining how the results should be ordered.
+     * @param forLineage the retrieved element is for lineage processing so include archived elements
+     * @param forDuplicateProcessing the retrieved element is for duplicate processing so do not combine results from known duplicates.
+     * @param startingFrom paging start point
+     * @param pageSize maximum results that can be returned
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     *
+     * @return a list of elements matching the supplied criteria; null means no matching elements in the metadata store.
+     * @throws InvalidParameterException one of the search parameters is invalid
+     * @throws UserNotAuthorizedException the governance action service is not able to access the elements
+     * @throws PropertyServerException a problem accessing the metadata store
+     */
+    public List<B> findBeans(String                userId,
+                             String                metadataElementTypeName,
+                             List<String>          metadataElementSubtypeName,
+                             boolean               skipSubtypes,
+                             SearchProperties      searchProperties,
+                             List<InstanceStatus>  limitResultsByStatus,
+                             SearchClassifications searchClassifications,
+                             Date                  asOfTime,
+                             String                sequencingProperty,
+                             SequencingOrder       sequencingOrder,
+                             boolean               forLineage,
+                             boolean               forDuplicateProcessing,
+                             int                   startingFrom,
+                             int                   pageSize,
+                             Date                  effectiveTime,
+                             String                methodName) throws InvalidParameterException,
+                                                                      UserNotAuthorizedException,
+                                                                      PropertyServerException
+    {
+        List<EntityDetail> entities = this.findEntities(userId,
+                                                        metadataElementTypeName,
+                                                        metadataElementSubtypeName,
+                                                        skipSubtypes,
+                                                        searchProperties,
+                                                        limitResultsByStatus,
+                                                        searchClassifications,
+                                                        asOfTime,
+                                                        sequencingProperty,
+                                                        sequencingOrder,
+                                                        forLineage,
+                                                        forDuplicateProcessing,
+                                                        startingFrom,
+                                                        pageSize,
+                                                        effectiveTime,
+                                                        methodName);
+
+        if (entities != null)
+        {
+            List<B> results = new ArrayList<>();
+
+            for (EntityDetail entity : entities)
+            {
+                if (entity != null)
+                {
+                    results.add(converter.getNewBean(beanClass, entity, methodName));
+                }
+            }
+
+            if (! results.isEmpty())
+            {
+                return results;
+            }
+        }
+
+        return null;
+    }
+
+
+
+    /**
+     * Return a list of metadata elements that match the supplied criteria.  The results can be returned over many pages.
+     *
+     * @param userId caller's userId
+     * @param metadataElementTypeName type of interest (null means any element type)
+     * @param metadataElementSubtypeNames optional list of the subtypes of the metadataElementTypeName to
+     *                           include in the search results. Null means all subtypes.
+     * @param searchProperties Optional list of entity property conditions to match.
+     * @param limitResultsByStatus By default, entities in all statuses (other than DELETE) are returned.  However, it is possible
+     *                             to specify a list of statuses (eg ACTIVE) to restrict the results to.  Null means all status values.
+     * @param searchClassifications Optional list of classifications to match.
+     * @param asOfTime Requests a historical query of the entity.  Null means return the present values.
+     * @param sequencingProperty String name of the property that is to be used to sequence the results.
+     *                           Null means do not sequence on a property name (see SequencingOrder).
+     * @param sequencingOrder Enum defining how the results should be ordered.
+     * @param forLineage the retrieved element is for lineage processing so include archived elements
+     * @param forDuplicateProcessing the retrieved element is for duplicate processing so do not combine results from known duplicates.
+     * @param startingFrom paging start point
+     * @param pageSize maximum results that can be returned
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     *
+     * @return a list of elements matching the supplied criteria; null means no matching elements in the metadata store.
+     * @throws InvalidParameterException one of the search parameters is invalid
+     * @throws UserNotAuthorizedException the governance action service is not able to access the elements
+     * @throws PropertyServerException a problem accessing the metadata store
+     */
+    public List<EntityDetail> findEntities(String                userId,
+                                           String                metadataElementTypeName,
+                                           List<String>          metadataElementSubtypeNames,
+                                           SearchProperties      searchProperties,
+                                           List<InstanceStatus>  limitResultsByStatus,
+                                           SearchClassifications searchClassifications,
+                                           Date                  asOfTime,
+                                           String                sequencingProperty,
+                                           SequencingOrder       sequencingOrder,
+                                           boolean               forLineage,
+                                           boolean               forDuplicateProcessing,
+                                           int                   startingFrom,
+                                           int                   pageSize,
+                                           Date                  effectiveTime,
+                                           String                methodName) throws InvalidParameterException,
+                                                                                    UserNotAuthorizedException,
+                                                                                    PropertyServerException
+    {
+        return this.findEntities(userId,
+                                 metadataElementTypeName,
+                                 metadataElementSubtypeNames,
+                                 false,
+                                 searchProperties,
+                                 limitResultsByStatus,
+                                 searchClassifications,
+                                 asOfTime,
+                                 sequencingProperty,
+                                 sequencingOrder,
+                                 forLineage,
+                                 forDuplicateProcessing,
+                                 startingFrom,
+                                 pageSize,
+                                 effectiveTime,
+                                 methodName);
+    }
+
+
+    /**
+     * Return a list of metadata elements that match the supplied criteria.  The results can be returned over many pages.
+     *
+     * @param userId caller's userId
+     * @param metadataElementTypeName type of interest (null means any element type)
+     * @param metadataElementSubtypeNames optional list of the subtypes of the metadataElementTypeName to
+     *                           include in (or, if skipSubtypes is true, exclude from) the search results. Null means all subtypes.
+     * @param skipSubtypes if true, metadataElementSubtypeNames is treated as the list of subtypes to exclude from the
+     *                      search results rather than the only subtypes to include.  Ignored if metadataElementSubtypeNames is null.
+     * @param searchProperties Optional list of entity property conditions to match.
+     * @param limitResultsByStatus By default, entities in all statuses (other than DELETE) are returned.  However, it is possible
+     *                             to specify a list of statuses (eg ACTIVE) to restrict the results to.  Null means all status values.
+     * @param searchClassifications Optional list of classifications to match.
+     * @param asOfTime Requests a historical query of the entity.  Null means return the present values.
+     * @param sequencingProperty String name of the property that is to be used to sequence the results.
+     *                           Null means do not sequence on a property name (see SequencingOrder).
+     * @param sequencingOrder Enum defining how the results should be ordered.
+     * @param forLineage the retrieved element is for lineage processing so include archived elements
+     * @param forDuplicateProcessing the retrieved element is for duplicate processing so do not combine results from known duplicates.
+     * @param startingFrom paging start point
+     * @param pageSize maximum results that can be returned
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     *
+     * @return a list of elements matching the supplied criteria; null means no matching elements in the metadata store.
+     * @throws InvalidParameterException one of the search parameters is invalid
+     * @throws UserNotAuthorizedException the governance action service is not able to access the elements
+     * @throws PropertyServerException a problem accessing the metadata store
+     */
+    public List<EntityDetail> findEntities(String                userId,
+                                           String                metadataElementTypeName,
+                                           List<String>          metadataElementSubtypeNames,
+                                           boolean               skipSubtypes,
+                                           SearchProperties      searchProperties,
+                                           List<InstanceStatus>  limitResultsByStatus,
+                                           SearchClassifications searchClassifications,
+                                           Date                  asOfTime,
+                                           String                sequencingProperty,
+                                           SequencingOrder       sequencingOrder,
+                                           boolean               forLineage,
+                                           boolean               forDuplicateProcessing,
+                                           int                   startingFrom,
+                                           int                   pageSize,
+                                           Date                  effectiveTime,
+                                           String                methodName) throws InvalidParameterException,
+                                                                                    UserNotAuthorizedException,
+                                                                                    PropertyServerException
+    {
+        invalidParameterHandler.validateUserId(userId, methodName);
+
+        int queryPageSize = invalidParameterHandler.validatePaging(startingFrom, pageSize, methodName);
+
+        String typeName = OpenMetadataType.OPEN_METADATA_ROOT.typeName;
+
+        if (metadataElementTypeName != null)
+        {
+            typeName = metadataElementTypeName;
+        }
+
+        String typeGUID = invalidParameterHandler.validateTypeName(typeName,
+                                                                   OpenMetadataType.OPEN_METADATA_ROOT.typeName,
+                                                                   serviceName,
+                                                                   methodName,
+                                                                   repositoryHelper);
+
+        List<String> subTypeGUIDs = null;
+
+        if (metadataElementSubtypeNames != null)
+        {
+            subTypeGUIDs = new ArrayList<>();
+
+            for (String subTypeName : metadataElementSubtypeNames)
+            {
+                if (subTypeName != null)
+                {
+                    String subTypeGUID = invalidParameterHandler.validateTypeName(subTypeName,
+                                                                                  typeName,
+                                                                                  serviceName,
+                                                                                  methodName,
+                                                                                  repositoryHelper);
+
+                    if (subTypeGUID != null)
+                    {
+                        subTypeGUIDs.add(subTypeGUID);
+                    }
+                }
+            }
+        }
+
+        if ((searchClassifications != null) && (searchClassifications.getConditions() != null))
+        {
+            for (ClassificationCondition classificationCondition : searchClassifications.getConditions())
+            {
+                if (classificationCondition != null)
+                {
+                    invalidParameterHandler.validateTypeDefName(classificationCondition.getName(),
+                                                                null,
+                                                                serviceName,
+                                                                methodName,
+                                                                repositoryHelper);
+
+                }
+            }
+        }
+
+        List<EntityDetail> retrievedEntities = repositoryHandler.findEntities(userId,
+                                                                              typeGUID,
+                                                                              subTypeGUIDs,
+                                                                              skipSubtypes,
+                                                                              searchProperties,
+                                                                              limitResultsByStatus,
+                                                                              searchClassifications,
+                                                                              asOfTime,
+                                                                              sequencingProperty,
+                                                                              sequencingOrder,
+                                                                              forLineage,
+                                                                              forDuplicateProcessing,
+                                                                              startingFrom,
+                                                                              queryPageSize,
+                                                                              effectiveTime,
+                                                                              methodName);
+
+        return this.getValidatedEntities(userId,
+                                         retrievedEntities,
+                                         null,
+                                         forLineage,
+                                         forDuplicateProcessing,
+                                         effectiveTime,
+                                         methodName);
+    }
+
+
+    /**
+     * Return a count of the entities of the requested type that match the supplied criteria.  This has the same
+     * search semantics as findEntities(), but returns the number of matching entities rather than the entities
+     * themselves.
+     *
+     * @param userId the calling user
+     * @param metadataElementTypeName type of interest (null means any type)
+     * @param metadataElementSubtypeNames optional list of the subtypes of the metadataElementTypeName to
+     *                           include in the search results. Null means all subtypes.
+     * @param searchProperties Optional list of entity property conditions to match.
+     * @param limitResultsByStatus By default, entities in all statuses (other than DELETE) are returned.  However, it is possible
+     *                             to specify a list of statuses (eg ACTIVE) to restrict the results to.  Null means all status values.
+     * @param searchClassifications Optional list of classifications to match.
+     * @param asOfTime Requests a historical query of the entity.  Null means return the present values.
+     * @param forLineage not used - accepted for call-site parity with findEntities().
+     * @param forDuplicateProcessing not used - accepted for call-site parity with findEntities().
+     * @param effectiveTime not used - accepted for call-site parity with findEntities().
+     * @param methodName calling method
+     *
+     * @return the number of elements matching the supplied criteria.
+     * @throws InvalidParameterException one of the search parameters is invalid
+     * @throws UserNotAuthorizedException the governance action service is not able to access the elements
+     * @throws PropertyServerException a problem accessing the metadata store
+     */
+    public long countEntities(String                userId,
+                              String                metadataElementTypeName,
+                              List<String>          metadataElementSubtypeNames,
+                              SearchProperties      searchProperties,
+                              List<InstanceStatus>  limitResultsByStatus,
+                              SearchClassifications searchClassifications,
+                              Date                  asOfTime,
+                              boolean               forLineage,
+                              boolean               forDuplicateProcessing,
+                              Date                  effectiveTime,
+                              String                methodName) throws InvalidParameterException,
+                                                                       UserNotAuthorizedException,
+                                                                       PropertyServerException
+    {
+        return this.countEntities(userId,
+                                  metadataElementTypeName,
+                                  metadataElementSubtypeNames,
+                                  false,
+                                  searchProperties,
+                                  limitResultsByStatus,
+                                  searchClassifications,
+                                  asOfTime,
+                                  forLineage,
+                                  forDuplicateProcessing,
+                                  effectiveTime,
+                                  methodName);
+    }
+
+
+    /**
+     * Return a count of the entities of the requested type that match the supplied criteria.  This has the same
+     * search semantics as findEntities(), but returns the number of matching entities rather than the entities
+     * themselves.
+     *
+     * @param userId the calling user
+     * @param metadataElementTypeName type of interest (null means any type)
+     * @param metadataElementSubtypeNames optional list of the subtypes of the metadataElementTypeName to
+     *                           include in (or, if skipSubtypes is true, exclude from) the search results. Null means all subtypes.
+     * @param skipSubtypes if true, metadataElementSubtypeNames is treated as the list of subtypes to exclude from the
+     *                      search results rather than the only subtypes to include.  Ignored if metadataElementSubtypeNames is null.
+     * @param searchProperties Optional list of entity property conditions to match.
+     * @param limitResultsByStatus By default, entities in all statuses (other than DELETE) are returned.  However, it is possible
+     *                             to specify a list of statuses (eg ACTIVE) to restrict the results to.  Null means all status values.
+     * @param searchClassifications Optional list of classifications to match.
+     * @param asOfTime Requests a historical query of the entity.  Null means return the present values.
+     * @param forLineage not used - accepted for call-site parity with findEntities().
+     * @param forDuplicateProcessing not used - accepted for call-site parity with findEntities().
+     * @param effectiveTime not used - accepted for call-site parity with findEntities().
+     * @param methodName calling method
+     *
+     * @return the number of elements matching the supplied criteria.
+     * @throws InvalidParameterException one of the search parameters is invalid
+     * @throws UserNotAuthorizedException the governance action service is not able to access the elements
+     * @throws PropertyServerException a problem accessing the metadata store
+     */
+    public long countEntities(String                userId,
+                              String                metadataElementTypeName,
+                              List<String>          metadataElementSubtypeNames,
+                              boolean               skipSubtypes,
+                              SearchProperties      searchProperties,
+                              List<InstanceStatus>  limitResultsByStatus,
+                              SearchClassifications searchClassifications,
+                              Date                  asOfTime,
+                              boolean               forLineage,
+                              boolean               forDuplicateProcessing,
+                              Date                  effectiveTime,
+                              String                methodName) throws InvalidParameterException,
+                                                                       UserNotAuthorizedException,
+                                                                       PropertyServerException
+    {
+        return this.countEntities(userId,
+                                  metadataElementTypeName,
+                                  metadataElementSubtypeNames,
+                                  skipSubtypes,
+                                  searchProperties,
+                                  limitResultsByStatus,
+                                  searchClassifications,
+                                  asOfTime,
+                                  forLineage,
+                                  forDuplicateProcessing,
+                                  effectiveTime,
+                                  true,
+                                  methodName);
+    }
+
+
+    /**
+     * Return a count of the entities of the requested type that match the supplied criteria.
+     * <br><br>
+     * pushDown chooses between two ways of answering, which do not always agree - see
+     * {@link #countAttachmentLinks} for the same choice on relationships, and the note on
+     * {@link #findEntities} for what the difference consists of.
+     *
+     * @param userId the calling user
+     * @param metadataElementTypeName type of interest (null means any type)
+     * @param metadataElementSubtypeNames optional list of the subtypes of the metadataElementTypeName to
+     *                           include in (or, if skipSubtypes is true, exclude from) the search results.
+     * @param skipSubtypes if true, metadataElementSubtypeNames is treated as the list of subtypes to exclude
+     *                     rather than the only subtypes to include.
+     * @param searchProperties Optional list of entity property conditions to match.
+     * @param limitResultsByStatus By default, entities in all statuses (other than DELETE) are returned.
+     * @param searchClassifications Optional list of classifications to match.
+     * @param asOfTime Requests a historical query of the entity.  Null means return the present values.
+     * @param forLineage the query is to support lineage retrieval
+     * @param forDuplicateProcessing the query is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for
+     * @param pushDown true to count in the repository, false to count what a retrieval would actually return
+     * @param methodName calling method
+     *
+     * @return the number of elements matching the supplied criteria.
+     * @throws InvalidParameterException one of the search parameters is invalid
+     * @throws UserNotAuthorizedException the governance action service is not able to access the elements
+     * @throws PropertyServerException a problem accessing the metadata store
+     */
+    public long countEntities(String                userId,
+                              String                metadataElementTypeName,
+                              List<String>          metadataElementSubtypeNames,
+                              boolean               skipSubtypes,
+                              SearchProperties      searchProperties,
+                              List<InstanceStatus>  limitResultsByStatus,
+                              SearchClassifications searchClassifications,
+                              Date                  asOfTime,
+                              boolean               forLineage,
+                              boolean               forDuplicateProcessing,
+                              Date                  effectiveTime,
+                              boolean               pushDown,
+                              String                methodName) throws InvalidParameterException,
+                                                                       UserNotAuthorizedException,
+                                                                       PropertyServerException
+    {
+        invalidParameterHandler.validateUserId(userId, methodName);
+
+        if (! pushDown)
+        {
+            /*
+             * Count what findEntities() would actually hand back, by paging through it.  This costs a read of
+             * every matching entity, which is what the repository count exists to avoid - but it is the only
+             * way to return a number that agrees with the list.
+             */
+            long count     = 0;
+            int  startFrom = 0;
+            int  pageSize  = invalidParameterHandler.getMaxPagingSize();
+
+            while (true)
+            {
+                List<EntityDetail> page = this.findEntities(userId,
+                                                             metadataElementTypeName,
+                                                             metadataElementSubtypeNames,
+                                                             skipSubtypes,
+                                                             searchProperties,
+                                                             limitResultsByStatus,
+                                                             searchClassifications,
+                                                             asOfTime,
+                                                             null,
+                                                             SequencingOrder.GUID,
+                                                             forLineage,
+                                                             forDuplicateProcessing,
+                                                             startFrom,
+                                                             pageSize,
+                                                             effectiveTime,
+                                                             methodName);
+
+                if (page == null)
+                {
+                    /*
+                     * Null ends the traversal.  An empty list does not - it means this batch was entirely
+                     * removed by the visibility check, and the next one may still hold something.
+                     */
+                    break;
+                }
+
+                count     += page.size();
+                startFrom += pageSize;
+            }
+
+            return count;
+        }
+
+        String typeName = OpenMetadataType.OPEN_METADATA_ROOT.typeName;
+
+        if (metadataElementTypeName != null)
+        {
+            typeName = metadataElementTypeName;
+        }
+
+        String typeGUID = invalidParameterHandler.validateTypeName(typeName,
+                                                                   OpenMetadataType.OPEN_METADATA_ROOT.typeName,
+                                                                   serviceName,
+                                                                   methodName,
+                                                                   repositoryHelper);
+
+        List<String> subTypeGUIDs = null;
+
+        if (metadataElementSubtypeNames != null)
+        {
+            subTypeGUIDs = new ArrayList<>();
+
+            for (String subTypeName : metadataElementSubtypeNames)
+            {
+                if (subTypeName != null)
+                {
+                    String subTypeGUID = invalidParameterHandler.validateTypeName(subTypeName,
+                                                                                  typeName,
+                                                                                  serviceName,
+                                                                                  methodName,
+                                                                                  repositoryHelper);
+
+                    if (subTypeGUID != null)
+                    {
+                        subTypeGUIDs.add(subTypeGUID);
+                    }
+                }
+            }
+        }
+
+        if ((searchClassifications != null) && (searchClassifications.getConditions() != null))
+        {
+            for (ClassificationCondition classificationCondition : searchClassifications.getConditions())
+            {
+                if (classificationCondition != null)
+                {
+                    invalidParameterHandler.validateTypeDefName(classificationCondition.getName(),
+                                                                null,
+                                                                serviceName,
+                                                                methodName,
+                                                                repositoryHelper);
+
+                }
+            }
+        }
+
+        return repositoryHandler.countEntities(userId,
+                                               typeGUID,
+                                               subTypeGUIDs,
+                                               skipSubtypes,
+                                               searchProperties,
+                                               limitResultsByStatus,
+                                               searchClassifications,
+                                               asOfTime,
+                                               null,
+                                               null,
+                                               forLineage,
+                                               forDuplicateProcessing,
+                                               effectiveTime,
+                                               methodName);
+    }
+
+
+    /**
+     * Return the list of beans of the requested type that match the supplied value.
+     *
+     * @param userId the calling user
+     * @param value value to search
+     * @param valueParameterName parameter providing value
+     * @param resultTypeGUID unique identifier of the type that the results should match with
+     * @param resultTypeName unique value of the type that the results should match with
+     * @param specificMatchPropertyNames list of property value to look in - if null or empty list then all string properties are checked.
+     * @param exactValueMatch indicates whether the value must match the whole property value in a matching result, or whether it is a
+     *                         partial match
+     * @param requiredClassificationName  String the name of the classification that must be on the entity.
+     * @param omittedClassificationName   String the name of a classification that must not be on the entity.
+     * @param limitResultsByStatus By default, relationships in all statuses (other than DELETE) are returned.  However, it is possible
+     *                             to specify a list of statuses (for example ACTIVE) to restrict the results to.  Null means all status values.
+     * @param asOfTime Requests a historical query of the entity.  Null means return the present values.
+     * @param sequencingPropertyName String name of the property that is to be used to sequence the results.
+     *                           Null means do not sequence on a property name (see SequencingOrder).
+     * @param sequencingOrder Enum defining how the results should be ordered.
+     * @param forLineage the query is to support lineage retrieval
+     * @param forDuplicateProcessing the query is for duplicate processing and so must not deduplicate
+     * @param startFrom  index of the list to start from (0 for start)
+     * @param pageSize   maximum number of elements to return
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     *
+     * @return list of beans
+     * @throws InvalidParameterException the userId is null or invalid.
+     * @throws PropertyServerException a problem retrieving information from the repositories.
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public List<B> getBeansByValue(String               userId,
+                                   String               value,
+                                   String               valueParameterName,
+                                   String               resultTypeGUID,
+                                   String               resultTypeName,
+                                   List<String>         specificMatchPropertyNames,
+                                   boolean              exactValueMatch,
+                                   String               requiredClassificationName,
+                                   String               omittedClassificationName,
+                                   List<InstanceStatus> limitResultsByStatus,
+                                   Date                 asOfTime,
+                                   SequencingOrder      sequencingOrder,
+                                   String               sequencingPropertyName,
+                                   boolean              forLineage,
+                                   boolean              forDuplicateProcessing,
+                                   int                  startFrom,
+                                   int                  pageSize,
+                                   Date                 effectiveTime,
+                                   String               methodName) throws InvalidParameterException,
+                                                                           PropertyServerException,
+                                                                           UserNotAuthorizedException
+    {
+        List<EntityDetail> entities = getEntitiesByValue(userId,
+                                                         value,
+                                                         valueParameterName,
+                                                         resultTypeGUID,
+                                                         resultTypeName,
+                                                         specificMatchPropertyNames,
+                                                         exactValueMatch,
+                                                         false,
+                                                         requiredClassificationName,
+                                                         omittedClassificationName,
+                                                         limitResultsByStatus,
+                                                         asOfTime,
+                                                         sequencingOrder,
+                                                         sequencingPropertyName,
+                                                         forLineage,
+                                                         forDuplicateProcessing,
+                                                         startFrom,
+                                                         pageSize,
+                                                         effectiveTime,
+                                                         methodName);
+
+
+        if (entities != null)
+        {
+            List<B> results = new ArrayList<>();
+
+            for (EntityDetail entity : entities)
+            {
+                if (entity != null)
+                {
+                    B bean = converter.getNewBean(beanClass, entity, methodName);
+
+                    results.add(bean);
+                }
+            }
+
+            return  results;
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Return the list of entities of the requested type.
+     *
+     * @param userId the name of the calling user
+     * @param resultTypeGUID unique identifier of the type that the results should match with
+     * @param resultTypeName unique name of the type that the results should match with
+     * @param limitResultsByStatus By default, relationships in all statuses (other than DELETE) are returned.  However, it is possible
+     *                             to specify a list of statuses (for example ACTIVE) to restrict the results to.  Null means all status values.
+     * @param asOfTime Requests a historical query of the entity.  Null means return the present values.
+     * @param sequencingPropertyName String name of the property that is to be used to sequence the results.
+     *                           Null means do not sequence on a property name (see SequencingOrder).
+     * @param sequencingOrder Enum defining how the results should be ordered.
+     * @param startFrom  index of the list to start from (0 for start)
+     * @param pageSize   maximum number of elements to return
+     * @param forLineage the query is to support lineage retrieval
+     * @param forDuplicateProcessing the query is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     *
+     * @return list of entities
+     * @throws InvalidParameterException the userId is null or invalid.
+     * @throws PropertyServerException a problem retrieving information from the repositories.
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public List<EntityDetail> getEntitiesByType(String               userId,
+                                                String               resultTypeGUID,
+                                                String               resultTypeName,
+                                                List<InstanceStatus> limitResultsByStatus,
+                                                Date                 asOfTime,
+                                                SequencingOrder      sequencingOrder,
+                                                String               sequencingPropertyName,
+                                                boolean              forLineage,
+                                                boolean              forDuplicateProcessing,
+                                                int                  startFrom,
+                                                int                  pageSize,
+                                                Date                 effectiveTime,
+                                                String               methodName) throws InvalidParameterException,
+                                                                                        PropertyServerException,
+                                                                                        UserNotAuthorizedException
+    {
+        invalidParameterHandler.validateUserId(userId, methodName);
+
+        int queryPageSize = invalidParameterHandler.validatePaging(startFrom, pageSize, methodName);
+
+        List<EntityDetail> retrievedEntities = repositoryHandler.getEntitiesForType(userId,
+                                                                                    resultTypeGUID,
+                                                                                    resultTypeName,
+                                                                                    limitResultsByStatus,
+                                                                                    null,
+                                                                                    asOfTime,
+                                                                                    sequencingOrder,
+                                                                                    sequencingPropertyName,
+                                                                                    forLineage,
+                                                                                    forDuplicateProcessing,
+                                                                                    startFrom,
+                                                                                    queryPageSize,
+                                                                                    effectiveTime,
+                                                                                    methodName);
+
+        return this.validateEntitiesAndAnchorsForRead(userId,
+                                                      retrievedEntities,
+                                                      forLineage,
+                                                      forDuplicateProcessing,
+                                                      effectiveTime,
+                                                      methodName);
+    }
+
+
+    /**
+     * Return the list of entities matching the supplied searchString.
+     *
+     * @param userId the searchString of the calling user.
+     * @param searchString searchString of endpoint.  This may include wild card characters.
+     * @param searchStringParameterName name of parameter providing search string
+     * @param resultTypeGUID unique identifier of the type that the results should match with
+     * @param resultTypeName unique value of the type that the results should match with
+     * @param requiredClassificationName  String the name of the classification that must be on the entity.
+     * @param omittedClassificationName   String the name of a classification that must not be on the entity.
+     * @param limitResultsByStatus By default, relationships in all statuses (other than DELETE) are returned.  However, it is possible
+     *                             to specify a list of statuses (for example ACTIVE) to restrict the results to.  Null means all status values.
+     * @param asOfTime Requests a historical query of the entity.  Null means return the present values.
+     * @param sequencingPropertyName String name of the property that is to be used to sequence the results.
+     *                           Null means do not sequence on a property name (see SequencingOrder).
+     * @param sequencingOrder Enum defining how the results should be ordered.
+     * @param startFrom  index of the list to start from (0 for start)
+     * @param pageSize   maximum number of elements to return.
+     * @param forLineage return elements marked with the Memento classification?
+     * @param forDuplicateProcessing do not merge elements marked as duplicates?
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     *
+     * @return list of entities
+     * @throws InvalidParameterException the userId is null or invalid.
+     * @throws PropertyServerException a problem retrieving information from the repositories.
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public List<EntityDetail> findEntities(String               userId,
+                                           String               searchString,
+                                           String               searchStringParameterName,
+                                           String               resultTypeGUID,
+                                           String               resultTypeName,
+                                           String               requiredClassificationName,
+                                           String               omittedClassificationName,
+                                           int                  startFrom,
+                                           int                  pageSize,
+                                           List<InstanceStatus> limitResultsByStatus,
+                                           Date                 asOfTime,
+                                           SequencingOrder      sequencingOrder,
+                                           String               sequencingPropertyName,
+                                           boolean              forLineage,
+                                           boolean              forDuplicateProcessing,
+                                           Date                 effectiveTime,
+                                           String               methodName) throws InvalidParameterException,
+                                                                                   PropertyServerException,
+                                                                                   UserNotAuthorizedException
+    {
+        invalidParameterHandler.validateSearchString(searchString, searchStringParameterName, methodName);
+
+        return this.getEntitiesByValue(userId,
+                                       searchString,
+                                       searchStringParameterName,
+                                       resultTypeGUID,
+                                       resultTypeName,
+                                       null,
+                                       false,
+                                       false,
+                                       requiredClassificationName,
+                                       omittedClassificationName,
+                                       limitResultsByStatus,
+                                       asOfTime,
+                                       sequencingOrder,
+                                       sequencingPropertyName,
+                                       forLineage,
+                                       forDuplicateProcessing,
+                                       startFrom,
+                                       pageSize,
+                                       effectiveTime,
+                                       methodName);
+    }
+
+
+
+    /**
+     * Return the list of entities of the requested type that match the supplied value.
+     *
+     * @param userId the calling user
+     * @param value value to search
+     * @param valueParameterName parameter providing value
+     * @param resultTypeGUID unique identifier of the type that the results should match with
+     * @param resultTypeName unique value of the type that the results should match with
+     * @param specificMatchPropertyNames list of property value to look in - if null or empty list then all string properties are checked.
+     * @param exactValueMatch indicates whether the value must match the whole property value in a matching result, or whether it is a
+     *                         partial match
+     * @param caseInsensitive set to true to have a case-insensitive exact match regular expression
+     * @param requiredClassificationName  String the name of the classification that must be on the attached entity
+     * @param omittedClassificationName   String the name of a classification that must not be on the attached entity
+     * @param limitResultsByStatus By default, relationships in all statuses (other than DELETE) are returned.  However, it is possible
+     *                             to specify a list of statuses (for example ACTIVE) to restrict the results to.  Null means all status values.
+     * @param asOfTime Requests a historical query of the entity.  Null means return the present values.
+     * @param sequencingPropertyName String name of the property that is to be used to sequence the results.
+     *                           Null means do not sequence on a property name (see SequencingOrder).
+     * @param sequencingOrder Enum defining how the results should be ordered.
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param startFrom  index of the list to start from (0 for start)
+     * @param pageSize   maximum number of elements to return
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     *
+     * @return list of entities
+     * @throws InvalidParameterException the userId is null or invalid.
+     * @throws PropertyServerException a problem retrieving information from the repositories.
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public List<EntityDetail> getEntitiesByValue(String               userId,
+                                                 String               value,
+                                                 String               valueParameterName,
+                                                 String               resultTypeGUID,
+                                                 String               resultTypeName,
+                                                 List<String>         specificMatchPropertyNames,
+                                                 boolean              exactValueMatch,
+                                                 boolean              caseInsensitive,
+                                                 String               requiredClassificationName,
+                                                 String               omittedClassificationName,
+                                                 List<InstanceStatus> limitResultsByStatus,
+                                                 Date                 asOfTime,
+                                                 SequencingOrder      sequencingOrder,
+                                                 String               sequencingPropertyName,
+                                                 boolean              forLineage,
+                                                 boolean              forDuplicateProcessing,
+                                                 int                  startFrom,
+                                                 int                  pageSize,
+                                                 Date                 effectiveTime,
+                                                 String               methodName) throws InvalidParameterException,
+                                                                                         PropertyServerException,
+                                                                                         UserNotAuthorizedException
+    {
+        invalidParameterHandler.validateUserId(userId, methodName);
+        invalidParameterHandler.validateName(value, valueParameterName, methodName);
+
+        int queryPageSize = invalidParameterHandler.validatePaging(startFrom, pageSize, methodName);
+
+        List<String> limitResultsByClassifications = null;
+
+        if (requiredClassificationName != null)
+        {
+            limitResultsByClassifications = new ArrayList<>();
+
+            limitResultsByClassifications.add(requiredClassificationName);
+        }
+
+        List<EntityDetail> retrievedEntities;
+
+        if ((specificMatchPropertyNames == null) || (specificMatchPropertyNames.isEmpty()))
+        {
+            retrievedEntities = repositoryHandler.getEntitiesByValue(userId,
+                                                                     value,
+                                                                     exactValueMatch,
+                                                                     exactValueMatch,
+                                                                     caseInsensitive,
+                                                                     resultTypeGUID,
+                                                                     limitResultsByStatus,
+                                                                     limitResultsByClassifications,
+                                                                     asOfTime,
+                                                                     sequencingOrder,
+                                                                     sequencingPropertyName,
+                                                                     forLineage,
+                                                                     forDuplicateProcessing,
+                                                                     startFrom,
+                                                                     queryPageSize,
+                                                                     effectiveTime,
+                                                                     methodName);
+        }
+        else
+        {
+            retrievedEntities = repositoryHandler.getEntitiesByName(userId,
+                                                                    this.getSearchInstanceProperties(value, specificMatchPropertyNames, methodName),
+                                                                    resultTypeGUID,
+                                                                    limitResultsByStatus,
+                                                                    limitResultsByClassifications,
+                                                                    asOfTime,
+                                                                    sequencingOrder,
+                                                                    sequencingPropertyName,
+                                                                    forLineage,
+                                                                    forDuplicateProcessing,
+                                                                    startFrom,
+                                                                    queryPageSize,
+                                                                    effectiveTime,
+                                                                    methodName);
+        }
+
+        return getValidatedEntities(userId,
+                                    retrievedEntities,
+                                    omittedClassificationName,
+                                    forLineage,
+                                    forDuplicateProcessing,
+                                    effectiveTime,
+                                    methodName);
+    }
+
+
+    /**
+     * Return the list of entities of the requested type that match the supplied value.
+     *
+     * @param userId the calling user
+     * @param retrievedEntities entities from the repository
+     * @param omittedClassificationName   String the name of a classification that must not be on the attached entity
+     * @param forLineage                   boolean indicating whether the entity is being retrieved for a lineage request or not
+     * @param forDuplicateProcessing       the query is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     *
+     * @return list of beans
+     * @throws InvalidParameterException bad starting entity
+     * @throws PropertyServerException a problem retrieving information from the repositories.
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public List<EntityDetail> getValidatedEntities(String             userId,
+                                                   List<EntityDetail> retrievedEntities,
+                                                   String             omittedClassificationName,
+                                                   boolean            forLineage,
+                                                   boolean            forDuplicateProcessing,
+                                                   Date               effectiveTime,
+                                                   String             methodName) throws InvalidParameterException,
+                                                                                         PropertyServerException,
+                                                                                         UserNotAuthorizedException
+    {
+        List<EntityDetail> validatedEntities = this.validateEntitiesAndAnchorsForRead(userId,
+                                                                                      retrievedEntities,
+                                                                                      forLineage,
+                                                                                      forDuplicateProcessing,
+                                                                                      effectiveTime,
+                                                                                      methodName);
+        if (validatedEntities != null)
+        {
+            /*
+             * The loop is necessary because some entities returned may not be visible to the calling user.
+             */
+            List<EntityDetail> results = new ArrayList<>();
+
+            for (EntityDetail entity : validatedEntities)
+            {
+                if (entity != null)
+                {
+                    boolean beanValid = true;
+
+                    if (omittedClassificationName != null)
+                    {
+                        try
+                        {
+                            if (repositoryHelper.getClassificationFromEntity(serviceName, entity, omittedClassificationName, methodName) != null)
+                            {
+                                beanValid = false;
+                            }
+                        }
+                        catch (ClassificationErrorException error)
+                        {
+                            // ok - don't care
+                        }
+                    }
+
+                    if (beanValid)
+                    {
+                        results.add(entity);
+                    }
+                }
+            }
+
+            return results;
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Return the entity that matches the requested value.
+     *
+     * @param userId identifier of calling user
+     * @param value  value to search
+     * @param valueParameterName parameter providing value
+     * @param resultTypeGUID unique identifier of the type that the results should match with
+     * @param resultTypeName unique value of the type that the results should match with
+     * @param specificMatchPropertyNames list of property value to look in - if null or empty list then all string properties are checked.
+     * @param limitResultsByStatus By default, relationships in all statuses (other than DELETE) are returned.  However, it is possible
+     *                             to specify a list of statuses (for example ACTIVE) to restrict the results to.  Null means all status values.
+     * @param asOfTime Requests a historical query of the entity.  Null means return the present values.
+     * @param sequencingPropertyName String name of the property that is to be used to sequence the results.
+     *                           Null means do not sequence on a property name (see SequencingOrder).
+     * @param sequencingOrder Enum defining how the results should be ordered.
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing       the query is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     * @return requested entity
+     *
+     * @throws InvalidParameterException one of the parameters is null or invalid.
+     * @throws UserNotAuthorizedException the user is not authorized to issue this request.
+     * @throws PropertyServerException problem retrieving the entity.
+     */
+    public  EntityDetail getEntityByValue(String               userId,
+                                          String               value,
+                                          String               valueParameterName,
+                                          String               resultTypeGUID,
+                                          String               resultTypeName,
+                                          List<String>         specificMatchPropertyNames,
+                                          List<InstanceStatus> limitResultsByStatus,
+                                          Date                 asOfTime,
+                                          SequencingOrder      sequencingOrder,
+                                          String               sequencingPropertyName,
+                                          boolean              forLineage,
+                                          boolean              forDuplicateProcessing,
+                                          Date                 effectiveTime,
+                                          String               methodName) throws InvalidParameterException,
+                                                                                  UserNotAuthorizedException,
+                                                                                  PropertyServerException
+    {
+        List<EntityDetail> results = this.getEntitiesByValue(userId,
+                                                             value,
+                                                             valueParameterName,
+                                                             resultTypeGUID,
+                                                             resultTypeName,
+                                                             specificMatchPropertyNames,
+                                                             true,
+                                                             false,
+                                                             null,
+                                                             null,
+                                                             limitResultsByStatus,
+                                                             asOfTime,
+                                                             sequencingOrder,
+                                                             sequencingPropertyName,
+                                                             forLineage,
+                                                             forDuplicateProcessing,
+                                                             0,
+                                                             invalidParameterHandler.getMaxPagingSize(),
+                                                             effectiveTime,
+                                                             methodName);
+
+
+        if (results != null)
+        {
+            if (results.size() == 1)
+            {
+                return results.get(0);
+            }
+            else if (results.size() > 1)
+            {
+                errorHandler.handleAmbiguousEntityName(value,
+                                                       valueParameterName,
+                                                       resultTypeName,
+                                                       results,
+                                                       methodName);
+            }
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Determine if the entities returned from the repository should be converted to beans and returned to caller.
+     *
+     * @param userId calling user
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param effectiveTime the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName calling method
+     * @param retrievedEntities entities retrieved from the repository
+     * @return list of beans
+     * @throws PropertyServerException problem in converter
+     */
+    public List<B> getValidatedBeans(String             userId,
+                                     Date               effectiveTime,
+                                     boolean            forLineage,
+                                     boolean            forDuplicateProcessing,
+                                     String             methodName,
+                                     List<EntityDetail> retrievedEntities) throws PropertyServerException
+    {
+        List<EntityDetail> validatedEntities = this.validateEntitiesAndAnchorsForRead(userId,
+                                                                                      retrievedEntities,
+                                                                                      forLineage,
+                                                                                      forDuplicateProcessing,
+                                                                                      effectiveTime,
+                                                                                      methodName);
+
+        if (validatedEntities != null)
+        {
+            List<B> results = new ArrayList<>();
+
+            for (EntityDetail entity : validatedEntities)
+            {
+                if (entity != null)
+                {
+                    results.add(converter.getNewBean(beanClass, entity, methodName));
+                }
+            }
+
+            return results;
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Creates a relationship between two elements.
+     * Both elements must be visible to the user to allow the link.  If the relationship already exists with matching effectivity dates,
+     * the properties are updated.
+     *
+     * @param userId                    userId of the user making the request
+     * @param externalSourceGUID        guid of the software capability entity that represented the external source - null for local
+     * @param externalSourceName        name of the software capability entity that represented the external source
+     * @param startingElementGUID       unique id for the starting element's entity
+     * @param startingGUIDParameterName name of the parameter supplying the startingGUID
+     * @param startingElementTypeName   type name of the starting element's entity
+     * @param attachingElementGUID      unique id of the entity for the element that is being attached
+     * @param attachingGUIDParameterName name of the parameter supplying the attachingGUID
+     * @param attachingElementTypeName  type name of the attaching element's entity
+     * @param forLineage                the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing    the request is for duplicate processing and so must not deduplicate
+     * @param attachmentTypeGUID        unique identifier of type of the relationship to create
+     * @param attachmentTypeName        unique name of type of the relationship to create
+     * @param relationshipProperties    properties to add to the relationship or null if no properties to add
+     * @param effectiveFrom             the date when this element is active - null for active now
+     * @param effectiveTo               the date when this element becomes inactive - null for active until deleted
+     * @param effectiveTime             the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName                calling method
+     *
+     * @return unique identifier of the new relationship
+     * @throws InvalidParameterException one of the parameters is null or invalid.
+     * @throws PropertyServerException a problem adding the relationship to the repositories.
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public String linkElementToElement(String             userId,
+                                       String             externalSourceGUID,
+                                       String             externalSourceName,
+                                       String             startingElementGUID,
+                                       String             startingGUIDParameterName,
+                                       String             startingElementTypeName,
+                                       String             attachingElementGUID,
+                                       String             attachingGUIDParameterName,
+                                       String             attachingElementTypeName,
+                                       boolean            forLineage,
+                                       boolean            forDuplicateProcessing,
+                                       String             attachmentTypeGUID,
+                                       String             attachmentTypeName,
+                                       InstanceProperties relationshipProperties,
+                                       Date               effectiveFrom,
+                                       Date               effectiveTo,
+                                       Date               effectiveTime,
+                                       String             methodName) throws InvalidParameterException,
+                                                                             PropertyServerException,
+                                                                             UserNotAuthorizedException
+    {
+        invalidParameterHandler.validateUserId(userId, methodName);
+        invalidParameterHandler.validateGUID(startingElementGUID, startingGUIDParameterName, methodName);
+        invalidParameterHandler.validateGUID(attachingElementGUID, attachingGUIDParameterName, methodName);
+
+        boolean multiLink = false;
+        boolean reversible = false;
+        TypeDef typeDef = repositoryHelper.getTypeDefByName(serviceName,
+                                                            attachmentTypeName);
+
+        if (typeDef instanceof RelationshipDef relationshipDef)
+        {
+            multiLink = relationshipDef.getMultiLink();
+
+            if (relationshipDef.getEndDef1().getAttributeName().equals(relationshipDef.getEndDef2().getAttributeName()))
+            {
+                reversible = true;
+            }
+        }
+
+        EntityDetail bean1Entity = repositoryHandler.getEntityByGUID(userId,
+                                                                     startingElementGUID,
+                                                                     startingGUIDParameterName,
+                                                                     startingElementTypeName,
+                                                                     forLineage,
+                                                                     forDuplicateProcessing,
+                                                                     effectiveTime,
+                                                                     methodName);
+
+        EntityDetail anchor1Entity = this.validateEntityAndAnchorForRead(userId,
+                                                                         startingElementTypeName,
+                                                                         bean1Entity,
+                                                                         startingGUIDParameterName,
+                                                                         true,
+                                                                         false,
+                                                                         forLineage,
+                                                                         forDuplicateProcessing,
+                                                                         effectiveTime,
+                                                                         methodName);
+
+        EntityDetail bean2Entity = repositoryHandler.getEntityByGUID(userId,
+                                                                     attachingElementGUID,
+                                                                     attachingGUIDParameterName,
+                                                                     attachingElementTypeName,
+                                                                     forLineage,
+                                                                     forDuplicateProcessing,
+                                                                     effectiveTime,
+                                                                     methodName);
+
+        EntityDetail anchor2Entity = this.validateEntityAndAnchorForRead(userId,
+                                                                         attachingElementTypeName,
+                                                                         bean2Entity,
+                                                                         attachingGUIDParameterName,
+                                                                         true,
+                                                                         false,
+                                                                         forLineage,
+                                                                         forDuplicateProcessing,
+                                                                         effectiveTime,
+                                                                         methodName);
+
+        /*
+         * Check that the user is able to create relationships
+         */
+        if ((repositoryHelper.isTypeOf(serviceName, attachmentTypeName, OpenMetadataType.ATTACHED_COMMENT_RELATIONSHIP.typeName)) ||
+                (repositoryHelper.isTypeOf(serviceName, attachmentTypeName, OpenMetadataType.ATTACHED_LIKE_RELATIONSHIP.typeName)) ||
+                (repositoryHelper.isTypeOf(serviceName, attachmentTypeName, OpenMetadataType.ATTACHED_TAG_RELATIONSHIP.typeName)) ||
+                (repositoryHelper.isTypeOf(serviceName, attachmentTypeName, OpenMetadataType.ATTACHED_RATING_RELATIONSHIP.typeName)))
+        {
+            if (anchor1Entity != null)
+            {
+                securityVerifier.validateUserForAnchorAddFeedback(userId,
+                                                                  anchor1Entity,
+                                                                  bean2Entity,
+                                                                  repositoryHelper,
+                                                                  serviceName,
+                                                                  methodName);
+            }
+            else
+            {
+                securityVerifier.validateUserForElementAddFeedback(userId,
+                                                                   bean1Entity,
+                                                                   bean2Entity,
+                                                                   repositoryHelper,
+                                                                   serviceName,
+                                                                   methodName);
+            }
+        }
+        else if (anchor1Entity != null)
+        {
+            if (anchor2Entity != null)
+            {
+                if (anchor1Entity.getGUID().equals(anchor2Entity.getGUID()))
+                {
+                    securityVerifier.validateUserForAnchorMemberUpdate(userId,
+                                                                       anchor1Entity,
+                                                                       repositoryHelper,
+                                                                       serviceName,
+                                                                       methodName);
+                }
+                else
+                {
+                    securityVerifier.validateUserForAnchorAttach(userId,
+                                                                 anchor1Entity,
+                                                                 bean2Entity,
+                                                                 attachmentTypeName,
+                                                                 repositoryHelper,
+                                                                 serviceName,
+                                                                 methodName);
+                }
+            }
+        }
+        else if (anchor2Entity == null)
+        {
+            securityVerifier.validateUserForElementAttach(userId,
+                                                          bean1Entity,
+                                                          bean2Entity,
+                                                          attachmentTypeName,
+                                                          repositoryHelper,
+                                                          serviceName,
+                                                          methodName);
+        }
+        else // anchor1 is null but anchor2 is not
+        {
+            securityVerifier.validateUserForAnchorAttach(userId,
+                                                         anchor2Entity,
+                                                         bean1Entity,
+                                                         attachmentTypeName,
+                                                         repositoryHelper,
+                                                         serviceName,
+                                                         methodName);
+        }
+
+
+        /*
+         * The calls above validate the existence of the two entities and that they are visible to the user.
+         * An exception is thrown if there are any problems.
+         * The anchor entities are returned if there are anchor entities associated with a specific end.
+         */
+
+        Relationship newRelationship;
+
+        /*
+         * If the relationship is a multi-link it is ok to create a new relationship.
+         */
+        if (multiLink)
+        {
+            newRelationship = repositoryHandler.createRelationship(userId,
+                                                                   attachmentTypeGUID,
+                                                                   externalSourceGUID,
+                                                                   externalSourceName,
+                                                                   bean1Entity.getGUID(),
+                                                                   bean2Entity.getGUID(),
+                                                                   relationshipProperties,
+                                                                   methodName);
+        }
+        else // uniLink
+        {
+            /*
+             * The next test ensures that only one relationship of this type is created between the 2 elements.
+             */
+            List<Relationship> existingRelationships = repositoryHandler.getRelationshipsBetweenEntities(userId,
+                                                                                                         bean1Entity,
+                                                                                                         startingElementTypeName,
+                                                                                                         bean2Entity.getGUID(),
+                                                                                                         attachmentTypeGUID,
+                                                                                                         attachmentTypeName,
+                                                                                                         2,
+                                                                                                         null,
+                                                                                                         null,
+                                                                                                         SequencingOrder.CREATION_DATE_RECENT,
+                                                                                                         null,
+                                                                                                         forLineage,
+                                                                                                         forDuplicateProcessing,
+                                                                                                         effectiveFrom,
+                                                                                                         effectiveTo,
+                                                                                                         true,
+                                                                                                         methodName);
+
+            if ((existingRelationships == null) && (reversible))
+            {
+                existingRelationships = repositoryHandler.getRelationshipsBetweenEntities(userId,
+                                                                                          bean2Entity,
+                                                                                          startingElementTypeName,
+                                                                                          bean1Entity.getGUID(),
+                                                                                          attachmentTypeGUID,
+                                                                                          attachmentTypeName,
+                                                                                          1,
+                                                                                          null,
+                                                                                          null,
+                                                                                          SequencingOrder.CREATION_DATE_RECENT,
+                                                                                          null,
+                                                                                          forLineage,
+                                                                                          forDuplicateProcessing,
+                                                                                          effectiveFrom,
+                                                                                          effectiveTo,
+                                                                                          true,
+                                                                                          methodName);
+            }
+
+            if (existingRelationships != null)
+            {
+                if (existingRelationships.size() == 1)
+                {
+                    newRelationship = repositoryHandler.updateRelationshipProperties(userId,
+                                                                                     externalSourceGUID,
+                                                                                     externalSourceName,
+                                                                                     existingRelationships.get(0),
+                                                                                     relationshipProperties,
+                                                                                     methodName);
+                }
+                else
+                {
+                    String guids = null;
+
+                    for (Relationship relationship : existingRelationships)
+                    {
+                        if (relationship != null)
+                        {
+                            if (guids == null)
+                            {
+                                guids = "[";
+                            }
+                            else
+                            {
+                                guids = ", ";
+                            }
+
+                            guids = guids + relationship.getGUID() + " ";
+                        }
+                    }
+
+                    if (guids == null)
+                    {
+                        guids = "[]";
+                    }
+                    else
+                    {
+                        guids = guids + "]";
+                    }
+
+                    throw new InvalidParameterException(GenericHandlersErrorCode.MULTIPLE_RELATIONSHIPS_FOUND.getMessageDefinition(attachmentTypeName,
+                                                                                                                                   startingElementTypeName,
+                                                                                                                                   bean1Entity.getGUID(),
+                                                                                                                                   attachingElementTypeName,
+                                                                                                                                   bean2Entity.getGUID(),
+                                                                                                                                   guids,
+                                                                                                                                   methodName,
+                                                                                                                                   serverName),
+                                                        this.getClass().getName(),
+                                                        methodName,
+                                                        attachmentTypeName);
+                }
+            }
+            else
+            {
+                newRelationship = repositoryHandler.createRelationship(userId,
+                                                                       attachmentTypeGUID,
+                                                                       externalSourceGUID,
+                                                                       externalSourceName,
+                                                                       bean1Entity.getGUID(),
+                                                                       bean2Entity.getGUID(),
+                                                                       relationshipProperties,
+                                                                       methodName);
+            }
+        }
+
+        if (newRelationship != null)
+        {
+            return newRelationship.getGUID();
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Creates a relationship between two elements.
+     * Both elements must be visible to the user to allow the link. No check is done for the relationship existence before creating it.
+     *
+     * @param userId                    userId of the user making the request
+     * @param externalSourceGUID        guid of the software capability entity that represented the external source - null for local
+     * @param externalSourceName        name of the software capability entity that represented the external source
+     * @param startingElementGUID       unique id for the starting element's entity
+     * @param startingGUIDParameterName name of the parameter supplying the startingGUID
+     * @param attachingElementGUID      unique id of the entity for the element that is being attached
+     * @param attachingGUIDParameterName name of the parameter supplying the attachingGUID
+     * @param attachmentTypeGUID        unique identifier of type of the relationship to create
+     * @param relationshipProperties    properties to add to the relationship or null if no properties to add
+     * @param methodName                calling method
+     *
+     * @return unique identifier of the new relationship
+     * @throws InvalidParameterException one of the parameters is null or invalid.
+     * @throws PropertyServerException a problem adding the relationship to the repositories.
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public String uncheckedLinkElementToElement(String             userId,
+                                                String             externalSourceGUID,
+                                                String             externalSourceName,
+                                                String             startingElementGUID,
+                                                String             startingGUIDParameterName,
+                                                String             attachingElementGUID,
+                                                String             attachingGUIDParameterName,
+                                                String             attachmentTypeGUID,
+                                                InstanceProperties relationshipProperties,
+                                                String             methodName) throws InvalidParameterException,
+                                                                                      PropertyServerException,
+                                                                                      UserNotAuthorizedException
+    {
+        invalidParameterHandler.validateUserId(userId, methodName);
+        invalidParameterHandler.validateGUID(startingElementGUID, startingGUIDParameterName, methodName);
+        invalidParameterHandler.validateGUID(attachingElementGUID, attachingGUIDParameterName, methodName);
+
+        Relationship newRelationship = repositoryHandler.createRelationship(userId,
+                                                                            attachmentTypeGUID,
+                                                                            externalSourceGUID,
+                                                                            externalSourceName,
+                                                                            startingElementGUID,
+                                                                            attachingElementGUID,
+                                                                            relationshipProperties,
+                                                                            methodName);
+
+        if (newRelationship != null)
+        {
+            return newRelationship.getGUID();
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Updates a relationship between two elements.
+     * Both elements must be visible to the user to allow the update.
+     *
+     * @param userId                    userId of the user making the request
+     * @param externalSourceGUID        guid of the software capability entity that represented the external source - null for local
+     * @param externalSourceName        name of the software capability entity that represented the external source
+     * @param startingGUID              unique id for the starting element's entity
+     * @param startingGUIDParameterName name of the parameter supplying the startingGUID
+     * @param startingElementTypeName   type name of the starting element's entity
+     * @param attachingGUID             unique id of the entity for the element that is being attached
+     * @param attachingGUIDParameterName name of the parameter supplying the attachingGUID
+     * @param attachingElementTypeName  type name of the attaching element's entity
+     * @param forLineage                the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing    the request is for duplicate processing and so must not deduplicate
+     * @param attachmentTypeGUID        unique identifier of type of the relationship to create
+     * @param attachmentTypeName        unique name of type of the relationship to create
+     * @param isMergeUpdate             should the supplied properties be merged with existing properties (true) by replacing just the properties with
+     *                                  matching names, or should the entire properties of the instance be replaced?
+     * @param relationshipProperties    properties to add to the relationship or null if no properties to add
+     * @param effectiveTime             the time that the retrieved elements must be effective for
+     * @param methodName                calling method
+     *
+     * @throws InvalidParameterException one of the parameters is null or invalid.
+     * @throws PropertyServerException a problem adding the relationship to the repositories.
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void updateElementToElementLink(String             userId,
+                                           String             externalSourceGUID,
+                                           String             externalSourceName,
+                                           String             startingGUID,
+                                           String             startingGUIDParameterName,
+                                           String             startingElementTypeName,
+                                           String             attachingGUID,
+                                           String             attachingGUIDParameterName,
+                                           String             attachingElementTypeName,
+                                           boolean            forLineage,
+                                           boolean            forDuplicateProcessing,
+                                           String             attachmentTypeGUID,
+                                           String             attachmentTypeName,
+                                           boolean            isMergeUpdate,
+                                           InstanceProperties relationshipProperties,
+                                           Date               effectiveTime,
+                                           String             methodName) throws InvalidParameterException,
+                                                                                 PropertyServerException,
+                                                                                 UserNotAuthorizedException
+    {
+        invalidParameterHandler.validateUserId(userId, methodName);
+        invalidParameterHandler.validateGUID(startingGUID, startingGUIDParameterName, methodName);
+        invalidParameterHandler.validateGUID(attachingGUID, attachingGUIDParameterName, methodName);
+
+        EntityDetail startingElementEntity = repositoryHandler.getEntityByGUID(userId,
+                                                                               startingGUID,
+                                                                               startingGUIDParameterName,
+                                                                               startingElementTypeName,
+                                                                               forLineage,
+                                                                               forDuplicateProcessing,
+                                                                               effectiveTime,
+                                                                               methodName);
+
+        EntityDetail startingElementAnchorEntity = this.validateEntityAndAnchorForRead(userId,
+                                                                                       startingElementTypeName,
+                                                                                       startingElementEntity,
+                                                                                       startingGUIDParameterName,
+                                                                                       true,
+                                                                                       false,
+                                                                                       forLineage,
+                                                                                       forDuplicateProcessing,
+                                                                                       effectiveTime,
+                                                                                       methodName);
+
+        String startingElementAnchorGUID = startingGUID;
+
+        if (startingElementAnchorEntity != null)
+        {
+            startingElementAnchorGUID = startingElementAnchorEntity.getGUID();
+        }
+
+        EntityDetail  attachingElementEntity = repositoryHandler.getEntityByGUID(userId,
+                                                                                 attachingGUID,
+                                                                                 attachingGUIDParameterName,
+                                                                                 attachingElementTypeName,
+                                                                                 forLineage,
+                                                                                 forDuplicateProcessing,
+                                                                                 effectiveTime,
+                                                                                 methodName);
+
+        EntityDetail attachingElementAnchorEntity = this.validateEntityAndAnchorForRead(userId,
+                                                                                        attachingElementTypeName,
+                                                                                        attachingElementEntity,
+                                                                                        attachingGUIDParameterName,
+                                                                                        true,
+                                                                                        false,
+                                                                                        forLineage,
+                                                                                        forDuplicateProcessing,
+                                                                                        effectiveTime,
+                                                                                        methodName);
+
+        /*
+         * The calls above validate the existence of the two entities and that they are visible to the user.
+         * An exception is thrown if there are any problems.
+         * The anchor entities are returned if there are anchor entities associated with a specific end.
+         * Next step is to find the relationship to update
+         */
+        Relationship relationship = repositoryHandler.getRelationshipBetweenEntities(userId,
+                                                                                     startingGUID,
+                                                                                     startingElementTypeName,
+                                                                                     attachingGUID,
+                                                                                     attachmentTypeGUID,
+                                                                                     attachmentTypeName,
+                                                                                     null,
+                                                                                     null,
+                                                                                     SequencingOrder.CREATION_DATE_RECENT,
+                                                                                     null,
+                                                                                     forLineage,
+                                                                                     forDuplicateProcessing,
+                                                                                     effectiveTime,
+                                                                                     methodName);
+
+        if (relationship != null)
+        {
+            InstanceProperties newProperties = setUpNewProperties(isMergeUpdate,
+                                                                  relationshipProperties,
+                                                                  relationship.getProperties());
+
+            repositoryHandler.updateRelationshipProperties(userId,
+                                                           externalSourceGUID,
+                                                           externalSourceName,
+                                                           relationship,
+                                                           newProperties,
+                                                           methodName);
+
+
+            /*
+             * Now that this relationship is in place, the anchorGUID might be set up
+             */
+            if (startingElementAnchorEntity == null)
+            {
+                this.reEvaluateAnchorGUID(startingGUID,
+                                          startingGUIDParameterName,
+                                          startingElementTypeName,
+                                          startingElementEntity,
+                                          null,
+                                          forLineage,
+                                          forDuplicateProcessing,
+                                          effectiveTime,
+                                          methodName);
+            }
+
+            if (attachingElementAnchorEntity == null)
+            {
+                this.reEvaluateAnchorGUID(attachingGUID,
+                                          attachingGUIDParameterName,
+                                          attachingElementTypeName,
+                                          attachingElementEntity,
+                                          null,
+                                          forLineage,
+                                          forDuplicateProcessing,
+                                          effectiveTime,
+                                          methodName);
+            }
+        }
+    }
+
+
+    /**
+     * Removes a relationship between two specified elements.  If after the relationship is deleted, one of the ends has now
+     * lost its anchor, then that entity is deleted. Anchored entities should not be left unanchored. This can cause a cascading effect
+     * if the anchored elements are organized in a hierarchy, such as a schema or a comment conversation.
+     *
+     * @param userId                    userId of the user making the request
+     * @param onlyCreatorPermitted      operation only permitted if the userId was the same one that created the relationship
+     * @param externalSourceGUID        guid of the software capability entity that represented the external source - null for local
+     * @param externalSourceName        name of the software capability entity that represented the external source
+     * @param startingGUID              unique id for the starting element's entity
+     * @param startingGUIDParameterName name of the parameter supplying the startingGUID
+     * @param startingElementTypeName   type name of the starting element's entity
+     * @param attachedGUID              unique id of the entity for the element that is being detached
+     * @param attachedGUIDParameterName name of the parameter supplying the attachedGUID
+     * @param attachedElementTypeGUID   type GUID of the attaching element's entity
+     * @param attachedElementTypeName   type name of the attaching element's entity
+     * @param forLineage the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing the request is for duplicate processing and so must not deduplicate
+     * @param attachmentTypeGUID        unique identifier of type of the relationship to remove
+     * @param attachmentTypeName        unique name of type of the relationship to remove
+     * @param effectiveTime             the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName                calling method
+     *
+     * @throws InvalidParameterException one of the parameters is null or invalid.
+     * @throws PropertyServerException a problem updating relationship in the repositories.
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void unlinkElementFromElement(String       userId,
+                                         boolean      onlyCreatorPermitted,
+                                         String       externalSourceGUID,
+                                         String       externalSourceName,
+                                         String       startingGUID,
+                                         String       startingGUIDParameterName,
+                                         String       startingElementTypeName,
+                                         String       attachedGUID,
+                                         String       attachedGUIDParameterName,
+                                         String       attachedElementTypeGUID,
+                                         String       attachedElementTypeName,
+                                         boolean      forLineage,
+                                         boolean      forDuplicateProcessing,
+                                         String       attachmentTypeGUID,
+                                         String       attachmentTypeName,
+                                         Date         effectiveTime,
+                                         String       methodName) throws InvalidParameterException,
+                                                                         PropertyServerException,
+                                                                         UserNotAuthorizedException
+    {
+        invalidParameterHandler.validateUserId(userId, methodName);
+        invalidParameterHandler.validateGUID(startingGUID, startingGUIDParameterName, methodName);
+        invalidParameterHandler.validateGUID(attachedGUID, attachedGUIDParameterName, methodName);
+
+        Relationship  relationship = repositoryHandler.getRelationshipBetweenEntities(userId,
+                                                                                      startingGUID,
+                                                                                      startingElementTypeName,
+                                                                                      attachedGUID,
+                                                                                      attachmentTypeGUID,
+                                                                                      attachmentTypeName,
+                                                                                      null,
+                                                                                      null,
+                                                                                      SequencingOrder.CREATION_DATE_RECENT,
+                                                                                      null,
+                                                                                      forLineage,
+                                                                                      forDuplicateProcessing,
+                                                                                      effectiveTime,
+                                                                                      methodName);
+
+        this.unlinkElementFromElement(userId,
+                                      onlyCreatorPermitted,
+                                      externalSourceGUID,
+                                      externalSourceName,
+                                      startingGUID,
+                                      startingGUIDParameterName,
+                                      startingElementTypeName,
+                                      attachedGUID,
+                                      attachedGUIDParameterName,
+                                      attachedElementTypeGUID,
+                                      attachedElementTypeName,
+                                      forLineage,
+                                      forDuplicateProcessing,
+                                      attachmentTypeName,
+                                      relationship,
+                                      effectiveTime,
+                                      methodName);
+    }
+
+
+    /**
+     * Removes a relationship between two specified elements.  If after the relationship is deleted, one of the ends has now
+     * lost its anchor, then that entity is deleted. Anchored entities should not be left unanchored. This can cause a cascading effect
+     * if the anchored elements are organized in a hierarchy, such as a schema or a comment conversation.
+     *
+     * @param userId                    userId of the user making the request
+     * @param onlyCreatorPermitted      operation only permitted if the userId was the same one that created the relationship
+     * @param externalSourceGUID        guid of the software capability entity that represented the external source - null for local
+     * @param externalSourceName        name of the software capability entity that represented the external source
+     * @param startingGUID              unique id for the starting element's entity
+     * @param startingGUIDParameterName name of the parameter supplying the startingGUID
+     * @param startingElementTypeName   type name of the starting element's entity
+     * @param attachedGUID              unique id of the entity for the element that is being detached
+     * @param attachedGUIDParameterName name of the parameter supplying the attachedGUID
+     * @param attachedElementTypeGUID   type GUID of the attaching element's entity
+     * @param attachedElementTypeName   type name of the attaching element's entity
+     * @param forLineage                the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing    the request is for duplicate processing and so must not deduplicate
+     * @param attachmentTypeName        unique name of type of the relationship to remove
+     * @param relationship              specific relationship to remove
+     * @param effectiveTime             the time that the retrieved elements must be effective for
+     * @param methodName                calling method
+     *
+     * @throws InvalidParameterException one of the parameters is null or invalid.
+     * @throws PropertyServerException a problem updating relationship in the repositories.
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void unlinkElementFromElement(String       userId,
+                                         boolean      onlyCreatorPermitted,
+                                         String       externalSourceGUID,
+                                         String       externalSourceName,
+                                         String       startingGUID,
+                                         String       startingGUIDParameterName,
+                                         String       startingElementTypeName,
+                                         String       attachedGUID,
+                                         String       attachedGUIDParameterName,
+                                         String       attachedElementTypeGUID,
+                                         String       attachedElementTypeName,
+                                         boolean      forLineage,
+                                         boolean      forDuplicateProcessing,
+                                         String       attachmentTypeName,
+                                         Relationship relationship,
+                                         Date         effectiveTime,
+                                         String       methodName) throws InvalidParameterException,
+                                                                         PropertyServerException,
+                                                                         UserNotAuthorizedException
+    {
+        final String relationshipParameterName = "relationship";
+
+        invalidParameterHandler.validateUserId(userId, methodName);
+        invalidParameterHandler.validateGUID(startingGUID, startingGUIDParameterName, methodName);
+        invalidParameterHandler.validateGUID(attachedGUID, attachedGUIDParameterName, methodName);
+        invalidParameterHandler.validateObject(relationship, relationshipParameterName, methodName);
+
+        this.validateRelationshipChange(userId,
+                                        relationship,
+                                        true,
+                                        forLineage,
+                                        forDuplicateProcessing,
+                                        effectiveTime,
+                                        methodName);
+
+        EntityDetail startingElementEntity = repositoryHandler.getEntityByGUID(userId,
+                                                                               startingGUID,
+                                                                               startingGUIDParameterName,
+                                                                               startingElementTypeName,
+                                                                               forLineage,
+                                                                               forDuplicateProcessing,
+                                                                               effectiveTime,
+                                                                               methodName);
+
+        EntityDetail startingElementAnchorEntity = this.validateEntityAndAnchorForRead(userId,
+                                                                                       startingElementTypeName,
+                                                                                       startingElementEntity,
+                                                                                       startingGUIDParameterName,
+                                                                                       true,
+                                                                                       false,
+                                                                                       forLineage,
+                                                                                       forDuplicateProcessing,
+                                                                                       effectiveTime,
+                                                                                       methodName);
+
+        String startingElementAnchorGUID = startingGUID;
+
+        String newStartingAnchorGUID = null;
+        String newAttachedAnchorGUID = null;
+
+
+        if (startingElementAnchorEntity != null)
+        {
+            startingElementAnchorGUID = startingElementAnchorEntity.getGUID();
+        }
+
+        EntityDetail attachedElementEntity = repositoryHandler.getEntityByGUID(userId,
+                                                                               attachedGUID,
+                                                                               attachedGUIDParameterName,
+                                                                               attachedElementTypeName,
+                                                                               forLineage,
+                                                                               forDuplicateProcessing,
+                                                                               effectiveTime,
+                                                                               methodName);
+
+        EntityDetail attachedElementAnchorEntity = this.validateEntityAndAnchorForRead(userId,
+                                                                                       attachedElementTypeName,
+                                                                                       attachedElementEntity,
+                                                                                       attachedGUIDParameterName,
+                                                                                       true,
+                                                                                       false,
+                                                                                       forLineage,
+                                                                                       forDuplicateProcessing,
+                                                                                       effectiveTime,
+                                                                                       methodName);
+
+        if ((!onlyCreatorPermitted) || (userId.equals(relationship.getCreatedBy())))
+        {
+            repositoryHandler.removeRelationship(userId,
+                                                 externalSourceGUID,
+                                                 externalSourceName,
+                                                 relationship,
+                                                 methodName);
+        }
+        else
+        {
+            throw new UserNotAuthorizedException(GenericHandlersErrorCode.ONLY_CREATOR_CAN_DELETE.getMessageDefinition(methodName,
+                                                                                                                       startingElementTypeName,
+                                                                                                                       startingGUID,
+                                                                                                                       attachedElementTypeName,
+                                                                                                                       attachedGUID,
+                                                                                                                       userId),
+                                                 this.getClass().getName(),
+                                                 methodName,
+                                                 userId);
+        }
+
+        /*
+         * Now that this relationship is gone, the anchorGUID may now be wrong
+         */
+
+        if ((startingElementAnchorEntity != null) && (! startingElementEntity.getGUID().equals(startingElementAnchorEntity.getGUID())))
+        {
+            newStartingAnchorGUID = this.reEvaluateAnchorGUID(startingGUID,
+                                                              startingGUIDParameterName,
+                                                              startingElementTypeName,
+                                                              startingElementAnchorEntity.getGUID(),
+                                                              forLineage,
+                                                              forDuplicateProcessing,
+                                                              effectiveTime,
+                                                              methodName);
+        }
+
+
+        if ((attachedElementAnchorEntity != null) && (! attachedElementAnchorEntity.getGUID().equals(attachedElementEntity.getGUID())))
+        {
+            newAttachedAnchorGUID = this.reEvaluateAnchorGUID(attachedGUID,
+                                                              attachedGUIDParameterName,
+                                                              attachedElementTypeName,
+                                                              attachedElementAnchorEntity.getGUID(),
+                                                              forLineage,
+                                                              forDuplicateProcessing,
+                                                              effectiveTime,
+                                                              methodName);
+        }
+
+
+        /*
+         * If the attached element had an anchor before the relationship deletion, but now is without an anchor, then delete the bean.
+         */
+        if (attachedElementAnchorEntity != null && newAttachedAnchorGUID == null)
+        {
+            try
+            {
+                this.deleteAnchoredBeanInRepository(userId,
+                                                    externalSourceGUID,
+                                                    externalSourceName,
+                                                    attachedGUID,
+                                                    attachedGUIDParameterName,
+                                                    attachedElementTypeGUID,
+                                                    attachedElementTypeName,
+                                                    false,
+                                                    null,
+                                                    null,
+                                                    attachedElementAnchorEntity.getGUID(),
+                                                    new LinkedHashSet<>(),
+                                                    forLineage,
+                                                    forDuplicateProcessing,
+                                                    effectiveTime,
+                                                    methodName);
+            }
+            catch (InvalidParameterException | PropertyServerException| UserNotAuthorizedException error)
+            {
+                // This method should succeed, because the relationship has been deleted. Issue an audit log indicating that the bean delete failed
+                auditLog.logException(methodName,
+                                      GenericHandlersAuditCode.UNABLE_TO_DELETE_UNANCHORED_BEAN.getMessageDefinition(serviceName,
+                                                                                                                     attachedGUID,
+                                                                                                                     attachedElementTypeName,
+                                                                                                                     attachedElementTypeGUID,
+                                                                                                                     methodName,
+                                                                                                                     error.getClass().getName(),
+                                                                                                                     error.getMessage()),
+                                      error);
+
+            }
+        }
+
+        /*
+         * If the starting element had an anchor before the relationship deletion, but now is without an anchor, then delete the bean.
+         */
+        if (startingElementAnchorEntity != null && newStartingAnchorGUID == null)
+        {
+            final String startingElementTypeGUID = repositoryHelper.getTypeDefByName(methodName, startingElementTypeName).getGUID();
+
+            try
+            {
+                this.deleteAnchoredBeanInRepository(userId,
+                                                    externalSourceGUID,
+                                                    externalSourceName,
+                                                    startingGUID,
+                                                    startingGUIDParameterName,
+                                                    startingElementTypeGUID,
+                                                    startingElementTypeName,
+                                                    false,
+                                                    null,
+                                                    null,
+                                                    startingElementAnchorEntity.getGUID(),
+                                                    new LinkedHashSet<>(),
+                                                    forLineage,
+                                                    forDuplicateProcessing,
+                                                    effectiveTime,
+                                                    methodName);
+            }
+            catch (InvalidParameterException | PropertyServerException| UserNotAuthorizedException error)
+            {
+                // This method should succeed, because the relationship has been deleted. Issue an audit log indicating that the bean delete failed
+                auditLog.logException(methodName,
+                                      GenericHandlersAuditCode.UNABLE_TO_DELETE_UNANCHORED_BEAN.getMessageDefinition(serviceName,
+                                                                                                                     startingGUID,
+                                                                                                                     startingElementTypeName,
+                                                                                                                     startingElementTypeGUID,
+                                                                                                                     methodName,
+                                                                                                                     error.getClass().getName(),
+                                                                                                                     error.getMessage()),
+                                      error);
+            }
+        }
+    }
+
+
+    /**
+     * Calls unlinkElementFromElement for all relationships of a certain type emanating from the requested element.
+     *
+     * @param userId                    userId of the user making the request
+     * @param onlyCreatorPermitted      operation only permitted if the userId was the same one that created the relationship
+     * @param externalSourceGUID        guid of the software capability entity that represented the external source - null for local
+     * @param externalSourceName        name of the software capability entity that represented the external source
+     * @param startingGUID              unique id for the starting element's entity
+     * @param startingGUIDParameterName name of the parameter supplying the startingGUID
+     * @param startingElementTypeName   type name of the starting element's entity
+     * @param forLineage                the request is to support lineage retrieval this means entities with the Memento classification can be returned
+     * @param forDuplicateProcessing    the request is for duplicate processing and so must not deduplicate
+     * @param attachmentTypeGUID        unique identifier of type of the relationship to create
+     * @param attachmentTypeName        unique name of type of the relationship to create
+     * @param effectiveTime             the time that the retrieved elements must be effective for (null for any time, new Date() for now)
+     * @param methodName                calling method
+     *
+     * @throws InvalidParameterException one of the parameters is null or invalid.
+     * @throws PropertyServerException a problem updating the relationships in the repositories.
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void unlinkAllElements(String       userId,
+                                  boolean      onlyCreatorPermitted,
+                                  String       externalSourceGUID,
+                                  String       externalSourceName,
+                                  String       startingGUID,
+                                  String       startingGUIDParameterName,
+                                  String       startingElementTypeName,
+                                  boolean      forLineage,
+                                  boolean      forDuplicateProcessing,
+                                  String       attachmentTypeGUID,
+                                  String       attachmentTypeName,
+                                  Date         effectiveTime,
+                                  String       methodName) throws InvalidParameterException,
+                                                                  PropertyServerException,
+                                                                  UserNotAuthorizedException
+    {
+        final String entityProxyParameterName = "entityProxy.getGUID()";
+
+        invalidParameterHandler.validateUserId(userId, methodName);
+        invalidParameterHandler.validateGUID(startingGUID, startingGUIDParameterName, methodName);
+
+        EntityDetail startingEntity = repositoryHandler.getEntityByGUID(userId,
+                                                                        startingGUID,
+                                                                        startingGUIDParameterName,
+                                                                        startingElementTypeName,
+                                                                        forLineage,
+                                                                        forDuplicateProcessing,
+                                                                        effectiveTime,
+                                                                        methodName);
+
+        RepositoryRelationshipsIterator iterator = new RepositoryRelationshipsIterator(repositoryHandler,
+                                                                                       invalidParameterHandler,
+                                                                                       userId,
+                                                                                       startingEntity,
+                                                                                       startingElementTypeName,
+                                                                                       attachmentTypeGUID,
+                                                                                       attachmentTypeName,
+                                                                                       2,
+                                                                                       null,
+                                                                                       null,
+                                                                                       SequencingOrder.CREATION_DATE_RECENT,
+                                                                                       null,
+                                                                                       forLineage,
+                                                                                       forDuplicateProcessing,
+                                                                                       0,
+                                                                                       invalidParameterHandler.getMaxPagingSize(),
+                                                                                       effectiveTime,
+                                                                                       methodName);
+
+        while (iterator.moreToReceive())
+        {
+            Relationship relationship = iterator.getNext();
+            EntityProxy  entityProxy  = repositoryHandler.getOtherEnd(startingEntity.getGUID(), startingElementTypeName, relationship, 2, methodName);
+
+            if ((entityProxy != null) && (entityProxy.getType() != null))
+            {
+                this.unlinkElementFromElement(userId,
+                                              onlyCreatorPermitted,
+                                              externalSourceGUID,
+                                              externalSourceName,
+                                              startingGUID,
+                                              startingGUIDParameterName,
+                                              startingElementTypeName,
+                                              entityProxy.getGUID(),
+                                              entityProxyParameterName,
+                                              entityProxy.getType().getTypeDefGUID(),
+                                              entityProxy.getType().getTypeDefName(),
+                                              forLineage,
+                                              forDuplicateProcessing,
+                                              attachmentTypeGUID,
+                                              attachmentTypeName,
+                                              effectiveTime,
+                                              methodName);
+            }
+        }
+    }
+
+
+    /**
+     * Set up the effectivity times for an element not using a builder - typically a relationship.
+     *
+     * @param currentProperties other property values for the element
+     * @param effectiveFrom supplied starting time for this element (null for all time)
+     * @param effectiveTo supplied ending time for this element
+     * @return correctly filled out properties
+     */
+    InstanceProperties setUpEffectiveDates(InstanceProperties currentProperties,
+                                           Date               effectiveFrom,
+                                           Date               effectiveTo)
+    {
+        InstanceProperties properties = currentProperties;
+
+        if ((effectiveFrom != null) || (effectiveTo != null))
+        {
+            if (properties == null)
+            {
+                properties = new InstanceProperties();
+            }
+
+            properties.setEffectiveFromTime(effectiveFrom);
+            properties.setEffectiveToTime(effectiveTo);
+        }
+
+        return properties;
+    }
+}

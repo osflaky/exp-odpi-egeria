@@ -1,0 +1,175 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ * Copyright Contributors to the ODPi Egeria project.
+ */
+
+plugins {
+    id 'org.springframework.boot'
+}
+
+dependencies {
+    compileOnly project(':open-metadata-implementation:user-security:token-controller')
+    implementation 'org.springframework.boot:spring-boot'
+    testImplementation('org.springframework.boot:spring-boot-starter-test')
+    implementation 'org.springframework.boot:spring-boot-autoconfigure'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.apache.tomcat.embed:tomcat-embed-core'
+    implementation 'org.springframework.boot:spring-boot-starter-tomcat'
+    implementation 'org.springframework:spring-web'
+    implementation 'jakarta.servlet:jakarta.servlet-api'
+
+    runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
+    implementation 'org.springframework:spring-beans'
+    implementation 'org.springframework:spring-core'
+    implementation 'org.springframework:spring-context'
+    compileOnly project(':open-metadata-implementation:frameworks:audit-log-framework')
+    compileOnly project(':open-metadata-implementation:frameworks:open-metadata-framework')
+    implementation project(':open-metadata-implementation:frameworks:open-connector-framework')
+    implementation project(':open-metadata-implementation:server-operations:server-operations-api')
+    implementation project(':open-metadata-implementation:server-operations:server-operations-server')
+    runtimeOnly project(':open-metadata-implementation:server-operations:server-operations-spring')
+    implementation project(':open-metadata-implementation:admin-services:admin-services-api')
+    implementation project(':open-metadata-implementation:admin-services:admin-services-server')
+    implementation project(':open-metadata-implementation:common-services:metadata-security:metadata-security-server')
+    implementation project(':open-metadata-implementation:common-services:multi-tenant')
+    compileOnly project(':open-metadata-implementation:common-services:ffdc-services')
+    runtimeOnly 'ch.qos.logback:logback-classic'
+    implementation project(':open-metadata-implementation:adapters:authentication-plugins:http-helper')
+    compileOnly project(':open-metadata-implementation:user-security:token-manager')
+    implementation 'org.slf4j:slf4j-api'
+    compileOnly 'com.fasterxml.jackson.core:jackson-annotations'
+    compileOnly 'com.fasterxml.jackson.core:jackson-databind'
+    compileOnly 'com.fasterxml.jackson.core:jackson-core'
+    runtimeOnly 'org.hibernate:hibernate-validator'
+    runtimeOnly project(':open-metadata-implementation:user-security:user-authn')
+    runtimeOnly project(':open-metadata-implementation:platform-services:platform-services-spring')
+    runtimeOnly project(':open-metadata-implementation:admin-services:admin-services-spring')
+    runtimeOnly 'org.springdoc:springdoc-openapi-starter-webmvc-ui'
+    compileOnly 'io.swagger.core.v3:swagger-annotations-jakarta'
+
+    // For PackagedPlatformSmokeTest - this module had no tests at all before it
+    testImplementation 'org.junit.jupiter:junit-jupiter-api'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    // Used at runtime but reached only transitively - declared directly so the classpath is explicit
+    runtimeOnly 'org.hibernate.validator:hibernate-validator'
+    testRuntimeOnly 'org.opentest4j:opentest4j'
+
+    // The following are only included at runtime for the full platform (ie adminChassisOnly is not set as a property)
+    if (!project.hasProperty("adminChassisOnly")) {
+        runtimeOnly project(':open-metadata-implementation:view-server-generic-services:actor-manager:actor-manager-spring')
+        runtimeOnly project(':open-metadata-implementation:view-server-generic-services:asset-maker:asset-maker-spring')
+        runtimeOnly project(':open-metadata-implementation:view-server-generic-services:automated-curation:automated-curation-spring')
+        runtimeOnly project(':open-metadata-implementation:view-server-generic-services:classification-explorer:classification-explorer-spring')
+        runtimeOnly project(':open-metadata-implementation:view-server-generic-services:collection-manager:collection-manager-spring')
+        runtimeOnly project(':open-metadata-implementation:view-server-generic-services:connection-maker:connection-maker-spring')
+        runtimeOnly project(':open-metadata-implementation:view-server-generic-services:external-links:external-links-spring')
+        runtimeOnly project(':open-metadata-implementation:view-server-generic-services:feedback-manager:feedback-manager-spring')
+        runtimeOnly project(':open-metadata-implementation:view-server-generic-services:governance-officer:governance-officer-spring')
+        runtimeOnly project(':open-metadata-implementation:view-server-generic-services:lineage-linker:lineage-linker-spring')
+        runtimeOnly project(':open-metadata-implementation:view-server-generic-services:metadata-expert:metadata-expert-spring')
+        runtimeOnly project(':open-metadata-implementation:view-server-generic-services:multi-language:multi-language-spring')
+        runtimeOnly project(':open-metadata-implementation:view-server-generic-services:schema-maker:schema-maker-spring')
+        runtimeOnly project(':open-metadata-implementation:view-server-generic-services:time-keeper:time-keeper-spring')
+        runtimeOnly project(':open-metadata-implementation:view-server-generic-services:valid-metadata:valid-metadata-spring')
+
+        runtimeOnly project(':open-metadata-implementation:view-services:action-author:action-author-spring')
+        runtimeOnly project(':open-metadata-implementation:view-services:asset-catalog:asset-catalog-spring')
+        runtimeOnly project(':open-metadata-implementation:view-services:community-matters:community-matters-spring')
+        runtimeOnly project(':open-metadata-implementation:view-services:data-designer:data-designer-spring')
+        runtimeOnly project(':open-metadata-implementation:view-services:data-discovery:data-discovery-spring')
+        runtimeOnly project(':open-metadata-implementation:view-services:data-engineer:data-engineer-spring')
+        runtimeOnly project(':open-metadata-implementation:view-services:data-officer:data-officer-spring')
+        runtimeOnly project(':open-metadata-implementation:view-services:devops-pipeline:devops-pipeline-spring')
+        runtimeOnly project(':open-metadata-implementation:view-services:digital-business:digital-business-spring')
+        runtimeOnly project(':open-metadata-implementation:view-services:glossary-manager:glossary-manager-spring')
+        runtimeOnly project(':open-metadata-implementation:view-services:location-arena:location-arena-spring')
+        runtimeOnly project(':open-metadata-implementation:view-services:my-profile:my-profile-spring')
+        runtimeOnly project(':open-metadata-implementation:view-services:notification-manager:notification-manager-spring')
+        runtimeOnly project(':open-metadata-implementation:view-services:people-organizer:people-organizer-spring')
+        runtimeOnly project(':open-metadata-implementation:view-services:privacy-officer:privacy-officer-spring')
+        runtimeOnly project(':open-metadata-implementation:view-services:product-catalog:product-catalog-spring')
+        runtimeOnly project(':open-metadata-implementation:view-services:product-manager:product-manager-spring')
+        runtimeOnly project(':open-metadata-implementation:view-services:project-manager:project-manager-spring')
+        runtimeOnly project(':open-metadata-implementation:view-services:reference-data:reference-data-spring')
+        runtimeOnly project(':open-metadata-implementation:view-services:runtime-manager:runtime-manager-spring')
+        runtimeOnly project(':open-metadata-implementation:view-services:security-officer:security-officer-spring')
+        runtimeOnly project(':open-metadata-implementation:view-services:solution-architect:solution-architect-spring')
+        runtimeOnly project(':open-metadata-implementation:view-services:subject-area:subject-area-spring')
+        runtimeOnly project(':open-metadata-implementation:view-services:template-manager:template-manager-spring')
+
+        runtimeOnly project(':open-metadata-implementation:engine-services:survey-action:survey-action-spring')
+        runtimeOnly project(':open-metadata-implementation:engine-services:repository-governance:repository-governance-spring')
+        runtimeOnly project(':open-metadata-implementation:engine-services:governance-action:governance-action-spring')
+        runtimeOnly project(':open-metadata-implementation:engine-services:watchdog-action:watchdog-action-spring')
+
+        runtimeOnly project(':open-metadata-implementation:repository-services:repository-services-spring')
+
+        runtimeOnly project(':open-metadata-implementation:access-services:omf-metadata-management:omf-metadata-spring')
+        runtimeOnly project(':open-metadata-implementation:access-services:ocf-metadata-management:ocf-metadata-spring')
+        runtimeOnly project(':open-metadata-implementation:access-services:gaf-metadata-management:gaf-metadata-spring')
+
+        runtimeOnly project(':open-metadata-implementation:governance-server-services:integration-daemon-services:integration-daemon-services-spring')
+        runtimeOnly project(':open-metadata-implementation:governance-server-services:engine-host-services:engine-host-services-spring')
+
+        runtimeOnly project(':open-metadata-conformance-suite:open-metadata-conformance-suite-spring')
+    }
+}
+
+description = 'OMAG Server Platform Chassis for Spring'
+
+bootJar {
+    // PropertiesLauncher rather than the default JarLauncher, because it honours -Dloader.path - which is
+    // how the platform picks up connector jars at runtime: 'lib' holds the connectors built here, and
+    // 'extra' is where connectors from outside this build are dropped in.
+    //
+    // Spring Boot 3.2 moved the loader classes from org.springframework.boot.loader to
+    // org.springframework.boot.loader.launch.  The old name leaves a jar whose manifest names a class that
+    // is not in it, which fails at startup with ClassNotFoundException and cannot be caught by any test
+    // that starts the platform in-process rather than from the packaged jar.
+    manifest {
+        attributes 'Main-Class': 'org.springframework.boot.loader.launch.PropertiesLauncher'
+    }
+}
+
+springBoot {
+    buildInfo()
+}
+
+java {
+    withJavadocJar()
+}
+
+// PackagedPlatformSmokeTest starts the boot jar as a separate process, which is the only place in the
+// whole repository where the packaged artefact is exercised - everything else starts the platform
+// in-process and so never sees its manifest, launcher or loader classes.  The jar path is resolved here,
+// at configuration time, so the test task stays compatible with the configuration cache.
+test {
+    useJUnitPlatform()
+
+    dependsOn tasks.named('bootJar')
+
+    systemProperty 'platform.boot.jar', tasks.named('bootJar').get().archiveFile.get().asFile.absolutePath
+
+    // Starting a real platform takes appreciably longer than a unit test, but not long enough to warrant
+    // making this opt-in: a smoke test nobody is obliged to run would not have caught the launcher class
+    // that this test exists because of.
+    timeout = java.time.Duration.ofMinutes(6)
+}
+
+// See https://stackoverflow.com/questions/61197984/bootjar-mavenjar-artifact-wasnt-produced-by-this-build
+// Ensure the SpringBoot jar is included -- we leave the 'plain' jar in-situ too, for composing alternate chassis
+configurations {
+    [apiElements, runtimeElements].each {
+        it.outgoing.artifact(bootJar)
+    }
+}
+
+// Assuming the plugin has been applied
+jvmDependencyConflicts {
+    logging {
+        enforceLogback()
+    }
+}

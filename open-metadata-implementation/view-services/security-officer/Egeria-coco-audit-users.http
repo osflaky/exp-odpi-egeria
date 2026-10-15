@@ -1,0 +1,276 @@
+# Egeria-coco-audit-users
+# A demonstration on access user identities, user accounts, their definitions and any exceptions.
+
+@baseURL=https://localhost:7443
+@viewServer=view-server
+
+###
+# =====================================================================================================================
+# Manage the authentication token.  Run these requests to create/refresh the token.
+
+# @name Token (log in as Gary Geeke who is a system administrator)
+POST {{baseURL}}/api/token
+Content-Type: application/json
+
+{
+  "userId" : "garygeeke",
+  "password" : "secret"
+}
+
+> {% client.global.set("garyToken", response.body); %}
+
+
+###
+
+# @name Token (log in as Ivor Padlock who is a security officer and has access to all of the user information)
+POST {{baseURL}}/api/token
+Content-Type: application/json
+
+{
+  "userId" : "ivorpadlock",
+  "password" : "secret"
+}
+
+> {% client.global.set("ivorToken", response.body); %}
+
+
+###
+
+# @name Token (log in as Callie Quartile who is a data scientist without priviledges to audit users.)
+POST {{baseURL}}/api/token
+Content-Type: application/json
+
+{
+  "userId" : "calliequartile",
+  "password" : "secret"
+}
+
+> {% client.global.set("callieToken", response.body); %}
+
+###
+# =====================================================================================================================
+# Retrieve the platform GUID
+# https://egeria-project.org/types/0037-Software-Server-Platforms/
+
+###
+# @name getPlatformsByName (ivor)
+# Returns the list of platforms with a particular name. The name is specified in the filter.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/runtime-manager/platforms/by-name
+Authorization: Bearer {{ivorToken}}
+Content-Type: application/json
+
+{
+  "filter" : "Local OMAG Server Platform"
+}
+
+> {% client.global.set("omagServerPlatformGUID", response.body.elements[0].elementHeader.guid); %}
+
+
+
+###
+# ========================================================================================
+# Retrieve Secret Collections
+#
+
+###
+# @name findAssets (SecretCollections) using gary's token (returns UserNotAuthorizedException)
+# The secrets collections are returned by the Asset Maker API.
+# They are in the security governance zone that Gary does nto have access to.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/assets/by-search-string
+Authorization: Bearer {{garyToken}}
+Content-Type: application/json
+
+{
+  "class" : "SearchStringRequestBody",
+  "searchString": "cocoUserDirectory",
+  "metadataElementTypeName": "SecretsCollection"
+}
+
+###
+# @name findAssets (SecretCollections) using ivor's token
+# The requested security collection is returned with a lot of information about the security
+# settings in the secrets collection.
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/assets/by-search-string
+Authorization: Bearer {{ivorToken}}
+Content-Type: application/json
+
+{
+  "class" : "SearchStringRequestBody",
+  "searchString": "cocoUserDirectory",
+  "metadataElementTypeName": "SecretsCollection"
+}
+
+###
+# ========================================================================================
+# Retrieve user identities
+#
+
+###
+# @name findUserIdentities (gary)
+# Even though all userIdentities are requested, only one is returned, this is gary's own user identity.
+# This allows a user to check their own security settings.
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/actor-manager/user-identities/by-search-string
+Authorization: Bearer {{garyToken}}
+Content-Type: application/json
+
+> {% client.global.set("garyUserIdentityGUID", response.body.elements[0].elementHeader.guid); %}
+
+###
+# @name getUserIdentityByGUID (gary)
+# Return the properties of a specific user identity.
+#
+# @param userIdentityGUID    unique identifier of the required element
+# Request body provides string to find in the properties
+#
+# Returns list of matching metadata elements or
+#  InvalidParameterException  one of the parameters is invalid
+#  UserNotAuthorizedException the user is not authorized to issue this request
+#  PropertyServerException    a problem reported in the open metadata server(s)
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/actor-manager/user-identities/{{garyUserIdentityGUID}}/retrieve
+Authorization: Bearer {{garyToken}}
+Content-Type: application/json
+
+
+###
+# @name findUserIdentities (ivor)
+# Ivor is able to retrieve all userIdentities
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/actor-manager/user-identities/by-search-string
+Authorization: Bearer {{ivorToken}}
+Content-Type: application/json
+
+
+###
+# @name getUserIdentityByGUID (ivor)
+# Ivor is able to retrieve gary's user identity
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/actor-manager/user-identities/{{garyUserIdentityGUID}}/retrieve
+Authorization: Bearer {{ivorToken}}
+Content-Type: application/json
+
+###
+# ========================================================================================
+# Retrieve exception types
+#
+
+###
+# @name findGovernanceDefinitions
+# Retrieve the list of governance definition metadata elements that contain the search string.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/governance-officer/governance-definitions/by-search-string
+Authorization: Bearer {{ivorToken}}
+Content-Type: application/json
+
+{
+  "class" : "SearchStringRequestBody",
+  "metadataElementTypeName": "ExceptionType"
+}
+
+
+###
+# @name: getUserList
+# Return the list of users registered with the platform security connector.
+#
+# @param serverName  name of called server
+# @param platformGUID unique identifier of the platform
+# @param status status of the user - or null for any status
+# @param type   type of user - or null for any type
+# @return list of matching userIds in the user directory
+#
+GET {{baseURL}}/servers/{{viewServer}}/api/open-metadata/security-officer/platforms/{{omagServerPlatformGUID}}/user-accounts
+Authorization: Bearer {{garyToken}}
+
+###
+# @name: getUserList
+# Return the list of users registered with the platform security connector.
+#
+# @param serverName  name of called server
+# @param platformGUID unique identifier of the platform
+# @param status status of the user - or null for any status
+# @param type   type of user - or null for any type
+# @return list of matching userIds in the user directory
+#
+GET {{baseURL}}/servers/{{viewServer}}/api/open-metadata/security-officer/platforms/{{omagServerPlatformGUID}}/user-accounts
+Authorization: Bearer {{ivorToken}}
+
+###
+# @name: getUserList for active employees
+# Return the list of users registered with the platform security connector.
+#
+# @param serverName  name of called server
+# @param platformGUID unique identifier of the platform
+# @param status status of the user - or null for any status
+# @param type   type of user - or null for any type
+# @return list of matching userIds in the user directory
+#
+GET {{baseURL}}/servers/{{viewServer}}/api/open-metadata/security-officer/platforms/{{omagServerPlatformGUID}}/user-accounts?status=AVAILABLE&type=EMPLOYEE
+Authorization: Bearer {{ivorToken}}
+
+###
+
+@accountUserId=garygeeke
+
+###
+# @name: getUserAccount
+# Return the user account object for the requested user from the platform metadata security connector.
+# Null is returned if no platform security or user account has been set up.
+# The user requires operator permission for the platform unless it is their own user account they are retrieving.
+#
+# @param serverName  name of called server
+# @param platformGUID unique identifier of the platform
+# @param accountUserId    user id of the account
+# @return user account response
+#
+GET {{baseURL}}/servers/{{viewServer}}/api/open-metadata/security-officer/platforms/{{omagServerPlatformGUID}}/user-accounts/{{accountUserId}}
+Authorization: Bearer {{garyToken}}
+
+
+
+###
+# ========================================================================================
+# Retrieve governance zone
+#
+
+###
+# @name find All GovernanceZones
+# Retrieve all the governance zones
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/governance-officer/governance-definitions/by-search-string
+Authorization: Bearer {{ivorToken}}
+Content-Type: application/json
+
+{
+  "class" : "SearchStringRequestBody",
+  "metadataElementTypeName": "GovernanceZone"
+}
+
+###
+# @name find digital-products GovernanceZone (ivor)
+# Retrieve all the governance zones
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/governance-officer/governance-definitions/by-search-string
+Authorization: Bearer {{ivorToken}}
+Content-Type: application/json
+
+{
+  "class" : "SearchStringRequestBody",
+  "metadataElementTypeName": "GovernanceZone",
+  "searchString": "digital-products"
+}
+
+
+
+###
+# @name find digital-products GovernanceZone (gary)
+# Retrieve all the governance zones
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/governance-officer/governance-definitions/by-search-string
+Authorization: Bearer {{garyToken}}
+Content-Type: application/json
+
+{
+  "class" : "SearchStringRequestBody",
+  "metadataElementTypeName": "GovernanceZone",
+  "searchString": "digital-products"
+}
+
+

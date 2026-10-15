@@ -1,0 +1,3062 @@
+# Egeria-asset-maker-api
+# The Asset Maker OMVS provides APIs for supporting the creation and editing of assets.
+
+@baseURL=https://localhost:7443
+@viewServer=view-server
+
+###
+# =====================================================================================================================
+# Manage the authentication token.  Run this request to create/refresh the token.
+
+# @name Token (RequestBody)
+POST {{baseURL}}/api/token
+Content-Type: application/json
+
+{
+  "userId" : "peterprofile",
+  "password" : "secret"
+}
+
+> {% client.global.set("token", response.body); %}
+
+
+###
+# =====================================================================================================================
+# Work with Assets
+# https://egeria-project.org/concepts/asset
+
+@assetGUID=add guid here
+@softwareCapabilityGUID=add guid here
+@infrastructureGUID=add guid here
+@governanceServiceGUID=add guid here
+@governanceEngineGUID=add guid here
+@supportedGovernanceServiceGUID=add guid here
+
+
+###
+# @name createAsset
+# Create an asset.
+#
+# Request body provides             properties for the asset.
+#
+# Returns unique identifier of the newly created element
+#  InvalidParameterException  one of the parameters is invalid.
+#  PropertyServerException    a problem retrieving information from the property server(s).
+#  UserNotAuthorizedException the requesting user is not authorized to issue this request.
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/assets
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewElementRequestBody",
+  "anchorGUID" : "add guid here",
+  "isOwnAnchor": false,
+  "parentGUID": "add guid here",
+  "parentRelationshipTypeName": "add type name here",
+  "parentRelationshipProperties": {
+    "class": "RelationshipElementProperties",
+    "propertyValueMap" : {
+      "description" : {
+        "class": "PrimitiveTypePropertyValue",
+        "typeName": "string",
+        "primitiveValue" : "New description"
+      }
+    }
+  },
+  "parentAtEnd1": false,
+  "properties": {
+    "class" : "AssetProperties",
+    "typeName" : "enter the type of the element",
+    "qualifiedName": "add unique name here",
+    "identifier" : "Add value here",
+    "legal" : "Add copyright or license statement here",
+    "displayName": "add short name here",
+    "description": "add description here",
+    "additionalProperties": {
+      "property1" : "propertyValue1",
+      "property2" : "propertyValue2"
+    },
+    "extendedProperties": {
+      "property1" : "propertyValue1",
+      "property2" : "propertyValue2"
+    },
+    "effectiveFrom": "{{$isoTimestamp}}",
+    "effectiveTo": "{{$isoTimestamp}}"
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+
+###
+# @name createAssetFromTemplate
+# Create a new metadata element to represent an asset using an existing metadata element as a template.
+# The template defines additional classifications and relationships that should be added to the new element.
+#
+# Request body provides properties that override the template
+#
+# Returns unique identifier of the new metadata element
+#  InvalidParameterException  one of the parameters is invalid
+#  UserNotAuthorizedException the user is not authorized to issue this request
+#  PropertyServerException    a problem reported in the open metadata server(s)
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/assets/from-template
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "TemplateRequestBody",
+  "anchorGUID" : "add guid here",
+  "isOwnAnchor": false,
+  "parentGUID": "add guid here",
+  "parentRelationshipTypeName": "add type name here",
+  "parentRelationshipProperties": {
+    "class": "RelationshipElementProperties",
+    "propertyValueMap" : {
+      "description" : {
+        "class": "PrimitiveTypePropertyValue",
+        "typeName": "string",
+        "primitiveValue" : "New description"
+      }
+    }
+  },
+  "parentAtEnd1": false,
+  "templateGUID": "add guid here",
+  "replacementProperties": {
+    "class": "EntityElementProperties",
+    "propertyValueMap" : {
+      "description" : {
+        "class": "PrimitiveTypePropertyValue",
+        "typeName": "string",
+        "primitiveValue" : "New description"
+      }
+    }
+  },
+  "placeholderPropertyValues":  {
+    "placeholder1" : "propertyValue1",
+    "placeholder2" : "propertyValue2"
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+
+###
+# @name updateAsset
+# Update the properties of an asset.
+#
+# @param assetGUID unique identifier of the asset (returned from create)
+# Request body provides     properties for the new element.
+#
+# Returns void or
+#  InvalidParameterException  one of the parameters is invalid.
+#  PropertyServerException    a problem retrieving information from the property server(s).
+#  UserNotAuthorizedException the requesting user is not authorized to issue this request.
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/assets/{{assetGUID}}/update
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "UpdateElementRequestBody",
+  "properties": {
+    "class" : "AssetProperties",
+    "typeName" : "enter the type of the element",
+    "qualifiedName": "add unique name here",
+    "displayName": "add short name here",
+    "description": "add description here",
+    "additionalProperties": {
+      "property1" : "propertyValue1",
+      "property2" : "propertyValue2"
+    },
+    "extendedProperties": {
+      "property1" : "propertyValue1",
+      "property2" : "propertyValue2"
+    }
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+
+###
+# @name deleteAsset
+# Delete an asset.
+#
+# @param assetGUID  unique identifier of the element to delete
+# Request body provides  description of the relationship.
+#
+# Returns void or
+#  InvalidParameterException  one of the parameters is null or invalid.
+#  PropertyServerException    a problem retrieving information from the property server(s).
+#  UserNotAuthorizedException the requesting user is not authorized to issue this request.
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/assets/{{assetGUID}}/delete
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteElementRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+
+###
+# @name getAssetsByName
+# Returns the list of assets with a particular name.
+#
+# Request body provides string to find in the properties
+#
+# Returns list of matching metadata elements or
+#  InvalidParameterException  one of the parameters is invalid
+#  UserNotAuthorizedException the user is not authorized to issue this request
+#  PropertyServerException    a problem reported in the open metadata server(s)
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/assets/by-name
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "FilterRequestBody",
+  "filter" : "Add name here",
+  "startFrom" : 0,
+  "pageSize": 10,
+  "metadataElementTypeName": "GovernanceActionType",
+  "metadataElementSubtypeNames": [],
+  "skipRelationships": [],
+  "includeOnlyRelationships": [],
+  "relationshipsPageSize": 100,
+  "skipClassifiedElements": [],
+  "includeOnlyClassifiedElements": [],
+  "graphQueryDepth" : 10,
+  "asOfTime" : "{{$isoTimestamp}}",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false,
+  "limitResultsByStatus" : ["ACTIVE"],
+  "sequencingOrder" : "PROPERTY_ASCENDING",
+  "sequencingProperty" : "qualifiedName"
+}
+
+
+###
+# @name findAssets
+# Retrieve the list of asset metadata elements that contain the search string.
+#
+# Request body provides string to find in the properties
+#
+# Returns list of matching metadata elements or
+#  InvalidParameterException  one of the parameters is invalid
+#  UserNotAuthorizedException the user is not authorized to issue this request
+#  PropertyServerException    a problem reported in the open metadata server(s)
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/assets/by-search-string
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "SearchStringRequestBody",
+  "searchString": "xxx",
+  "metadataElementTypeName": "GovernanceActionType",
+  "metadataElementSubtypeNames": [],
+  "skipRelationships": [],
+  "includeOnlyRelationships": [],
+  "relationshipsPageSize": 100,
+  "skipClassifiedElements": [],
+  "includeOnlyClassifiedElements": [],
+  "graphQueryDepth" : 10,
+  "startsWith" : false,
+  "endsWith" : false,
+  "ignoreCase" : true,
+  "startFrom" : 0,
+  "pageSize": 0,
+  "asOfTime" : "{{$isoTimestamp}}",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false,
+  "limitResultsByStatus" : ["ACTIVE"],
+  "sequencingOrder" : "PROPERTY_ASCENDING",
+  "sequencingProperty" : "qualifiedName"
+}
+
+
+###
+# @name getAssetByGUID
+# Return the properties of a specific asset.
+#
+# @param assetGUID    unique identifier of the required element
+# Request body provides string to find in the properties
+#
+# Returns list of matching metadata elements or
+#  InvalidParameterException  one of the parameters is invalid
+#  UserNotAuthorizedException the user is not authorized to issue this request
+#  PropertyServerException    a problem reported in the open metadata server(s)
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/assets/{{assetGUID}}/retrieve
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "GetRequestBody",
+  "metadataElementTypeName": "",
+  "metadataElementSubtypeNames": [],
+  "skipRelationships": [],
+  "includeOnlyRelationships": [],
+  "relationshipsPageSize": 100,
+  "skipClassifiedElements": [],
+  "includeOnlyClassifiedElements": [],
+  "graphQueryDepth" : 10,
+  "asOfTime" : "{{$isoTimestamp}}",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# =====================================================================================================================
+# Processes and Actions are assets.  
+# https://egeria-project.org/concepts/action
+###
+# @name findProcesses
+# Retrieve the processes that match the search string and activity status.
+#
+# @param serverName name of the server instances for this request
+# @param urlMarker  view service URL marker
+# @param requestBody     status of the action (null means current active)
+#
+# @return list of action beans or
+# InvalidParameterException a parameter is invalid
+# PropertyServerException the server is not available
+# UserNotAuthorizedException the calling user is not authorized to issue the call
+#/
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/processes/find-by-search-string
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "ActivityStatusSearchString",
+  "metadataElementSubtypeNames": ["ToDo", "Notification", "GovernanceActionService"],
+  "searchString" : "Digital",
+  "startsWith" : false,
+  "endsWith" : false,
+  "ignoreCase" : true,
+  "startFrom" : 0,
+  "pageSize": 0,
+  "asOfTime" : "{{$isoTimestamp}}",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false,
+  "limitResultsByStatus" : ["ACTIVE"],
+  "sequencingOrder" : "PROPERTY_ASCENDING",
+  "sequencingProperty" : "qualifiedName"
+}
+
+###
+# @name getProcessesByCategory
+# Retrieve the actions that match the category name and status.
+#
+# @param serverName name of the server instances for this request
+# @param urlMarker  view service URL marker
+# @param requestBody     status of the action (null means current active)
+#
+# @return list of action beans or
+# InvalidParameterException a parameter is invalid
+# PropertyServerException the server is not available
+# UserNotAuthorizedException the calling user is not authorized to issue the call
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/processes/by-category
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "ActivityStatusFilterRequestBody",
+  "filter" : "xxx",
+  "activityStatusList" : [ "IN_PROGRESS" ],
+  "category" : "Governance",
+  "startFrom" : 0,
+  "pageSize": 0,
+  "asOfTime" : "{{$isoTimestamp}}",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false,
+  "limitResultsByStatus" : ["ACTIVE"],
+  "sequencingOrder" : "PROPERTY_ASCENDING",
+  "sequencingProperty" : "qualifiedName"
+}
+
+###
+
+@actionTargetGUID=add guid here
+
+###
+# @name createAction
+# Create a new action and link it to the supplied actor and targets (if applicable).
+#
+# @param serverName name of the server instances for this request
+# @param urlMarker  view service URL marker
+# @param requestBody properties of the action
+#
+# @return unique identifier of the action or
+# InvalidParameterException a parameter is invalid
+# PropertyServerException the server is not available
+# UserNotAuthorizedException the calling user is not authorized to issue the call
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/actions
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "ActionRequestBody",
+  "initialClassifications" : {
+    "ZoneMembership" : {
+      "class" : "ZoneMembershipProperties",
+      "zoneMembership" : ["governance"]
+    }
+  },
+  "newActionTargets" : [
+    {
+      "actionTargetGUID" : "add guid here",
+      "actionTargetName": "add name here"
+    }
+  ],
+  "properties" : {
+    "class" : "ActionProperties",
+    "qualifiedName": "",
+    "identifier": "",
+    "displayName": "",
+    "description": "",
+    "versionIdentifier": "",
+    "category": "",
+    "url": "",
+    "resourceName": "",
+    "namespacePath": "",
+    "deployedImplementationType": "",
+    "source": "",
+    "expectedBehaviour": "",
+    "requestedTime": "{{$isoTimestamp}}",
+    "requestedStartTime": "{{$isoTimestamp}}",
+    "startTime": "{{$isoTimestamp}}",
+    "dueTime": "{{$isoTimestamp}}",
+    "lastReviewTime": "{{$isoTimestamp}}",
+    "lastPauseTime": "{{$isoTimestamp}}",
+    "lastResumeTime": "{{$isoTimestamp}}",
+    "completionTime": "{{$isoTimestamp}}",
+    "priority": 0,
+    "formula": "",
+    "formulaType": "",
+    "activityStatus": "REQUESTED",
+    "userDefinedActivityStatus": "",
+    "situation": "",
+    "additionalProperties" : {
+      "property1" : "propertyValue1",
+      "property2" : "propertyValue2"
+    }
+  },
+  "originatorGUID" : "add guid of requester (ActionRequester relationship)",
+  "actionSponsorGUID" : "add guid of sponsor (Actions relationship)",
+  "assignToActorGUID" : "add guid of actor that will be assigned this action (AssignmentScope relationship)"
+}
+
+
+###
+# @name createAction (Meeting)
+# Create a new action and link it to the supplied actor and targets (if applicable).
+#
+# @param serverName name of the server instances for this request
+# @param urlMarker  view service URL marker
+# @param requestBody properties of the action
+#
+# @return unique identifier of the action or
+# InvalidParameterException a parameter is invalid
+# PropertyServerException the server is not available
+# UserNotAuthorizedException the calling user is not authorized to issue the call
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/actions
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "ActionRequestBody",
+  "initialClassifications" : {
+    "ZoneMembership" : {
+      "class" : "ZoneMembershipProperties",
+      "zoneMembership" : "governance"
+    }
+  },
+  "newActionTargets" : [
+    {
+      "actionTargetGUID" : "add guid here",
+      "actionTargetName": "add name here"
+    }
+  ],
+  "properties" : {
+    "class" : "MeetingProperties",
+    "qualifiedName": "",
+    "identifier": "",
+    "displayName": "",
+    "description": "",
+    "versionIdentifier": "",
+    "category": "",
+    "url": "",
+    "resourceName": "",
+    "namespacePath": "",
+    "deployedImplementationType": "",
+    "source": "",
+    "expectedBehaviour": "",
+    "requestedTime": "{{$isoTimestamp}}",
+    "requestedStartTime": "{{$isoTimestamp}}",
+    "startTime": "{{$isoTimestamp}}",
+    "dueTime": "{{$isoTimestamp}}",
+    "lastReviewTime": "{{$isoTimestamp}}",
+    "lastPauseTime": "{{$isoTimestamp}}",
+    "lastResumeTime": "{{$isoTimestamp}}",
+    "completionTime": "{{$isoTimestamp}}",
+    "priority": 0,
+    "formula": "",
+    "formulaType": "",
+    "activityStatus": "REQUESTED",
+    "userDefinedActivityStatus": "",
+    "situation": "",
+    "objective": "",
+    "minutes": [""],
+    "decisions": [""],
+    "additionalProperties" : {
+      "property1" : "propertyValue1",
+      "property2" : "propertyValue2"
+    }
+  },
+  "originatorGUID" : "add guid of requester (ActionRequester relationship)",
+  "actionSponsorGUID" : "add guid of sponsor (Actions relationship)",
+  "assignToActorGUID" : "add guid of actor that will be assigned this action (AssignmentScope relationship)"
+}
+
+
+###
+# @name createAction (To Do)
+# Create a new action and link it to the supplied actor and targets (if applicable).
+#
+# @param serverName name of the server instances for this request
+# @param urlMarker  view service URL marker
+# @param requestBody properties of the action
+#
+# @return unique identifier of the action or
+# InvalidParameterException a parameter is invalid
+# PropertyServerException the server is not available
+# UserNotAuthorizedException the calling user is not authorized to issue the call
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/actions
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "ActionRequestBody",
+  "initialClassifications" : {
+    "ZoneMembership" : {
+      "class" : "ZoneMembershipProperties",
+      "zoneMembership" : "governance"
+    }
+  },
+  "newActionTargets" : [
+    {
+      "actionTargetGUID" : "add guid here",
+      "actionTargetName": "add name here"
+    }
+  ],
+  "properties" : {
+    "class" : "ToDoProperties",
+    "qualifiedName": "",
+    "identifier": "",
+    "displayName": "",
+    "description": "",
+    "versionIdentifier": "",
+    "category": "",
+    "url": "",
+    "resourceName": "",
+    "namespacePath": "",
+    "deployedImplementationType": "",
+    "source": "",
+    "expectedBehaviour": "",
+    "requestedTime": "{{$isoTimestamp}}",
+    "requestedStartTime": "{{$isoTimestamp}}",
+    "startTime": "{{$isoTimestamp}}",
+    "dueTime": "{{$isoTimestamp}}",
+    "lastReviewTime": "{{$isoTimestamp}}",
+    "lastPauseTime": "{{$isoTimestamp}}",
+    "lastResumeTime": "{{$isoTimestamp}}",
+    "completionTime": "{{$isoTimestamp}}",
+    "priority": 0,
+    "formula": "",
+    "formulaType": "",
+    "activityStatus": "REQUESTED",
+    "userDefinedActivityStatus": "",
+    "situation": "",
+    "additionalProperties" : {
+      "property1" : "propertyValue1",
+      "property2" : "propertyValue2"
+    }
+  },
+  "originatorGUID" : "add guid of requester (ActionRequester relationship)",
+  "actionSponsorGUID" : "add guid of sponsor (Actions relationship)",
+  "assignToActorGUID" : "add guid of actor that will be assigned this action (AssignmentScope relationship)"
+}
+
+###
+# @name createAction (Notification)
+# Create a new action and link it to the supplied actor and targets (if applicable).
+#
+# @param serverName name of the server instances for this request
+# @param urlMarker  view service URL marker
+# @param requestBody properties of the action
+#
+# @return unique identifier of the action or
+# InvalidParameterException a parameter is invalid
+# PropertyServerException the server is not available
+# UserNotAuthorizedException the calling user is not authorized to issue the call
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/actions
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "ActionRequestBody",
+  "initialClassifications" : {
+    "ZoneMembership" : {
+      "class" : "ZoneMembershipProperties",
+      "zoneMembership" : "governance"
+    }
+  },
+  "newActionTargets" : [
+    {
+      "actionTargetGUID" : "add guid here",
+      "actionTargetName": "add name here"
+    }
+  ],
+  "properties" : {
+    "class" : "NotificationProperties",
+    "qualifiedName": "",
+    "identifier": "",
+    "displayName": "",
+    "description": "",
+    "versionIdentifier": "",
+    "category": "",
+    "url": "",
+    "resourceName": "",
+    "namespacePath": "",
+    "deployedImplementationType": "",
+    "source": "",
+    "expectedBehaviour": "",
+    "requestedTime": "{{$isoTimestamp}}",
+    "requestedStartTime": "{{$isoTimestamp}}",
+    "startTime": "{{$isoTimestamp}}",
+    "dueTime": "{{$isoTimestamp}}",
+    "lastReviewTime": "{{$isoTimestamp}}",
+    "lastPauseTime": "{{$isoTimestamp}}",
+    "lastResumeTime": "{{$isoTimestamp}}",
+    "completionTime": "{{$isoTimestamp}}",
+    "priority": 0,
+    "formula": "",
+    "formulaType": "",
+    "activityStatus": "REQUESTED",
+    "userDefinedActivityStatus": "",
+    "situation": "",
+    "additionalProperties" : {
+      "property1" : "propertyValue1",
+      "property2" : "propertyValue2"
+    }
+  },
+  "originatorGUID" : "add guid of requester (ActionRequester relationship)",
+  "actionSponsorGUID" : "add guid of sponsor (Actions relationship)",
+  "assignToActorGUID" : "add guid of actor that will be assigned this action (AssignmentScope relationship)"
+}
+
+
+###
+# @name createAction
+# Create a new action and link it to the supplied actor and targets (if applicable).
+#
+# @param serverName name of the server instances for this request
+# @param urlMarker  view service URL marker
+# @param requestBody properties of the action
+#
+# @return unique identifier of the action or
+# InvalidParameterException a parameter is invalid
+# PropertyServerException the server is not available
+# UserNotAuthorizedException the calling user is not authorized to issue the call
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/actions
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "ActionRequestBody",
+  "initialClassifications" : {
+    "ZoneMembership" : {
+      "class" : "ZoneMembershipProperties",
+      "zoneMembership" : "governance"
+    }
+  },
+  "newActionTargets" : [
+    {
+      "actionTargetGUID" : "add guid here",
+      "actionTargetName": "add name here"
+    }
+  ],
+  "properties" : {
+    "class" : "ReviewProperties",
+    "qualifiedName": "",
+    "identifier": "",
+    "displayName": "",
+    "description": "",
+    "versionIdentifier": "",
+    "category": "",
+    "url": "",
+    "resourceName": "",
+    "namespacePath": "",
+    "deployedImplementationType": "",
+    "source": "",
+    "expectedBehaviour": "",
+    "requestedTime": "{{$isoTimestamp}}",
+    "requestedStartTime": "{{$isoTimestamp}}",
+    "startTime": "{{$isoTimestamp}}",
+    "dueTime": "{{$isoTimestamp}}",
+    "lastReviewTime": "{{$isoTimestamp}}",
+    "lastPauseTime": "{{$isoTimestamp}}",
+    "lastResumeTime": "{{$isoTimestamp}}",
+    "completionTime": "{{$isoTimestamp}}",
+    "priority": 0,
+    "formula": "",
+    "formulaType": "",
+    "activityStatus": "REQUESTED",
+    "userDefinedActivityStatus": "",
+    "situation": "",
+    "reviewDate" : "{{$isoTimestamp}}",
+    "comment" : "",
+    "additionalProperties" : {
+      "property1" : "propertyValue1",
+      "property2" : "propertyValue2"
+    }
+  },
+  "originatorGUID" : "add guid of requester (ActionRequester relationship)",
+  "actionSponsorGUID" : "add guid of sponsor (Actions relationship)",
+  "assignToActorGUID" : "add guid of actor that will be assigned this action (AssignmentScope relationship)"
+}
+
+###
+
+# @name addActionTarget
+# Add an element to an action's workload.
+#
+# @param serverName name of the service to route the request to.
+# @param urlMarker  view service URL marker
+# @param actionGUID unique identifier of the integration service.
+# @param metadataElementGUID unique identifier of the metadata element that is a catalog target.
+# @param requestBody properties for the relationship.
+#
+# @return guid or
+# InvalidParameterException one of the parameters is null or invalid or
+# UserNotAuthorizedException the user is not authorized to issue this request or
+# PropertyServerException problem storing the catalog target definition.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/actions/{{actionGUID}}/action-targets/{{metadataElementGUID}}/attach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewRelationshipRequestBody",
+   "properties" : {
+     "class": "ActionTargetProperties",
+     "activityStatus" : "IN_PROGRESS",
+     "actionTargetName" : "add label here",
+     "startTime" : "{{$isoTimestamp}}",
+     "completionTime" : "{{$isoTimestamp}}",
+     "completionMessage" : "Add message here"
+  },
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+###
+# @name updateActionTargetProperties
+# Update the properties associated with an Action Target for an action.
+#
+# @param serverName name of the server instances for this request
+# @param urlMarker  view service URL marker
+# @param actionTargetGUID               unique identifier of the action target relationship
+# @param requestBody properties to change
+#
+# @return void or
+# InvalidParameterException a parameter is invalid
+# PropertyServerException the server is not available
+# UserNotAuthorizedException the calling user is not authorized to issue the call
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/actions/action-targets/{{actionTargetGUID}}/update
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "UpdateRelationshipRequestBody",
+  "properties": {
+    "class": "ActionTargetProperties",
+     "activityStatus" : "IN_PROGRESS",
+     "actionTargetName" : "add label here",
+     "startTime" : "{{$isoTimestamp}}",
+     "completionTime" : "{{$isoTimestamp}}",
+     "completionMessage" : "Add message here"
+  },
+  "mergeUpdate": true,
+  "externalSourceGUID": "",
+  "externalSourceName": "",
+  "forLineage": false,
+  "forDuplicateProcessing": true,
+  "effectiveTime": "{{$isoTimestamp}}"
+}
+
+###
+# @name getActionTarget
+# Retrieve a specific action target associated with an action.
+#
+# @param serverName name of the service to route the request to
+# @param urlMarker  view service URL marker
+# @param relationshipGUID unique identifier of the relationship
+# @param requestBody details of how the retrieve should be processed
+#
+# @return details of the governance service and the asset types it is registered for or
+# InvalidParameterException one of the parameters is null or invalid or
+# UserNotAuthorizedException the user is not authorized to issue this request or
+# PropertyServerException problem storing the integration connector definition.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/actions/action-targets/{{actionTargetGUID}}/retrieve
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "GetRequestBody",
+  "asOfTime" : "{{$isoTimestamp}}",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name getActionTargets
+# Return a list of elements that are target elements for an action.
+#
+# @param serverName name of the service to route the request to.
+# @param urlMarker  view service URL marker
+# @param actionGUID unique identifier of the integration connector.
+# @param requestBody describe how results are to be returned
+#
+# @return list of unique identifiers or
+# InvalidParameterException one of the parameters is null or invalid or
+# UserNotAuthorizedException the user is not authorized to issue this request or
+# PropertyServerException problem storing the integration connector definition.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/actions/{{actionGUID}}/action-targets
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "ActivityStatusRequestBody",
+  "activityStatusList": ["REQUESTED", "WAITING", "IN_PROGRESS"]
+}
+
+###
+# @name getActionsForActionTarget
+# Retrieve the "Actions" that are chained off of an action target element.
+#
+# @param serverName name of the server instances for this request
+# @param urlMarker  view service URL marker
+# @param metadataElementGUID unique identifier of the element to start with
+# @param requestBody     status of the action (null means current active)
+#
+# @return list of action beans or
+# InvalidParameterException a parameter is invalid
+# PropertyServerException the server is not available
+# UserNotAuthorizedException the calling user is not authorized to issue the call
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/elements/{{metadataElementGUID}}/action-targets/actions
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "ActivityStatusRequestBody",
+  "activityStatusList": ["REQUESTED", "WAITING", "IN_PROGRESS"]
+}
+
+
+###
+# Linking Actors and Actions
+# https://egeria-project.org/concepts/action
+
+@actionGUID=add guid here
+@actorGUID=add guid here
+
+###
+# @name assignAction
+# Assign an action to an actor. Request body is optional.
+#
+# @param serverName name of the server instances for this request
+# @param urlMarker  view service URL marker
+# @param actionGUID unique identifier of the action
+# @param actorGUID  actor to assign the action to
+# @param requestBody  request body
+#
+# @return void or
+# InvalidParameterException a parameter is invalid
+# PropertyServerException the server is not available
+# UserNotAuthorizedException the calling user is not authorized to issue the call
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/actions/{{actionGUID}}/assign/{{actorGUID}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "NewRelationshipRequestBody",
+   "properties" : {
+     "class": "AssignmentScopeProperties",
+     "label" : "add label here",
+     "description" : "Add description here"
+  },
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+# @name reassignAction
+# Assign an action to a new actor.  This will unassign all other actors previously assigned to the action.
+#
+# @param serverName name of the server instances for this request
+# @param urlMarker  view service URL marker
+# @param actionGUID unique identifier of the action
+# @param actorGUID  actor to assign the action to
+# @param requestBody  request body
+#
+# @return void or
+# InvalidParameterException a parameter is invalid
+# PropertyServerException the server is not available
+# UserNotAuthorizedException the calling user is not authorized to issue the call
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/actions/{{actionGUID}}/reassign/{{actorGUID}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "NewRelationshipRequestBody",
+   "properties" : {
+     "class": "AssignmentScopeProperties",
+     "label" : "add label here",
+     "description" : "Add description here"
+  },
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+# @name unassignAction
+# Remove an action from an actor.
+#
+# @param serverName name of the server instances for this request
+# @param urlMarker  view service URL marker
+# @param actionGUID unique identifier of the action
+# @param actorGUID  actor to assign the action to
+# @param requestBody  request body
+#
+# @return void or
+# InvalidParameterException a parameter is invalid
+# PropertyServerException the server is not available
+# UserNotAuthorizedException the calling user is not authorized to issue the call
+#/
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/actions/{{actionGUID}}/unassign/{{actorGUID}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "DeleteRelationshipRequestBody",
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+###
+
+@actorGUIG=add guid here
+
+###
+# @name getAssignedActions
+# Retrieve the actions for a particular actor.
+#
+# @param serverName name of the server instances for this request
+# @param urlMarker  view service URL marker
+# @param actorGUID unique identifier of the role
+# @param requestBody     status of the action (null means current active)
+#
+# @return list of action beans or
+# InvalidParameterException a parameter is invalid
+# PropertyServerException the server is not available
+# UserNotAuthorizedException the calling user is not authorized to issue the call
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/actors/{{actorGUID}}/assigned/actions
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "ActivityStatusRequestBody",
+  "activityStatusList": ["REQUESTED", "WAITING", "IN_PROGRESS"]
+}
+
+###
+# @name getActionsForSponsor
+# Retrieve the "Actions" that are chained off a sponsor's element. (Actions relationship)
+#
+# @param serverName name of the server instances for this request
+# @param urlMarker  view service URL marker
+# @param metadataElementGUID unique identifier of the element to start with
+# @param requestBody     status of the action (null means current active)
+#
+# @return list of action beans or
+# InvalidParameterException a parameter is invalid
+# PropertyServerException the server is not available
+# UserNotAuthorizedException the calling user is not authorized to issue the call
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/elements/{{metadataElementGUID}}/sponsored/actions
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "ActivityStatusRequestBody",
+  "activityStatusList": ["REQUESTED", "WAITING", "IN_PROGRESS"]
+}
+
+
+###
+# @name getActionsForRequester
+# Retrieve the "Actions" that are chained off the requester's element. (ActionRequester relationship)
+#
+# @param serverName name of the server instances for this request
+# @param urlMarker  view service URL marker
+# @param metadataElementGUID unique identifier of the element to start with
+# @param requestBody     status of the action (null means current active)
+#
+# @return list of action beans or
+# InvalidParameterException a parameter is invalid
+# PropertyServerException the server is not available
+# UserNotAuthorizedException the calling user is not authorized to issue the call
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/elements/{{metadataElementGUID}}/requested/actions
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "ActivityStatusRequestBody",
+  "activityStatusList": ["REQUESTED", "WAITING", "IN_PROGRESS"]
+}
+
+
+###
+# =====================================================================================================================
+# IT infrastructure is a type of asset.  It includes hosts and servers.
+#
+#
+
+###
+# @name findInfrastructure
+# https://egeria-project.org/concepts/asset
+# Returns the list of infrastructure assets matching the search string and optional deployment status.
+#
+# @param serverName name of the service to route the request to
+# @param urlMarker  view service URL marker
+# @param requestBody string to find in the properties
+#
+# @return a list of infrastructure assets
+#  InvalidParameterException  one of the parameters is null or invalid.
+#  PropertyServerException    a problem retrieving information from the property server(s).
+#  UserNotAuthorizedException the requesting user is not authorized to issue this request.
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/infrastructure-assets/by-search-string
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeploymentStatusSearchString",
+  "searchString" : "xxx",
+  "deploymentStatusList" : ["ACTIVE"],
+  "startsWith" : false,
+  "endsWith" : false,
+  "ignoreCase" : true,
+  "startFrom" : 0,
+  "pageSize": 0,
+  "asOfTime" : "{{$isoTimestamp}}",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false,
+  "limitResultsByStatus" : ["ACTIVE"],
+  "sequencingOrder" : "PROPERTY_ASCENDING",
+  "sequencingProperty" : "qualifiedName"
+}
+
+###
+# @name getInfrastructureByCategory
+# https://egeria-project.org/concepts/asset
+# Returns the list of infrastructure assets matching the category and optional deployment status.
+#
+# @param serverName name of the service to route the request to
+# @param urlMarker  view service URL marker
+# @param requestBody string to find in the properties
+#
+# @return a list of infrastructure assets
+#  InvalidParameterException  one of the parameters is null or invalid.
+#  PropertyServerException    a problem retrieving information from the property server(s).
+#  UserNotAuthorizedException the requesting user is not authorized to issue this request.
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/infrastructure-assets/by-category
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeploymentStatusFilterRequestBody",
+  "filter" : "xxx",
+  "deploymentStatusList" : ["ACTIVE"],
+  "startFrom" : 0,
+  "pageSize": 0,
+  "asOfTime" : "{{$isoTimestamp}}",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false,
+  "limitResultsByStatus" : ["ACTIVE"],
+  "sequencingOrder" : "PROPERTY_ASCENDING",
+  "sequencingProperty" : "qualifiedName"
+}
+
+###
+
+@infrastructureAssetGUID=add guid here
+@destinationGUID=add guid here
+@capabilityGUID=add guid here
+
+###
+# @name deployITAsset
+# Create a relationship that represents the deployment of an IT infrastructure asset to a specific deployment destination (another asset).
+#
+# @param serverName name of the server to route the request to
+# @param urlMarker  view service URL marker
+# @param assetGUID       unique identifier of the asset
+# @param destinationGUID           unique identifier of the destination asset
+# @param requestBody properties to help with the mapping of the elements in the external asset manager and open metadata
+#
+# @return  void or
+# InvalidParameterException  one of the parameters is invalid
+# UserNotAuthorizedException the user is not authorized to issue this request
+# PropertyServerException    a problem reported in the open metadata server(s)
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/assets/{{infrastructureAssetGUID}}/deployed-on/{{destinationGUID}}/attach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewRelationshipRequestBody",
+  "properties": {
+    "class": "DeployedOnProperties",
+    "deployer": "add name of actor",
+    "deployerTypeName": "add type of actor",
+    "deployerPropertyName": "add property of name of actor",
+    "deploymentTime": "{{$isoTimestamp}}",
+    "effectiveFrom": "{{$isoTimestamp}}",
+    "effectiveTo": "{{$isoTimestamp}}"
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name unDeployITAsset
+# Remove a DeployedOn relationship.
+#
+# @param serverName name of the server to route the request to
+# @param urlMarker  view service URL marker
+# @param assetGUID       unique identifier of the asset
+# @param destinationGUID           unique identifier of the destination asset
+# @param requestBody properties to help with the mapping of the elements in the external asset manager and open metadata
+#
+# @return void or
+# InvalidParameterException  one of the parameters is invalid
+# UserNotAuthorizedException the user is not authorized to issue this request
+# PropertyServerException    a problem reported in the open metadata server(s)
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/assets/{{infrastructureAssetGUID}}/deployed-on/{{destinationGUID}}/detach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteRelationshipRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+  
+###
+# @name linkSoftwareCapability
+# Create a relationship that links a software capability to an infrastructure asset like a software server.
+#
+# @param serverName name of the server to route the request to
+# @param urlMarker  view service URL marker
+# @param assetGUID          unique identifier of the data set
+# @param capabilityGUID          unique identifier of the data asset supplying the data
+# @param requestBody properties to help with the mapping of the elements in the external asset manager and open metadata
+#
+# @return  void or
+# InvalidParameterException  one of the parameters is invalid
+# UserNotAuthorizedException the user is not authorized to issue this request
+# PropertyServerException    a problem reported in the open metadata server(s)
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/assets/{{infrastructureAssetGUID}}/supported-software-capabilities/{{capabilityGUID}}/attach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewRelationshipRequestBody",
+  "properties": {
+    "class": "SupportedSoftwareCapabilityProperties",
+    "deployer": "add name of actor",
+    "deployerTypeName": "add type of actor",
+    "deployerPropertyName": "add property of name of actor",
+    "deploymentTime": "{{$isoTimestamp}}",
+    "effectiveFrom": "{{$isoTimestamp}}",
+    "effectiveTo": "{{$isoTimestamp}}"
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name detachSoftwareCapability
+# Remove a relationship that links a software capability to an infrastructure asset like a software server.
+#
+# @param serverName name of the server to route the request to
+# @param urlMarker  view service URL marker
+# @param assetGUID          unique identifier of the data set
+# @param capabilityGUID          unique identifier of the data asset supplying the data
+# @param requestBody properties to help with the mapping of the elements in the external asset manager and open metadata
+#
+# @return void or
+# InvalidParameterException  one of the parameters is invalid
+# UserNotAuthorizedException the user is not authorized to issue this request
+# PropertyServerException    a problem reported in the open metadata server(s)
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/assets/{{infrastructureAssetGUID}}/supported-software-capabilities/{{capabilityGUID}}/detach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteRelationshipRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+
+###
+# =====================================================================================================================
+# Data Assets include Files, Databases and APIs
+#
+
+###
+# @name findDataAssets
+# https://egeria-project.org/concepts/asset
+# Returns the list of data assets matching the search string and optional content status.
+#
+# @param serverName name of the service to route the request to
+# @param urlMarker  view service URL marker
+# @param requestBody string to find in the properties
+#
+# @return a list of data assets
+#  InvalidParameterException  one of the parameters is null or invalid.
+#  PropertyServerException    a problem retrieving information from the property server(s).
+#  UserNotAuthorizedException the requesting user is not authorized to issue this request.
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/data-assets/by-search-string
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "ContentStatusSearchString",
+  "searchString" : "xxx",
+  "contentStatusList" : ["ACTIVE"],
+  "startsWith" : false,
+  "endsWith" : false,
+  "ignoreCase" : true,
+  "startFrom" : 0,
+  "pageSize": 0,
+  "asOfTime" : "{{$isoTimestamp}}",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false,
+  "limitResultsByStatus" : ["ACTIVE"],
+  "sequencingOrder" : "PROPERTY_ASCENDING",
+  "sequencingProperty" : "qualifiedName"
+}
+
+###
+# @name getDataAssetsByCategory
+# https://egeria-project.org/concepts/asset
+# Returns the list of data assets matching the category and optional content status.
+#
+# @param serverName name of the service to route the request to
+# @param urlMarker  view service URL marker
+# @param requestBody string to find in the properties
+#
+# @return a list of data assets
+#  InvalidParameterException  one of the parameters is null or invalid.
+#  PropertyServerException    a problem retrieving information from the property server(s).
+#  UserNotAuthorizedException the requesting user is not authorized to issue this request.
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/data-assets/by-category
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "ContentStatusFilterRequestBody",
+  "filter" : "xxx",
+  "contentStatusList" : ["ACTIVE"],
+  "startFrom" : 0,
+  "pageSize": 0,
+  "asOfTime" : "{{$isoTimestamp}}",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false,
+  "limitResultsByStatus" : ["ACTIVE"],
+  "sequencingOrder" : "PROPERTY_ASCENDING",
+  "sequencingProperty" : "qualifiedName"
+}
+
+###
+
+@dataSetGUID=add guid here
+@dataContentAssetGUID=get guid here
+
+###
+# @name linkDataSetContent
+# Attach a data set to another asset (typically a data store) that is supplying the data.
+#
+# @param serverName name of the server to route the request to
+# @param urlMarker  view service URL marker
+# @param dataSetGUID          unique identifier of the data set
+# @param dataContentAssetGUID          unique identifier of the data asset supplying the data
+# @param requestBody properties to help with the mapping of the elements in the external asset manager and open metadata
+#
+# @return  void or
+# InvalidParameterException  one of the parameters is invalid
+# UserNotAuthorizedException the user is not authorized to issue this request
+# PropertyServerException    a problem reported in the open metadata server(s)
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/data-sets/{{dataSetGUID}}/data-set-content/{{dataContentAssetGUID}}/attach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewRelationshipRequestBody",
+  "properties": {
+    "class": "DataSetContentProperties",
+    "queryId": "add id that is used on overall formula",
+    "query": "add query",
+    "queryType": "add query type",
+    "iscQualifiedName": "add qualified name",
+    "effectiveFrom": "{{$isoTimestamp}}",
+    "effectiveTo": "{{$isoTimestamp}}"
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name detachDataSetContent
+# Detach a data set from another asset that was supplying the data and is no more.
+#
+# @param serverName name of the server to route the request to
+# @param urlMarker  view service URL marker
+# @param dataSetGUID          unique identifier of the data set
+# @param dataContentAssetGUID          unique identifier of the data asset supplying the data
+# @param requestBody properties to help with the mapping of the elements in the external asset manager and open metadata
+#
+# @return void or
+# InvalidParameterException  one of the parameters is invalid
+# UserNotAuthorizedException the user is not authorized to issue this request
+# PropertyServerException    a problem reported in the open metadata server(s)
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/data-sets/{{dataSetGUID}}/data-set-content/{{dataContentAssetGUID}}/detach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteRelationshipRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# Reports
+# https://egeria-project.org/concepts/report
+
+@originatorGUID=add guid here
+@subjectGUID=add guid here
+@reportGUID=add guid here
+@priorReportGUID=add guid here
+
+###
+# @name linkReportOriginator
+# Create a relationship that identifies the originator of a report.
+
+# @param serverName name of the server to route the request to
+# @param originatorGUID       unique identifier of the originator
+# @param reportGUID           unique identifier of the report
+# @param urlMarker  view service URL marker
+# @param requestBody optional effective time
+#
+# @return  void or
+# InvalidParameterException  one of the parameters is invalid
+# UserNotAuthorizedException the user is not authorized to issue this request
+# PropertyServerException    a problem reported in the open metadata server(s)
+#/
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/elements/{{originatorGUID}}/originated-reports/{{reportGUID}}/attach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewRelationshipRequestBody",
+  "properties": {
+    "class": "ReportOriginatorProperties",
+    "label": "add display label",
+    "description": "add description",
+    "effectiveFrom": "{{$isoTimestamp}}",
+    "effectiveTo": "{{$isoTimestamp}}"
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+
+###
+# @name unlinkReportOriginator
+# Remove a ReportOriginator relationship.
+#
+# @param serverName name of the server to route the request to
+# @param originatorGUID       unique identifier of the originator
+# @param reportGUID           unique identifier of the report
+# @param urlMarker  view service URL marker
+# @param requestBody optional effective time
+#
+# @return void or
+# InvalidParameterException  one of the parameters is invalid
+# UserNotAuthorizedException the user is not authorized to issue this request
+# PropertyServerException    a problem reported in the open metadata server(s)
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/elements/{{originatorGUID}}/originated-reports/{{reportGUID}}/detach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteRelationshipRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name linkReportDependency
+# Create a relationship that identifies the prior publishing of a report.
+#
+# @param serverName name of the server to route the request to
+# @param priorReportGUID       unique identifier of the earlier report
+# @param reportGUID           unique identifier of the new report
+# @param urlMarker  view service URL marker
+# @param requestBody optional effective time
+#
+# @return  void or
+# InvalidParameterException  one of the parameters is invalid
+# UserNotAuthorizedException the user is not authorized to issue this request
+# PropertyServerException    a problem reported in the open metadata server(s)
+#/
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/reports/{{priorReportGUID}}/follow-on-reports/{{reportGUID}}/attach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewRelationshipRequestBody",
+  "properties": {
+    "class": "ReportDependencyProperties",
+    "label": "add display label",
+    "description": "add description",
+    "effectiveFrom": "{{$isoTimestamp}}",
+    "effectiveTo": "{{$isoTimestamp}}"
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+
+###
+# @name unlinkReportDependency
+# Remove a ReportDependency relationship.
+#
+# @param serverName name of the server to route the request to
+# @param priorReportGUID       unique identifier of the prior report
+# @param reportGUID           unique identifier of the new report
+# @param urlMarker  view service URL marker
+# @param requestBody optional effective time
+#
+# @return void or
+# InvalidParameterException  one of the parameters is invalid
+# UserNotAuthorizedException the user is not authorized to issue this request
+# PropertyServerException    a problem reported in the open metadata server(s)
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/reports/{{priorReportGUID}}/follow-on-reports/{{reportGUID}}/detach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteRelationshipRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+
+###
+# @name linkReportSubject
+# Create a relationship that identifies the subject of a report.
+#
+# @param serverName name of the server to route the request to
+# @param subjectGUID       unique identifier of the subject
+# @param reportGUID           unique identifier of the report
+# @param urlMarker  view service URL marker
+# @param requestBody optional effective time
+#
+# @return  void or
+# InvalidParameterException  one of the parameters is invalid
+# UserNotAuthorizedException the user is not authorized to issue this request
+# PropertyServerException    a problem reported in the open metadata server(s)
+#/
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/elements/{{subjectGUID}}/reports/{{reportGUID}}/attach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewRelationshipRequestBody",
+  "properties": {
+    "class": "ReportSubjectProperties",
+    "label": "add display label",
+    "description": "add description",
+    "effectiveFrom": "{{$isoTimestamp}}",
+    "effectiveTo": "{{$isoTimestamp}}"
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+
+###
+# @name unlinkReportSubject
+# Remove a ReportSubject relationship.
+#
+# @param serverName name of the server to route the request to
+# @param subjectGUID       unique identifier of the subject
+# @param reportGUID           unique identifier of the report
+# @param urlMarker  view service URL marker
+# @param requestBody optional effective time
+#
+# @return void or
+# InvalidParameterException  one of the parameters is invalid
+# UserNotAuthorizedException the user is not authorized to issue this request
+# PropertyServerException    a problem reported in the open metadata server(s)
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/elements/{{subjectGUID}}/reports/{{reportGUID}}/detach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteRelationshipRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+
+###
+# =====================================================================================================================
+# A catalog target links an element (typically an asset) to an integration connector for processing.
+#
+
+@integrationConnectorGUID=fa1f711c-0b34-4b57-8e6e-16162b132b0c
+@metadataElementGUID=add guid here
+@relationshipGUID=add guid here
+
+###
+# @name addCatalogTarget
+# Add a catalog target to an integration connector.
+# Further Information: https://egeria-project.org/concepts/integration-connector/
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/integration-connectors/{{integrationConnectorGUID}}/catalog-targets/{{metadataElementGUID}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewRelationshipRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false,
+  "properties": {
+    "class": "CatalogTargetProperties",
+    "catalogTargetName" : "Freddy",
+    "metadataSourceQualifiedName" : "",
+    "templates" : {
+       "templateName1" : "template1GUID",
+       "templateName2" : "template2GUID"
+    },
+    "configurationProperties" : {
+      "propertyName1" : "propertyValue1",
+      "propertyName2" : "propertyValue2"
+    },
+    "effectiveFrom": "{{$isoTimestamp}}",
+    "effectiveTo": "{{$isoTimestamp}}"
+  }
+}
+
+
+###
+# Full catalog target properties
+#{
+#    "class": "CatalogTargetProperties",
+#    "catalogTargetName" : "",
+#    "metadataSourceQualifiedName" : "",
+#    "templates" : {
+#        "templateName1" : "template1GUID",
+#        "templateName2" : "template2GUID"
+#    },
+#    "configurationProperties" : {
+#        "propertyName1" : "propertyValue1",
+#        "propertyName2" : "propertyValue2"
+#    }
+#}
+
+
+###
+# @name updateCatalogTarget
+# Update a catalog target for an integration connector.
+# Further Information: https://egeria-project.org/concepts/integration-connector/
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/catalog-targets/{{relationshipGUID}}/update
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "UpdateRelationshipRequestBody",
+  "properties" : {
+    "class": "CatalogTargetProperties",
+    "catalogTargetName" : "Freddy",
+    "metadataSourceQualifiedName" : "",
+    "templates" : {
+       "templateName1" : "template1GUID",
+       "templateName2" : "template2GUID"
+    },
+    "configurationProperties" : {
+      "propertyName1" : "propertyValue1",
+      "propertyName2" : "propertyValue2"
+    }
+  },
+  "mergeUpdate": true,
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+
+###
+# @name getCatalogTarget
+# Retrieve a specific catalog target associated with an integration connector.
+# Further Information: https://egeria-project.org/concepts/integration-connector/
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/catalog-targets/{{relationshipGUID}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "GetRequestBody"
+}
+
+
+###
+# @name getCatalogTargets
+# Retrieve the details of the metadata elements identified as catalog targets with an integration connector.
+# Further Information: https://egeria-project.org/concepts/integration-connector/
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/integration-connectors/{{integrationConnectorGUID}}/catalog-targets
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "ResultsRequestBody",
+  "startFrom": 0,
+  "pageSize": 10
+}
+
+###
+# @name removeCatalogTarget
+# Unregister a catalog target from the integration connector.
+# Further Information: https://egeria-project.org/concepts/integration-connector/
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/catalog-targets/{{relationshipGUID}}/remove
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteRelationshipRequestBody"
+}
+
+
+###
+# @name removeCatalogTarget (by integration connector and metadata element GUID)
+# Unregister a catalog target from the integration connector. Request body is optional.
+# Further Information: https://egeria-project.org/concepts/integration-connector/
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/integration-connectors/{{integrationConnectorGUID}}/catalog-targets/{{metadataElementGUID}}/detach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteRelationshipRequestBody"
+}
+
+
+###
+# =====================================================================================================================
+# Work with Software Capabilities
+# https://egeria-project.org/concepts/software-capability
+
+###
+# @name createSoftwareCapability
+# Create a software capability.
+# Further Information: https://egeria-project.org/concepts/software-capability
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/software-capabilities
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewElementRequestBody",
+  "properties" : {
+    "class": "SoftwareCapabilityProperties",
+    "qualifiedName": "SoftwareCapability:{{$random.uuid}}",
+    "displayName": "New Software Capability",
+    "description": "Description of the new software capability.",
+    "deployedImplementationType": "Software Server"
+  }
+}
+
+
+###
+# @name createSoftwareCapabilityFromTemplate
+# Create a new metadata element to represent a software capability using an existing metadata element as a template.
+# Further Information: https://egeria-project.org/concepts/software-capability
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/software-capabilities/from-template
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "TemplateRequestBody",
+  "templateGUID" : "add guid here",
+  "replacementProperties" : {
+    "class": "SoftwareCapabilityProperties",
+    "qualifiedName": "SoftwareCapability:{{$random.uuid}}",
+    "displayName": "New Software Capability from Template"
+  }
+}
+
+
+###
+# @name updateSoftwareCapability
+# Update the properties of a software capability.
+# Further Information: https://egeria-project.org/concepts/software-capability
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/software-capabilities/{{softwareCapabilityGUID}}/update
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "UpdateElementRequestBody",
+  "properties" : {
+    "class": "SoftwareCapabilityProperties",
+    "description": "Updated description of the software capability."
+  }
+}
+
+
+###
+# @name getSoftwareCapabilityByGUID
+# Retrieve a specific software capability.
+# Further Information: https://egeria-project.org/concepts/software-capability
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/software-capabilities/{{softwareCapabilityGUID}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "GetRequestBody"
+}
+
+
+###
+# @name findSoftwareCapabilities
+# Retrieve the list of software capability metadata elements that contain the search string.
+# Further Information: https://egeria-project.org/concepts/software-capability
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/software-capabilities/search
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "SearchStringRequestBody",
+  "searchString" : "add search string here"
+}
+
+
+###
+# @name getSoftwareCapabilitiesByName
+# Retrieve the list of software capabilities with a particular name.
+# Further Information: https://egeria-project.org/concepts/software-capability
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/software-capabilities/by-name
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "FilterRequestBody",
+  "filter" : "SoftwareCapabilityName"
+}
+
+
+###
+# @name getSoftwareCapabilitiesByDeployedImplementationType
+# Retrieve the list of software capabilities with a particular deployed implementation type.
+# Further Information: https://egeria-project.org/concepts/software-capability
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/software-capabilities/by-deployed-implementation-type
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "FilterRequestBody",
+  "filter" : "Software Server"
+}
+
+
+###
+# @name getSoftwareCapabilitiesForInfrastructure
+# Retrieve the list of software capabilities attached to a specific infrastructure element.
+# Further Information: https://egeria-project.org/concepts/software-capability
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/infrastructure/{{infrastructureGUID}}/software-capabilities
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "ResultsRequestBody",
+  "startFrom": 0,
+  "pageSize": 10
+}
+
+
+###
+# @name addCapabilityAssetUse
+# Create a relationship that represents the use of an asset by a software capability.
+# The useType attribute may be "OWNS", "GOVERNS", "MAINTAINS", "USES", or "OTHER".
+# Further Information: https://egeria-project.org/concepts/software-capability
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/software-capabilities/{{softwareCapabilityGUID}}/assets/{{assetGUID}}/attach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewRelationshipRequestBody",
+  "properties" : {
+    "class": "CapabilityAssetUseProperties",
+    "useType": "OWNS"
+  }
+}
+
+
+###
+# @name removeCapabilityAssetUse
+# Remove the relationship that represents the use of an asset by a software capability.
+# Further Information: https://egeria-project.org/concepts/software-capability
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/software-capabilities/{{softwareCapabilityGUID}}/assets/{{assetGUID}}/detach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteRelationshipRequestBody"
+}
+
+
+###
+# @name getCapabilityUse
+# Retrieve the software capabilities using a particular asset.
+# Further Information: https://egeria-project.org/concepts/software-capability
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/assets/{{assetGUID}}/capability-use
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "ResultsRequestBody",
+  "startFrom": 0,
+  "pageSize": 10
+}
+
+
+###
+# @name linkSupportedGovernanceService
+# Create a relationship that registers a governance service with a governance engine.  This is a multi-link
+# relationship, which means the same governance engine may call the same governance service many times, each
+# with a different request type.  The unique identifier of the new relationship is returned so it can be
+# updated or removed later.
+# The deleteMethod attribute may be "ARCHIVE", "SOFT_DELETE", "LOOK_FOR_LINEAGE", "PURGE" or "OTHER".
+# Further Information: https://egeria-project.org/concepts/governance-engine
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/governance-engines/{{governanceEngineGUID}}/supported-governance-services/{{governanceServiceGUID}}/attach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewRelationshipRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false,
+  "properties": {
+    "class": "SupportedGovernanceServiceProperties",
+    "requestType": "add request type here",
+    "serviceRequestType": "add service request type here",
+    "requestParameters": {
+      "propertyName1" : "propertyValue1",
+      "propertyName2" : "propertyValue2"
+    },
+    "generateConnectorActivityReports": true,
+    "deleteMethod": "LOOK_FOR_LINEAGE",
+    "effectiveFrom": "{{$isoTimestamp}}",
+    "effectiveTo": "{{$isoTimestamp}}"
+  }
+}
+
+
+###
+# @name updateSupportedGovernanceService
+# Update the properties of a SupportedGovernanceService relationship.
+# Further Information: https://egeria-project.org/concepts/governance-engine
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/supported-governance-services/{{supportedGovernanceServiceGUID}}/update
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "UpdateRelationshipRequestBody",
+  "properties" : {
+    "class": "SupportedGovernanceServiceProperties",
+    "requestType": "add request type here",
+    "serviceRequestType": "add service request type here",
+    "requestParameters": {
+      "propertyName1" : "propertyValue1",
+      "propertyName2" : "propertyValue2"
+    },
+    "generateConnectorActivityReports": true,
+    "deleteMethod": "LOOK_FOR_LINEAGE"
+  },
+  "mergeUpdate": true,
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+
+###
+# @name detachSupportedGovernanceService
+# Remove a SupportedGovernanceService relationship.  Request body is optional.
+# Further Information: https://egeria-project.org/concepts/governance-engine
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/supported-governance-services/{{supportedGovernanceServiceGUID}}/detach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteRelationshipRequestBody"
+}
+
+
+###
+# @name getGovernanceEngines
+# Retrieve the governance engines connected to a particular governance service.
+# Further Information: https://egeria-project.org/concepts/governance-engine
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/governance-services/{{governanceServiceGUID}}/governance-engines
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "ResultsRequestBody",
+  "startFrom": 0,
+  "pageSize": 10
+}
+
+
+###
+# @name getIntegrationGroups
+# Retrieve the integration groups connected to a particular integration connector.
+# Further Information: https://egeria-project.org/concepts/integration-group
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/integration-connectors/{{integrationConnectorGUID}}/integration-groups
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "ResultsRequestBody",
+  "startFrom": 0,
+  "pageSize": 10
+}
+
+###
+# =====================================================================================================================
+# Asset structure relationships
+
+###
+# @name linkAPIEndpoint
+# Attach a deployed API to the endpoint where it is called.
+#
+# @param serverName name of the server to route the request to
+# @param urlMarker  view service URL marker
+# @param deployedAPIGUID unique identifier of the deployed API
+# @param endpointGUID unique identifier of the endpoint
+# @param requestBody properties for the relationship
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/deployed-apis/{{deployedAPIGUID}}/api-endpoints/{{endpointGUID}}/attach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewRelationshipRequestBody",
+  "properties": {
+    "class": "APIEndpointProperties",
+    "effectiveFrom": "{{$isoTimestamp}}",
+    "effectiveTo": "{{$isoTimestamp}}"
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name detachAPIEndpoint
+# Detach a deployed API from the endpoint where it is called.
+#
+# @param serverName name of the server to route the request to
+# @param urlMarker  view service URL marker
+# @param deployedAPIGUID unique identifier of the deployed API
+# @param endpointGUID unique identifier of the endpoint
+# @param requestBody delete options
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/deployed-apis/{{deployedAPIGUID}}/api-endpoints/{{endpointGUID}}/detach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteRelationshipRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name linkProcessHierarchy
+# Attach a child process to its parent process.
+#
+# @param serverName name of the server to route the request to
+# @param urlMarker  view service URL marker
+# @param parentProcessGUID unique identifier of the parent process
+# @param childProcessGUID unique identifier of the child process
+# @param requestBody properties for the relationship
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/processes/{{parentProcessGUID}}/process-hierarchies/{{childProcessGUID}}/attach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewRelationshipRequestBody",
+  "properties": {
+    "class": "ProcessHierarchyProperties",
+    "containmentType": "OWNED",
+    "effectiveFrom": "{{$isoTimestamp}}",
+    "effectiveTo": "{{$isoTimestamp}}"
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name detachProcessHierarchy
+# Detach a child process from its parent process.
+#
+# @param serverName name of the server to route the request to
+# @param urlMarker  view service URL marker
+# @param parentProcessGUID unique identifier of the parent process
+# @param childProcessGUID unique identifier of the child process
+# @param requestBody delete options
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/processes/{{parentProcessGUID}}/process-hierarchies/{{childProcessGUID}}/detach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteRelationshipRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name linkNestedFiles
+# Attach a data file to the file folder that it is stored in.
+#
+# @param serverName name of the server to route the request to
+# @param urlMarker  view service URL marker
+# @param folderGUID unique identifier of the file folder
+# @param fileGUID unique identifier of the data file that is stored in the folder
+# @param requestBody properties for the relationship
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/file-folders/{{folderGUID}}/nested-files/{{fileGUID}}/attach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewRelationshipRequestBody",
+  "properties": {
+    "class": "NestedFileProperties",
+    "effectiveFrom": "{{$isoTimestamp}}",
+    "effectiveTo": "{{$isoTimestamp}}"
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name detachNestedFile
+# Detach a data file from the file folder that it is stored in.
+#
+# @param serverName name of the server to route the request to
+# @param urlMarker  view service URL marker
+# @param folderGUID unique identifier of the file folder
+# @param fileGUID unique identifier of the data file that is stored in the folder
+# @param requestBody delete options
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/file-folders/{{folderGUID}}/nested-files/{{fileGUID}}/detach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteRelationshipRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name linkLinkedFiles
+# Attach a data file to a file folder that links to it without storing it.
+#
+# @param serverName name of the server to route the request to
+# @param urlMarker  view service URL marker
+# @param folderGUID unique identifier of the file folder
+# @param fileGUID unique identifier of the data file that is linked to the folder
+# @param requestBody properties for the relationship
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/file-folders/{{folderGUID}}/linked-files/{{fileGUID}}/attach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewRelationshipRequestBody",
+  "properties": {
+    "class": "LinkedFileProperties",
+    "effectiveFrom": "{{$isoTimestamp}}",
+    "effectiveTo": "{{$isoTimestamp}}"
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name detachLinkedFile
+# Detach a data file from a file folder that links to it without storing it.
+#
+# @param serverName name of the server to route the request to
+# @param urlMarker  view service URL marker
+# @param folderGUID unique identifier of the file folder
+# @param fileGUID unique identifier of the data file that is linked to the folder
+# @param requestBody delete options
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/file-folders/{{folderGUID}}/linked-files/{{fileGUID}}/detach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteRelationshipRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name linkFolderHierarchy
+# Attach a child file folder to its parent file folder.
+#
+# @param serverName name of the server to route the request to
+# @param urlMarker  view service URL marker
+# @param parentFolderGUID unique identifier of the parent file folder
+# @param childFolderGUID unique identifier of the child file folder
+# @param requestBody properties for the relationship
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/file-folders/{{parentFolderGUID}}/folder-hierarchies/{{childFolderGUID}}/attach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewRelationshipRequestBody",
+  "properties": {
+    "class": "FolderHierarchyProperties",
+    "effectiveFrom": "{{$isoTimestamp}}",
+    "effectiveTo": "{{$isoTimestamp}}"
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name detachFolderHierarchy
+# Detach a child file folder from its parent file folder.
+#
+# @param serverName name of the server to route the request to
+# @param urlMarker  view service URL marker
+# @param parentFolderGUID unique identifier of the parent file folder
+# @param childFolderGUID unique identifier of the child file folder
+# @param requestBody delete options
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/file-folders/{{parentFolderGUID}}/folder-hierarchies/{{childFolderGUID}}/detach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteRelationshipRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name linkImpactedResource
+# Attach a resource that is impacted by an incident report to that incident report.
+#
+# @param serverName name of the server to route the request to
+# @param urlMarker  view service URL marker
+# @param resourceGUID unique identifier of the impacted resource
+# @param incidentReportGUID unique identifier of the incident report
+# @param requestBody properties for the relationship
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/resources/{{resourceGUID}}/impacted-resources/{{incidentReportGUID}}/attach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewRelationshipRequestBody",
+  "properties": {
+    "class": "ImpactedResourceProperties",
+    "severityLevel": 0,
+    "effectiveFrom": "{{$isoTimestamp}}",
+    "effectiveTo": "{{$isoTimestamp}}"
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name detachImpactedResource
+# Detach a resource from an incident report that no longer impacts it.
+#
+# @param serverName name of the server to route the request to
+# @param urlMarker  view service URL marker
+# @param resourceGUID unique identifier of the impacted resource
+# @param incidentReportGUID unique identifier of the incident report
+# @param requestBody delete options
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/resources/{{resourceGUID}}/impacted-resources/{{incidentReportGUID}}/detach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteRelationshipRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# =====================================================================================================================
+# Further asset relationships
+# https://egeria-project.org/concepts/asset
+
+@archiveFileGUID=add guid here
+@collectionGUID=add guid here
+@elementGUID=add guid here
+@linkedMediaFileGUID=add guid here
+@logAssetGUID=add guid here
+@mediaFileGUID=add guid here
+@portGUID=add guid here
+@processGUID=add guid here
+@sampleDataGUID=add guid here
+
+###
+# @name linkArchiveContents
+# Attach an archive file to the collection that describes its contents.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/archive-files/{{archiveFileGUID}}/archive-contents/{{collectionGUID}}/attach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewRelationshipRequestBody",
+  "properties": {
+    "class": "ArchiveContentsProperties",
+    "effectiveFrom": "{{$isoTimestamp}}",
+    "effectiveTo": "{{$isoTimestamp}}"
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name detachArchiveContents
+# Detach an archive file from the collection that described its contents.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/archive-files/{{archiveFileGUID}}/archive-contents/{{collectionGUID}}/detach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteRelationshipRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name linkAssociatedLog
+# Attach an asset that holds a log to the element that the log is about.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/elements/{{elementGUID}}/associated-logs/{{logAssetGUID}}/attach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewRelationshipRequestBody",
+  "properties": {
+    "class": "AssociatedLogProperties",
+    "effectiveFrom": "{{$isoTimestamp}}",
+    "effectiveTo": "{{$isoTimestamp}}"
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name detachAssociatedLog
+# Detach an asset that holds a log from the element that the log was about.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/elements/{{elementGUID}}/associated-logs/{{logAssetGUID}}/detach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteRelationshipRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name linkLinkedMedia
+# Attach a media file to another media file that is related to it.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/media-files/{{mediaFileGUID}}/linked-media/{{linkedMediaFileGUID}}/attach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewRelationshipRequestBody",
+  "properties": {
+    "class": "LinkedMediaProperties",
+    "label": "add label",
+    "description": "add description",
+    "effectiveFrom": "{{$isoTimestamp}}",
+    "effectiveTo": "{{$isoTimestamp}}"
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name detachLinkedMedia
+# Detach a media file from another media file that was related to it.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/media-files/{{mediaFileGUID}}/linked-media/{{linkedMediaFileGUID}}/detach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteRelationshipRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name linkProcessPort
+# Attach a port to the process that owns it.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/processes/{{processGUID}}/ports/{{portGUID}}/attach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewRelationshipRequestBody",
+  "properties": {
+    "class": "ProcessPortProperties",
+    "effectiveFrom": "{{$isoTimestamp}}",
+    "effectiveTo": "{{$isoTimestamp}}"
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name detachProcessPort
+# Detach a port from the process that owned it.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/processes/{{processGUID}}/ports/{{portGUID}}/detach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteRelationshipRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name linkSampleData
+# Attach an asset holding sample data to the element that the sample was taken from.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/elements/{{elementGUID}}/sample-data/{{sampleDataGUID}}/attach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewRelationshipRequestBody",
+  "properties": {
+    "class": "SampleDataProperties",
+    "samplingMethod": "add sampling method here",
+    "effectiveFrom": "{{$isoTimestamp}}",
+    "effectiveTo": "{{$isoTimestamp}}"
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name detachSampleData
+# Detach an asset holding sample data from the element that the sample was taken from.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/elements/{{elementGUID}}/sample-data/{{sampleDataGUID}}/detach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteRelationshipRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# =====================================================================================================================
+# Asset log classifications
+# https://egeria-project.org/concepts/asset
+
+
+###
+# @name setAssetAsAuditLog
+# Classify an asset to say that it holds an audit log.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/assets/{{assetGUID}}/audit-log
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewClassificationRequestBody",
+  "properties": {
+    "class": "AuditLogProperties",
+    "notes": "add notes here",
+    "process": "add the process that maintains the log here",
+    "source": "add source here",
+    "effectiveFrom": "{{$isoTimestamp}}",
+    "effectiveTo": "{{$isoTimestamp}}"
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name clearAssetAsAuditLog
+# Remove the audit log designation from an asset.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/assets/{{assetGUID}}/audit-log/remove
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteClassificationRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name setAssetAsLineageLog
+# Classify an asset to say that it holds a lineage log.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/assets/{{assetGUID}}/lineage-log
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewClassificationRequestBody",
+  "properties": {
+    "class": "LineageLogProperties",
+    "notes": "add notes here",
+    "process": "add the process that maintains the log here",
+    "source": "add source here",
+    "effectiveFrom": "{{$isoTimestamp}}",
+    "effectiveTo": "{{$isoTimestamp}}"
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name clearAssetAsLineageLog
+# Remove the lineage log designation from an asset.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/assets/{{assetGUID}}/lineage-log/remove
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteClassificationRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name setAssetAsMeteringLog
+# Classify an asset to say that it holds a metering log.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/assets/{{assetGUID}}/metering-log
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewClassificationRequestBody",
+  "properties": {
+    "class": "MeteringLogProperties",
+    "notes": "add notes here",
+    "process": "add the process that maintains the log here",
+    "source": "add source here",
+    "effectiveFrom": "{{$isoTimestamp}}",
+    "effectiveTo": "{{$isoTimestamp}}"
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name clearAssetAsMeteringLog
+# Remove the metering log designation from an asset.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/assets/{{assetGUID}}/metering-log/remove
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteClassificationRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name setAssetAsSecurityLog
+# Classify an asset to say that it holds a security log.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/assets/{{assetGUID}}/security-log
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewClassificationRequestBody",
+  "properties": {
+    "class": "SecurityLogProperties",
+    "notes": "add notes here",
+    "process": "add the process that maintains the log here",
+    "source": "add source here",
+    "effectiveFrom": "{{$isoTimestamp}}",
+    "effectiveTo": "{{$isoTimestamp}}"
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name clearAssetAsSecurityLog
+# Remove the security log designation from an asset.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/assets/{{assetGUID}}/security-log/remove
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteClassificationRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name setAssetAsExceptionBacklog
+# Classify an asset to say that it holds a backlog of exceptions that need to be resolved.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/assets/{{assetGUID}}/exception-backlog
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewClassificationRequestBody",
+  "properties": {
+    "class": "ExceptionBacklogProperties",
+    "notes": "add notes here",
+    "process": "add the process that maintains the log here",
+    "source": "add source here",
+    "steward": "add steward here",
+    "stewardTypeName": "add steward type name here",
+    "stewardPropertyName": "add steward property name here",
+    "effectiveFrom": "{{$isoTimestamp}}",
+    "effectiveTo": "{{$isoTimestamp}}"
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name clearAssetAsExceptionBacklog
+# Remove the exception backlog designation from an asset.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/assets/{{assetGUID}}/exception-backlog/remove
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteClassificationRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name setAssetAsLogAnalysis
+# Classify an asset to say that it holds the results of analysing a log.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/assets/{{assetGUID}}/log-analysis
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewClassificationRequestBody",
+  "properties": {
+    "class": "LogAnalysisProperties",
+    "notes": "add notes here",
+    "process": "add the process that maintains the log here",
+    "source": "add source here",
+    "dataCollectionStartTime": "{{$isoTimestamp}}",
+    "dataCollectionEndTime": "{{$isoTimestamp}}",
+    "effectiveFrom": "{{$isoTimestamp}}",
+    "effectiveTo": "{{$isoTimestamp}}"
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name clearAssetAsLogAnalysis
+# Remove the log analysis designation from an asset.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/assets/{{assetGUID}}/log-analysis/remove
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteClassificationRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# =====================================================================================================================
+# Deployed API classifications
+# https://egeria-project.org/concepts/deployed-api
+
+@deployedAPIGUID=add guid here
+
+###
+# @name setAPIAsListenerInterface
+# Classify a deployed API to say that it provides a listener interface.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/deployed-apis/{{deployedAPIGUID}}/listener-interface
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewClassificationRequestBody",
+  "properties": {
+    "class": "ListenerInterfaceProperties",
+    "effectiveFrom": "{{$isoTimestamp}}",
+    "effectiveTo": "{{$isoTimestamp}}"
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name clearAPIAsListenerInterface
+# Remove the listener interface designation from a deployed API.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/deployed-apis/{{deployedAPIGUID}}/listener-interface/remove
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteClassificationRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name setAPIAsPublisherInterface
+# Classify a deployed API to say that it provides a publisher interface.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/deployed-apis/{{deployedAPIGUID}}/publisher-interface
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewClassificationRequestBody",
+  "properties": {
+    "class": "PublisherInterfaceProperties",
+    "effectiveFrom": "{{$isoTimestamp}}",
+    "effectiveTo": "{{$isoTimestamp}}"
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name clearAPIAsPublisherInterface
+# Remove the publisher interface designation from a deployed API.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/deployed-apis/{{deployedAPIGUID}}/publisher-interface/remove
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteClassificationRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name setAPIAsRequestResponseInterface
+# Classify a deployed API to say that it provides a request-response interface.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/deployed-apis/{{deployedAPIGUID}}/request-response-interface
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewClassificationRequestBody",
+  "properties": {
+    "class": "RequestResponseInterfaceProperties",
+    "effectiveFrom": "{{$isoTimestamp}}",
+    "effectiveTo": "{{$isoTimestamp}}"
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name clearAPIAsRequestResponseInterface
+# Remove the request-response interface designation from a deployed API.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/deployed-apis/{{deployedAPIGUID}}/request-response-interface/remove
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteClassificationRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# =====================================================================================================================
+# Data asset encoding classification
+# https://egeria-project.org/concepts/data-asset
+
+@dataAssetGUID=add guid here
+
+###
+# @name setDataAssetEncoding
+# Classify a data asset to describe how its data is encoded.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/data-assets/{{dataAssetGUID}}/encoding
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewClassificationRequestBody",
+  "properties": {
+    "class": "DataAssetEncodingProperties",
+    "encodingType": "add encoding type here",
+    "encodingLanguage": "add encoding language here",
+    "encodingDescription": "add description here",
+    "effectiveFrom": "{{$isoTimestamp}}",
+    "effectiveTo": "{{$isoTimestamp}}"
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name clearDataAssetEncoding
+# Remove the encoding description from a data asset.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/data-assets/{{dataAssetGUID}}/encoding/remove
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteClassificationRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# =====================================================================================================================
+# Port delegation relationship
+# https://egeria-project.org/concepts/port
+
+@delegatingFromPortGUID=add guid here
+@delegatingToPortGUID=add guid here
+
+###
+# @name linkPortDelegation
+# Attach a port to the port that it delegates to.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/ports/{{delegatingFromPortGUID}}/port-delegations/{{delegatingToPortGUID}}/attach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewRelationshipRequestBody",
+  "properties": {
+    "class": "PortDelegationProperties",
+    "effectiveFrom": "{{$isoTimestamp}}",
+    "effectiveTo": "{{$isoTimestamp}}"
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name detachPortDelegation
+# Detach a port from the port that it delegated to.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/ports/{{delegatingFromPortGUID}}/port-delegations/{{delegatingToPortGUID}}/detach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteRelationshipRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# =====================================================================================================================
+# Registered integration connector relationship
+# https://egeria-project.org/concepts/integration-connector
+
+@integrationGroupGUID=add guid here
+
+###
+# @name linkRegisteredIntegrationConnector
+# Register an integration connector with the integration group that runs it.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/integration-groups/{{integrationGroupGUID}}/registered-integration-connectors/{{integrationConnectorGUID}}/attach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewRelationshipRequestBody",
+  "properties": {
+    "class": "RegisteredIntegrationConnectorProperties",
+    "connectorName": "add connector name here",
+    "connectorUserId": "add user id here",
+    "refreshTimeInterval": 60,
+    "generateConnectorActivityReports": true,
+    "permittedSynchronization": "BOTH_DIRECTIONS",
+    "effectiveFrom": "{{$isoTimestamp}}",
+    "effectiveTo": "{{$isoTimestamp}}"
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name detachRegisteredIntegrationConnector
+# Remove an integration connector from the integration group that ran it.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/integration-groups/{{integrationGroupGUID}}/registered-integration-connectors/{{integrationConnectorGUID}}/detach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteRelationshipRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+

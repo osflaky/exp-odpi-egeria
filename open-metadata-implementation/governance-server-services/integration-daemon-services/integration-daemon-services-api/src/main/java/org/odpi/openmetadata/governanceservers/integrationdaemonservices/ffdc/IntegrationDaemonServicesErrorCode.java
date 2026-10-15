@@ -1,0 +1,252 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Copyright Contributors to the ODPi Egeria project. */
+package org.odpi.openmetadata.governanceservers.integrationdaemonservices.ffdc;
+
+import org.odpi.openmetadata.frameworks.auditlog.messagesets.ExceptionMessageDefinition;
+import org.odpi.openmetadata.frameworks.auditlog.messagesets.ExceptionMessageSet;
+
+/**
+ * The IntegrationDaemonServicesErrorCode error code is used to define first failure data capture (FFDC) for errors that
+ * occur when working with the Integration Daemon Services.  It is used in conjunction with all exceptions,
+ * both Checked and Runtime (unchecked).
+ * The 5 fields in the enum are:
+ * <ul>
+ *     <li>HTTP Error Code for translating between REST and JAVA - Typically the numbers used are:</li>
+ *     <li><ul>
+ *         <li>500 - internal error</li>
+ *         <li>400 - invalid parameters</li>
+ *         <li>404 - not found</li>
+ *         <li>409 - data conflict errors - eg item already defined</li>
+ *     </ul></li>
+ *     <li>Error Message Id - to uniquely identify the message</li>
+ *     <li>Error Message Text - includes placeholder to allow additional values to be captured</li>
+ *     <li>SystemAction - describes the result of the error</li>
+ *     <li>UserAction - describes how a user should correct the error</li>
+ * </ul>
+ */
+public enum IntegrationDaemonServicesErrorCode implements ExceptionMessageSet
+{
+    /**
+     * INTEGRATION-DAEMON-SERVICES-400-001 - Integration daemon {0} has been passed a null configuration document section for the integration daemon services
+     */
+    NO_CONFIG_DOC(400,"INTEGRATION-DAEMON-SERVICES-400-001",
+                  "Integration daemon {0} has been passed a null configuration document section for the integration daemon services",
+                  "The integration daemon services can not retrieve any configuration values.  " +
+                          "The integration daemon fails to start because it would be bored with nothing to do.",
+                  "Add the configuration for at least one integration service or integration group to this integration daemon's configuration document and then restart the integration daemon.",
+                  "https://egeria-project.org/services/integration-daemon-services/"),
+
+    /**
+     * INTEGRATION-DAEMON-SERVICES-400-003 - Integration service {0} is not configured with the platform URL root for the {1}
+     */
+    NO_OMAS_SERVER_URL(400,"INTEGRATION-DAEMON-SERVICES-400-003",
+                       "Integration service {0} is not configured with the platform URL root for the {1}",
+                       "The integration service is not able to locate the server where its partner OMAS is running in order " +
+                               "to exchange metadata.  The integration daemon server fails to start.",
+                       "To be successful each integration service needs both the platform URL root and the name of the " +
+                               "server there the OMAS is running as well as the list of connections for the connectors it is to manage. Add this " +
+                               "configuration to the integration daemon's configuration document and check that the " +
+                               "other required configuration properties are in place. Then restart the integration daemon server.",
+                               "https://egeria-project.org/services/integration-daemon-services/"),
+
+    /**
+     * INTEGRATION-DAEMON-SERVICES-400-004 - Integration service {0} is not configured with the name for the server running the {1}
+     */
+    NO_OMAS_SERVER_NAME(400, "INTEGRATION-DAEMON-SERVICES-400-004",
+                        "Integration service {0} is not configured with the name for the server running the {1}",
+                        "The integration service is not able to locate the metadata server where its partner OMAS is running in order " +
+                                "to exchange metadata.  The integration daemon fails to start.",
+                        "Add the configuration for the server name for this integration service to the integration daemon's " +
+                                "configuration document.  " +
+                                "Ensure that the platform URL root points to the platform where the metadata server is running and that" +
+                                "there is at least one connection for an integration connector listed.  Once the configuration document is set up " +
+                                "correctly, restart the integration daemon.",
+                                "https://egeria-project.org/services/integration-daemon-services/"),
+
+    /**
+     * INTEGRATION-DAEMON-SERVICES-400-009 - The integration daemon services are unable to initialize a new instance of integration daemon {0};
+     * error message is {1}
+     */
+    SERVICE_INSTANCE_FAILURE(400, "INTEGRATION-DAEMON-SERVICES-400-009",
+                             "The integration daemon services are unable to initialize a new instance of integration daemon {0}; " +
+                                     "error message is {1}",
+                             "The integration daemon services detected an error during the start up of a specific integration daemon instance.  " +
+                                     "No integration services are running in the server.",
+                             "Review the error message and any other reported failures to determine the cause of the problem.  " +
+                                     "Once this is resolved, restart the integration daemon.",
+                                     "https://egeria-project.org/services/integration-daemon-services/"),
+
+    /*
+     * Errors when running requests
+     */
+
+    /**
+     * INTEGRATION-DAEMON-SERVICES-400-031 - Integration connector named {0} is not running in the integration daemon {1}
+     */
+    UNKNOWN_CONNECTOR_NAME(400, "INTEGRATION-DAEMON-SERVICES-400-031",
+                                "Integration connector named {0} is not running in the integration daemon {1}",
+                                "The integration connector specified on a request is not known to the integration daemon.",
+                                "This may be a configuration error in the integration daemon or an error in the caller.  " +
+                                        "The supported integration connectors may be listed in the integration service's configuration" +
+                                        "or be part of one of the configured integration groups.  " +
+                                        "Check the configuration document for the daemon and then its start up messages to ensure the correct " +
+                                        "integration services and connectors are started successfully.  " +
+                                        "Look for other error messages that indicate that an error occurred during " +
+                                        "start up.  If the integration daemon is running the correct integration services then validate that " +
+                                        "the caller has passed matching connector name and URL marker of the integration service to the " +
+                                        "integration daemon." +
+                                        "If all of this is correct then it may be a code error in the integration daemon services and you need to " +
+                                        "raise an issue to get it fixed.  Once the cause is resolved, retry the request.",
+                                        "https://egeria-project.org/services/integration-daemon-services/"),
+
+    /**
+     * INTEGRATION-DAEMON-SERVICES-400-032 - Properties for integration group called {0} have not been returned by open metadata server {1}
+     * to the integration daemon services in server {2}
+     */
+    UNKNOWN_INTEGRATION_GROUP_CONFIG(400, "INTEGRATION-DAEMON-SERVICES-400-032",
+                                     "Properties for integration group called {0} have not been returned by open metadata server {1} to the integration" +
+                                             " daemon services in server {2}",
+                                     "The integration daemon is still not able to initialize the integration group and so it will not be " +
+                                             "able to support any integration connectors for this group.",
+                                     "This may be a configuration error or the metadata server may be down.  Look for other error messages and review the " +
+                                             "configuration of the integration daemon.  If the name of the group needs to change, restart the " +
+                                             "server.",
+                                             "https://egeria-project.org/services/integration-daemon-services/"),
+
+    /**
+     * INTEGRATION-DAEMON-SERVICES-400-034 - Integration group named {0} is not running in the integration daemon {1}
+     */
+    UNKNOWN_GROUP_NAME(400, "INTEGRATION-DAEMON-SERVICES-400-034",
+                       "Integration group named {0} is not running in the integration daemon {1}",
+                       "The integration group specified on a request is not known to the integration daemon.",
+                       "This may be a configuration error in the integration daemon or an error in the caller.  " +
+                                "The supported integration groups are listed in the integration daemon's configuration.  " +
+                                "Check the configuration document for the daemon and then its start up messages to ensure the correct " +
+                                "integration groups are started successfully.  " +
+                                "Look for other error messages that indicate that an error occurred during " +
+                                "start up.  If the integration daemon is running the correct integration groups then validate that " +
+                                "the caller has passed the correct name." +
+                                "If all of this is correct then it may be a code error in the integration daemon services and you need to " +
+                                "raise an issue to get it fixed.  Once the cause is resolved, retry the request.",
+                                "https://egeria-project.org/services/integration-daemon-services/"),
+
+    /**
+     * INTEGRATION-DAEMON-SERVICES-400-035 - No integration groups are running in the integration daemon {0}
+     */
+    NO_INTEGRATION_GROUPS(400, "INTEGRATION-DAEMON-SERVICES-400-035",
+                          "No integration groups are running in the integration daemon {0}",
+                          "The call to the integration daemon fails and an exception is returned to the caller.",
+                          "This is either a configuration error or a logic error.  If this is a configuration error, add the required integration " +
+                                  "groups to the configuration document.  " +
+                                  "If there are no errors in the configuration, raise an issue to get help to fix this.",
+                                  "https://egeria-project.org/services/integration-daemon-services/"),
+
+    /*
+     * Internal logic errors
+     */
+
+    ;
+
+
+    private final int    httpErrorCode;
+    private final String errorMessageId;
+    private final String errorMessage;
+    private final String systemAction;
+    private final String userAction;
+    private final String url;
+
+
+    /**
+     * Constructor for the message definitions that have no page to link to.
+     *
+     * @param httpErrorCode   error code to use over REST calls
+     * @param errorMessageId   unique id for the message
+     * @param errorMessage   text for the message
+     * @param systemAction   description of the action taken by the system when the error condition happened
+     * @param userAction   instructions for resolving the error
+     */
+    IntegrationDaemonServicesErrorCode(int httpErrorCode, String errorMessageId, String errorMessage, String systemAction, String userAction)
+    {
+        this(httpErrorCode, errorMessageId, errorMessage, systemAction, userAction, null);
+    }
+
+
+    /**
+     * The constructor expects to be passed one of the enumeration rows defined above.
+     *
+     * @param httpErrorCode   error code to use over REST calls
+     * @param errorMessageId   unique id for the message
+     * @param errorMessage   text for the message
+     * @param systemAction   description of the action taken by the system when the error condition happened
+     * @param userAction   instructions for resolving the error
+     * @param url link to a page that describes the component or concept behind
+     *            this message - null if there is no suitable page
+     */
+    IntegrationDaemonServicesErrorCode(int httpErrorCode, String errorMessageId, String errorMessage, String systemAction, String userAction, String url)
+    {
+        this.httpErrorCode = httpErrorCode;
+        this.errorMessageId = errorMessageId;
+        this.errorMessage = errorMessage;
+        this.systemAction = systemAction;
+        this.userAction = userAction;
+        this.url        = url;
+    }
+
+
+    /**
+     * Retrieve a message definition object for an exception.  This method is used when there are no message inserts.
+     *
+     * @return message definition object.
+     */
+    @Override
+    public ExceptionMessageDefinition getMessageDefinition()
+    {
+        return new ExceptionMessageDefinition(httpErrorCode,
+                                              errorMessageId,
+                                              errorMessage,
+                                              systemAction,
+                                              userAction,
+                                              url);
+    }
+
+
+    /**
+     * Retrieve a message definition object for an exception.  This method is used when there are values to be inserted into the message.
+     *
+     * @param params array of parameters (all strings).  They are inserted into the message according to the numbering in the message text.
+     * @return message definition object.
+     */
+    @Override
+    public ExceptionMessageDefinition getMessageDefinition(String... params)
+    {
+        ExceptionMessageDefinition messageDefinition = new ExceptionMessageDefinition(httpErrorCode,
+                                                                                      errorMessageId,
+                                                                                      errorMessage,
+                                                                                      systemAction,
+                                                                                      userAction,
+                                                                                      url);
+
+        messageDefinition.setMessageParameters(params);
+
+        return messageDefinition;
+    }
+
+
+    /**
+     * JSON-style toString
+     *
+     * @return string of property names and values for this enum
+     */
+    @Override
+    public String toString()
+    {
+        return "IntegrationDaemonServicesErrorCode{" +
+                       "httpErrorCode=" + httpErrorCode +
+                       ", errorMessageId='" + errorMessageId + '\'' +
+                       ", errorMessage='" + errorMessage + '\'' +
+                       ", systemAction='" + systemAction + '\'' +
+                       ", userAction='" + userAction + '\'' +
+                       ", url='" + url + '\'' +
+                       '}';
+    }
+}

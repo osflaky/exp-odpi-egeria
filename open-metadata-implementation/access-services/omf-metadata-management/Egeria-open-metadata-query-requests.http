@@ -1,0 +1,194 @@
+# Egeria-open-metadata-store
+
+@serverName=active-metadata-store
+@userId=erinoverview
+
+###
+# =====================================================================================================================
+# Manage the authentication token.  Run this request to create/refresh the token.
+
+# @name Token (RequestBody)
+POST {{baseURL}}/api/token
+Content-Type: application/json
+
+{
+  "userId" : "{{userId}}",
+  "password" : "secret"
+}
+
+> {% client.global.set("token", response.body); %}
+
+
+###
+# Working with entities
+@elementGUID=dcca9788-b30f-4007-b1ac-ec634aff6879
+
+
+###
+# @name getMetadataElementByGUID
+# Retrieve the metadata element using its unique identifier.
+GET {{baseURL}}/servers/{{serverName}}/open-metadata/access-services/open-metadata-store/users/{{userId}}/metadata-elements/{{elementGUID}}
+Authorization: Bearer {{token}}
+
+# Optional request parameters
+#    ?forLineage=false&forDuplicateProcessing=false&effectiveTime=0
+
+
+###
+# @name getMetadataElementByUniqueName
+# Retrieve the metadata element using its unique name. The namePropertyName identifies which proeprty ot match on
+# (typically this is the qualified name, but the example shows retrieving the asset for a file by its path name).
+POST {{baseURL}}/servers/{{serverName}}/open-metadata/access-services/open-metadata-store/users/{{userId}}/metadata-elements/by-unique-name
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NameRequestBody",
+  "namePropertyName" : "pathName",
+  "name" : "/Code/ODPi/egeria-core/egeria/open-metadata-distribution/omag-server-platform/build/unpacked/egeria-platform-6.2-SNAPSHOT-distribution.tar.gz/assembly/platform/sample-data/oak-dene-drop-foot-weekly-measurements/week9.csv"
+}
+
+
+###
+# @name getMetadataElementGUIDByUniqueName
+# Retrieve the unique identifier of a metadata element using its unique name (typically the qualified name).
+POST {{baseURL}}/servers/{{serverName}}/open-metadata/access-services/open-metadata-store/users/{{userId}}/metadata-elements/guid-by-unique-name
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NameRequestBody",
+  "namePropertyName" : "pathName",
+  "name" : "/Code/ODPi/egeria-core/egeria/open-metadata-distribution/omag-server-platform/build/unpacked/egeria-platform-6.2-SNAPSHOT-distribution.tar.gz/assembly/platform/sample-data/oak-dene-drop-foot-weekly-measurements/week9.csv"
+}
+
+
+###
+# @name findMetadataElementsWithString
+# Retrieve the metadata elements that contain the requested string.
+POST {{baseURL}}/servers/{{serverName}}/open-metadata/access-services/open-metadata-store/users/{{userId}}/metadata-elements/by-search-string?
+    startFrom=0&
+    pageSize=0
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "SearchStringRequestBody",
+  "searchString" : ".*Template.*"
+}
+
+
+###
+# @name findMetadataElements
+# Return a list of metadata elements that match the supplied criteria.  The results can be returned over many pages.
+POST {{baseURL}}/servers/{{serverName}}/open-metadata/access-services/open-metadata-store/users/{{userId}}/metadata-elements/by-search-conditions?
+    startFrom=0&
+    pageSize=0
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "FindRequestBody",
+  "metadataElementTypeName" : "Asset",
+  "metadataElementSubtypeName" : ["CSVFile", "Document" ],
+  "searchProperties" : {
+    "conditions" : [ {
+      "class" : "PropertyCondition",
+      "property" : "fileName",
+      "operator" : "EQ",
+      "value" : {
+        "class" : "PrimitiveTypePropertyValue",
+        "typeName" : "string",
+        "primitiveTypeCategory" : "OM_PRIMITIVE_TYPE_STRING",
+        "primitiveValue" : "week1.csv"
+      }
+    }],
+    "matchCriteria" : "ALL"
+  }
+}
+
+###
+# Navigating the relationships to related elements
+
+@relationshipTypeName=DataSetContent
+
+
+###
+# @name getAllRelatedMetadataElements
+# Retrieve the metadata elements connected to the supplied element.
+POST {{baseURL}}/servers/{{serverName}}/open-metadata/access-services/open-metadata-store/users/{{userId}}/related-elements/{{elementGUID}}/any-type?
+    startingAtEnd=0&
+    startFrom=0&
+    pageSize=0
+Authorization: Bearer {{token}}
+
+
+###
+# @name getRelatedMetadataElements
+# Retrieve the metadata elements connected to the supplied element via a specific relationship type.
+POST {{baseURL}}/servers/{{serverName}}/open-metadata/access-services/open-metadata-store/users/{{userId}}/related-elements/{{elementGUID}}/type/{{relationshipTypeName}}?
+    startingAtEnd=0&
+    startFrom=0&
+    pageSize=0
+Authorization: Bearer {{token}}
+
+###
+# Querying relationships
+
+@metadataElementAtEnd1GUID=guid
+@metadataElementAtEnd2GUID=guid
+@relationshipGUID=687bf1ab-fe42-403c-a2aa-abec3904e080
+
+
+###
+# @name getAllMetadataElementRelationships
+# Retrieve the relationships linking the supplied elements.
+POST {{baseURL}}/servers/{{serverName}}/open-metadata/access-services/open-metadata-store/users/{{userId}}/metadata-elements/{{metadataElementAtEnd1GUID}}/linked-by-any-type/to-elements/{{metadataElementAtEnd2GUID}}?
+    startFrom=0&
+    pageSize=0
+Authorization: Bearer {{token}}
+
+
+###
+# @name getMetadataElementRelationships
+# Retrieve the relationships linking the supplied elements via a specific type of relationship.
+POST {{baseURL}}/servers/{{serverName}}/open-metadata/access-services/open-metadata-store/users/{{userId}}/metadata-elements/{{metadataElementAtEnd1GUID}}/linked-by-type/{{relationshipTypeName}}/to-elements/{{metadataElementAtEnd2GUID}}?
+    startFrom=0&
+    pageSize=0
+Authorization: Bearer {{token}}
+
+
+###
+# @name getRelationshipByGUID
+# Retrieve the relationship using its unique identifier.
+GET {{baseURL}}/servers/{{serverName}}/open-metadata/access-services/open-metadata-store/users/{{userId}}/relationships/by-guid/{{relationshipGUID}}
+Authorization: Bearer {{token}}
+
+
+###
+# @name findRelationshipsBetweenMetadataElements
+# Return a list of relationships that match the requested conditions.  The results can be received as a series of pages.
+POST {{baseURL}}/servers/{{serverName}}/open-metadata/access-services/open-metadata-store/users/{{userId}}/relationships/by-search-conditions?
+    startFrom=0&
+    pageSize=0
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "FindRelationshipRequestBody",
+  "relationshipTypeName" : "SourcedFrom",
+  "searchProperties" : {
+     "conditions" : [ {
+         "class" : "PropertyCondition",
+         "property" : "sourceVersionIdentifier",
+         "operator" : "GT",
+         "value" : {
+             "class" : "PrimitiveTypePropertyValue",
+             "typeName" : "long",
+             "primitiveTypeCategory" : "OM_PRIMITIVE_TYPE_LONG",
+             "primitiveValue" : 0
+         }
+     }],
+     "matchCriteria" : "ALL"
+  }
+}

@@ -1,0 +1,288 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Copyright Contributors to the ODPi Egeria project. */
+package org.odpi.openmetadata.frameworks.openmetadata.properties.validvalues;
+
+import com.fasterxml.jackson.annotation.*;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.AuthoredReferenceableProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.types.OpenMetadataType;
+
+import java.util.Objects;
+
+import static com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility.NONE;
+import static com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility.PUBLIC_ONLY;
+
+/**
+ * ValidValueDefinitionProperties provides the common super class for ValidValueSet and ValidValueDefinition.
+ */
+@JsonAutoDetect(getterVisibility=PUBLIC_ONLY, setterVisibility=PUBLIC_ONLY, fieldVisibility=NONE)
+@JsonInclude(JsonInclude.Include.NON_NULL)
+@JsonIgnoreProperties(ignoreUnknown=true)
+@JsonTypeInfo(use = JsonTypeInfo.Id.NAME,
+        include = JsonTypeInfo.As.PROPERTY,
+        property = "class")
+@JsonSubTypes(
+        {
+                @JsonSubTypes.Type(value = ReferenceDataValueProperties.class, name = "ReferenceDataValueProperties"),
+                @JsonSubTypes.Type(value = SpecificationPropertyValueProperties.class, name = "SpecificationPropertyValueProperties"),
+                @JsonSubTypes.Type(value = ValidMetadataValueProperties.class, name = "ValidMetadataValueProperties"),
+        })
+public class ValidValueDefinitionProperties extends AuthoredReferenceableProperties
+{
+    private String  namespacePath   = null;
+    private String  usage           = null;
+    private String  scope           = null;
+    private String  preferredValue  = null;
+    private String  dataType        = null;
+    private boolean isCaseSensitive = false;
+    private int     ordinal         = 0;
+
+
+    /**
+     * Constructor
+     */
+    public ValidValueDefinitionProperties()
+    {
+        super();
+        super.typeName = OpenMetadataType.VALID_VALUE_DEFINITION.typeName;
+    }
+
+
+    /**
+     * Copy/clone constructor
+     *
+     * @param template object to copy
+     */
+    public ValidValueDefinitionProperties(ValidValueDefinitionProperties template)
+    {
+        super(template);
+
+        if (template != null)
+        {
+            namespacePath   = template.getNamespacePath();
+            usage           = template.getUsage();
+            scope           = template.getScope();
+            preferredValue  = template.getPreferredValue();
+            dataType        = template.getDataType();
+            isCaseSensitive = template.getIsCaseSensitive();
+            ordinal         = template.getOrdinal();
+        }
+    }
+
+
+    /**
+     * Return the name of the namespace that this type belongs to.
+     *
+     * @return string name
+     */
+    public String getNamespacePath()
+    {
+        return namespacePath;
+    }
+
+
+    /**
+     * Set up the name of the namespace that this type belongs to.
+     *
+     * @param namespacePath string name
+     */
+    public void setNamespacePath(String namespacePath)
+    {
+        this.namespacePath = namespacePath;
+    }
+
+
+    /**
+     * Return the description of how this valid value should be used.
+     *
+     * @return String text
+     */
+    public String getUsage()
+    {
+        return usage;
+    }
+
+
+    /**
+     * Set up the description of how this valid value should be used.
+     *
+     * @param usage String text
+     */
+    public void setUsage(String usage)
+    {
+        this.usage = usage;
+    }
+
+
+    /**
+     * Return the scope of values that this valid value covers (normally used with sets)
+     *
+     * @return String text
+     */
+    public String getScope()
+    {
+        return scope;
+    }
+
+
+    /**
+     * Set up the scope of values that this valid value covers (normally used with sets)
+     *
+     * @param scope String text
+     */
+    public void setScope(String scope)
+    {
+        this.scope = scope;
+    }
+
+
+    /**
+     * Return the preferred values to use in implementations (normally used with definitions)
+     *
+     * @return String value
+     */
+    public String getPreferredValue()
+    {
+        return preferredValue;
+    }
+
+
+    /**
+     * Set up the preferred values to use in implementations (normally used with definitions)
+     *
+     * @param preferredValue String value
+     */
+    public void setPreferredValue(String preferredValue)
+    {
+        this.preferredValue = preferredValue;
+    }
+
+
+    /**
+     * Returns the data type of the preferred value.
+     *
+     * @return string
+     */
+    public String getDataType()
+    {
+        return dataType;
+    }
+
+
+    /**
+     * Set up the data type of the preferred value.
+     *
+     * @param dataType string
+     */
+    public void setDataType(String dataType)
+    {
+        this.dataType = dataType;
+    }
+
+
+
+    /**
+     * Return whether this valid value is case-sensitive, or will match irrespective of case.
+     *
+     * @return boolean flag
+     */
+    public boolean getIsCaseSensitive()
+    {
+        return isCaseSensitive;
+    }
+
+
+    /**
+     * Set up whether this valid value is case-sensitive, or will match irrespective of case.
+     *
+     * @param caseSensitive boolean flag
+     */
+    public void setIsCaseSensitive(boolean caseSensitive)
+    {
+        isCaseSensitive = caseSensitive;
+    }
+
+
+    /**
+     * Return the ordinal for this valid value.
+     *
+     * @return int ordinal
+     */
+    public int getOrdinal()
+    {
+        return ordinal;
+    }
+
+
+    /**
+     * Set up the ordinal for this valid value.
+     *
+     * @param ordinal int
+     */
+    public void setOrdinal(int ordinal)
+    {
+        this.ordinal = ordinal;
+    }
+
+
+    /**
+     * Generate a string containing the properties.
+     *
+     * @return string value
+     */
+    @Override
+    public String toString()
+    {
+        return "ValidValueDefinitionProperties{" +
+                "namespacePath='" + namespacePath + '\'' +
+                ", usage='" + usage + '\'' +
+                ", scope='" + scope + '\'' +
+                ", preferredValue='" + preferredValue + '\'' +
+                ", dataType='" + dataType + '\'' +
+                ", isCaseSensitive=" + isCaseSensitive +
+                ", ordinal=" + ordinal +
+                "} " + super.toString();
+    }
+
+
+    /**
+     * Compare the values of the supplied object with those stored in the current object.
+     *
+     * @param objectToCompare supplied object
+     * @return boolean result of comparison
+     */
+    @Override
+    public boolean equals(Object objectToCompare)
+    {
+        if (this == objectToCompare)
+        {
+            return true;
+        }
+        if (objectToCompare == null || getClass() != objectToCompare.getClass())
+        {
+            return false;
+        }
+        if (!super.equals(objectToCompare))
+        {
+            return false;
+        }
+        ValidValueDefinitionProperties that = (ValidValueDefinitionProperties) objectToCompare;
+        return ordinal == that.ordinal &&
+                Objects.equals(usage, that.usage) &&
+                Objects.equals(scope, that.scope) &&
+                Objects.equals(isCaseSensitive, that.isCaseSensitive) &&
+                Objects.equals(preferredValue, that.preferredValue) &&
+                Objects.equals(dataType, that.dataType);
+    }
+
+
+    /**
+     * Return hash code based on properties.
+     *
+     * @return int
+     */
+    @Override
+    public int hashCode()
+    {
+        return Objects.hash(super.hashCode(), usage, scope, preferredValue, dataType, isCaseSensitive, ordinal);
+    }
+}

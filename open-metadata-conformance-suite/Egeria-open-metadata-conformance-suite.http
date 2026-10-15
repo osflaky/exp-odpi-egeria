@@ -1,0 +1,192 @@
+# Egeria-open-metadata-conformance-suite
+
+@baseURL=https://localhost:7443
+@adminUserId=garygeeke
+
+@ctsServer=ctsServer
+@ctsUserId=cts
+@ctsPassword=secret
+
+@tutServer=postgres-metadata-store
+@tutPlatformURLroot=https://localhost:7443
+
+@cohort=ctsCohort
+
+###
+# =====================================================================================================================
+# Manage the authentication token.  Run this request to create/refresh the token.
+
+# @name Token (RequestBody)
+POST {{baseURL}}/api/token
+Content-Type: application/json
+
+{
+  "userId" : "{{adminUserId}}",
+  "password" : "secret"
+}
+
+> {% client.global.set("token", response.body); %}
+
+###
+# group: Configuration
+# @name Set cSuite server's user Id
+# Set up the user Id that this server should use on open metadata requests.
+POST {{baseURL}}/open-metadata/admin-services/servers/{{ctsServer}}/server-user-id?
+    id={{ctsUserId}}
+Authorization: Bearer {{token}}
+
+###
+# group: Configuration
+# @name Set up event bus to connect to cohort topics
+# Set up the common properties needed to call your event bus.  These properties are passed in the request body.
+# This request just sets up the defaults that will be incorporated into any future configuration that includes an event bus topic.
+POST {{baseURL}}/open-metadata/admin-services/servers/{{ctsServer}}/event-bus
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+
+{
+"producer":
+{
+"bootstrap.servers":"~{kafkaEndpoint}~"
+},
+"consumer":
+{
+"bootstrap.servers":"~{kafkaEndpoint}~"
+}
+}
+
+###
+# group: Configuration
+# @name Enable access to the cohort (CTS Server)
+# Request registration to a cohort.
+POST {{baseURL}}/open-metadata/admin-services/servers/{{ctsServer}}/cohorts/{{cohort}}
+Authorization: Bearer {{token}}
+
+###
+# group: Configuration
+# @name Enable access to the cohort (TUT Server)
+# Request registration to a cohort.
+POST {{baseURL}}/open-metadata/admin-services/servers/{{tutServer}}/cohorts/{{cohort}}
+Authorization: Bearer {{token}}
+
+###
+# group: Configuration
+# @name Configure the test of an open metadata repository
+# Activate the repository workbench tests to validate the behaviour of a specific repository.
+POST {{baseURL}}/open-metadata/admin-services/servers/{{ctsServer}}/conformance-suite-workbenches/repository-workbench/repositories
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class": "RepositoryConformanceWorkbenchConfig",
+  "tutRepositoryServerName": "{{tutServer}}",
+  "maxSearchResults": 20,
+  "testEntityTypes": ["Asset"]
+}
+
+
+###
+# group: Configuration
+# @name Configure the test of an open metadata server platform
+# Activate the repository workbench tests to validate the behaviour of a specific server platform.
+POST {{baseURL}}/open-metadata/admin-services/servers/{{ctsServer}}/conformance-suite-workbenches/platform-workbench/platforms
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "urlRoot": "{{tutPlatformURLroot}}"
+}
+
+
+###
+# group: Configuration
+# @name Delete the repository workbench configuration
+# Remove all of the configuration for the open metadata conformance suite.
+DELETE {{baseURL}}/open-metadata/admin-services/servers/{{ctsServer}}/conformance-suite-workbenches/repository-workbench
+Authorization: Bearer {{token}}
+
+###
+# group: Configuration
+# @name Delete the platform workbench configuration
+# Remove the configuration for the platform workbench of the open metadata conformance suite.
+DELETE {{baseURL}}/open-metadata/admin-services/servers/{{ctsServer}}/conformance-suite-workbenches/platform-workbench
+Authorization: Bearer {{token}}
+
+###
+# group: Configuration
+# @name Delete the conformance suite configuration
+# Remove all of the configuration for the open metadata conformance suite.
+DELETE {{baseURL}}/open-metadata/admin-services/servers/{{ctsServer}}/conformance-suite-workbenches
+Authorization: Bearer {{token}}
+
+
+
+###
+# group: Starting/Stopping CTS server
+# @name Start conformance suite using config
+# Activate open metadata conformance suite services.
+POST {{baseURL}}/open-metadata/platform-services/server-platform/servers/{{ctsServer}}/instance
+Authorization: Bearer {{token}}
+
+
+
+
+###
+# group: Starting/Stopping CTS server
+# @name Deactivate conformance suite server
+# Deactivate open metadata conformance suite services for this server.
+DELETE {{baseURL}}/open-metadata/platform-services/server-platform/servers/{{ctsServer}}/instance
+Authorization: Bearer {{token}}
+
+###
+# group: Getting Results
+# @name Retrieve platform workbench results
+# Retrieve the results from the platform workbench tests.
+GET {{baseURL}}/servers/{{ctsServer}}/open-metadata/conformance-suite/users/{{adminUserId}}/report/workbenches/platform-workbench
+Authorization: Bearer {{token}}
+
+###
+# group: Getting Results
+# @name Retrieve repository workbench results
+# Retrieve the results from the repository workbench tests.
+GET {{baseURL}}/servers/{{ctsServer}}/open-metadata/conformance-suite/users/{{adminUserId}}/report/workbenches/repository-workbench
+Authorization: Bearer {{token}}
+
+###
+# group: Getting Results
+# @name Retrieve full report of results
+# Retrieve all of the results of the conformance suite testing.
+GET {{baseURL}}/servers/{{ctsServer}}/open-metadata/conformance-suite/users/{{adminUserId}}/report
+Authorization: Bearer {{token}}
+
+###
+# group: Getting Results
+# @name Retrieve summary report of results
+# Retrieve all of the results of the conformance suite testing.
+GET {{baseURL}}/servers/{{ctsServer}}/open-metadata/conformance-suite/users/{{adminUserId}}/report/summary
+Authorization: Bearer {{token}}
+
+###
+# group: Getting Results
+# @name Retrieve report of failed test cases
+# Retrieve the results of all failed test cases.
+GET {{baseURL}}/servers/{{ctsServer}}/open-metadata/conformance-suite/users/{{adminUserId}}/report/test-cases/failed
+Authorization: Bearer {{token}}
+
+###
+# group: Getting Results
+# @name Retrieve report of a specific test case
+# Retrieve the results of all failed test cases.
+GET {{baseURL}}/servers/{{ctsServer}}/open-metadata/conformance-suite/users/{{adminUserId}}/report/test-cases/repository-entity-reference-copy-lifecycle-ConceptModelElement
+Authorization: Bearer {{token}}
+
+
+###
+# group: Configuration
+# @name Query cSuite server's configuration
+# Query the current configuration of the conformance suite server.
+GET {{baseURL}}/open-metadata/admin-services/servers/{{ctsServer}}/configuration
+Authorization: Bearer {{token}}
+
+###

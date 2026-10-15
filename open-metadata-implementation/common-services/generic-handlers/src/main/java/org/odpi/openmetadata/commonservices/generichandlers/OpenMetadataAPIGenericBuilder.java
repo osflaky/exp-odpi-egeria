@@ -1,0 +1,1119 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Copyright Contributors to the ODPi Egeria project. */
+package org.odpi.openmetadata.commonservices.generichandlers;
+
+import org.odpi.openmetadata.frameworks.openmetadata.types.OpenMetadataProperty;
+import org.odpi.openmetadata.frameworks.openmetadata.types.OpenMetadataType;
+import org.odpi.openmetadata.commonservices.generichandlers.ffdc.GenericHandlersErrorCode;
+import org.odpi.openmetadata.commonservices.repositoryhandler.RepositoryErrorHandler;
+import org.odpi.openmetadata.frameworks.openmetadata.ffdc.InvalidParameterException;
+import org.odpi.openmetadata.frameworks.openmetadata.ffdc.OMFCheckedExceptionBase;
+import org.odpi.openmetadata.frameworks.openmetadata.ffdc.PropertyServerException;
+import org.odpi.openmetadata.repositoryservices.connectors.stores.metadatacollectionstore.properties.instances.*;
+import org.odpi.openmetadata.repositoryservices.connectors.stores.metadatacollectionstore.properties.typedefs.PrimitiveDefCategory;
+import org.odpi.openmetadata.repositoryservices.connectors.stores.metadatacollectionstore.properties.typedefs.TypeDef;
+import org.odpi.openmetadata.repositoryservices.connectors.stores.metadatacollectionstore.repositoryconnector.OMRSRepositoryHelper;
+import org.odpi.openmetadata.repositoryservices.ffdc.exception.TypeErrorException;
+
+import java.util.*;
+import java.util.regex.Pattern;
+
+/**
+ * OpenMetadataAPIGenericBuilder provides the common functions for building new entities, relationships and
+ * classifications.  Subtypes push details of their classifications to this supertype.  They manage their instance properties.
+ */
+public class OpenMetadataAPIGenericBuilder
+{
+    protected RepositoryErrorHandler      errorHandler;
+    protected OMRSRepositoryHelper        repositoryHelper;
+    protected String                      serviceName;
+    protected String                      serverName;
+
+    protected Map<String, Object>         extendedProperties;
+    protected String                      typeGUID;
+    protected String                      typeName;
+
+    private   Date                        effectiveFrom;
+    private   Date                        effectiveTo;
+    protected List<Classification>        existingClassifications;
+    protected Map<String, Classification> newClassifications = new HashMap<>();
+
+    protected InstanceProperties          templateProperties = null;
+    protected Map<String, Classification> templateClassifications = new HashMap<>();
+
+
+    /**
+     * Constructor for working with classifications.
+     *
+     * @param typeGUID type GUID to use for the entity
+     * @param typeName type name to use for the entity
+     * @param repositoryHelper helper methods
+     * @param serviceName name of this OMAS
+     * @param serverName name of local server
+     */
+    public OpenMetadataAPIGenericBuilder(String               typeGUID,
+                                         String               typeName,
+                                         OMRSRepositoryHelper repositoryHelper,
+                                         String               serviceName,
+                                         String               serverName)
+    {
+        this(typeGUID,
+             typeName,
+             null,
+             null,
+             repositoryHelper,
+             serviceName,
+             serverName);
+    }
+
+
+    /**
+     * Constructor for type specific creates.
+     *
+     * @param typeGUID type GUID to use for the entity
+     * @param typeName type name to use for the entity
+     * @param extendedProperties properties for the sub ype (if any)
+     * @param existingClassifications classifications that are currently stored
+     * @param repositoryHelper helper methods
+     * @param serviceName name of this OMAS
+     * @param serverName name of local server
+     */
+    protected OpenMetadataAPIGenericBuilder(String               typeGUID,
+                                            String               typeName,
+                                            Map<String, Object>  extendedProperties,
+                                            List<Classification> existingClassifications,
+                                            OMRSRepositoryHelper repositoryHelper,
+                                            String               serviceName,
+                                            String               serverName)
+    {
+        this(typeGUID,
+             typeName,
+             extendedProperties,
+             null,
+             null,
+             existingClassifications,
+             repositoryHelper,
+             serviceName,
+             serverName);
+    }
+
+
+    /**
+     * Constructor for type specific creates.
+     *
+     * @param typeGUID type GUID to use for the entity
+     * @param typeName type name to use for the entity
+     * @param extendedProperties properties for the subtype (if any)
+     * @param effectiveFrom date to make the element active in the governance program (null for now)
+     * @param effectiveTo date to remove the element from the governance program (null = until deleted)
+     * @param existingClassifications classifications that are currently stored
+     * @param repositoryHelper helper methods
+     * @param serviceName name of this OMAS
+     * @param serverName name of local server
+     */
+    protected OpenMetadataAPIGenericBuilder(String               typeGUID,
+                                            String               typeName,
+                                            Map<String, Object>  extendedProperties,
+                                            Date                 effectiveFrom,
+                                            Date                 effectiveTo,
+                                            List<Classification> existingClassifications,
+                                            OMRSRepositoryHelper repositoryHelper,
+                                            String               serviceName,
+                                            String               serverName)
+    {
+        this.repositoryHelper        = repositoryHelper;
+        this.serviceName             = serviceName;
+        this.serverName              = serverName;
+        this.typeGUID                = typeGUID;
+        this.typeName                = typeName;
+        this.extendedProperties      = extendedProperties;
+        this.effectiveFrom           = effectiveFrom;
+        this.effectiveTo             = effectiveTo;
+        this.existingClassifications = existingClassifications;
+
+        if (this.typeName == null)
+        {
+            this.typeName = OpenMetadataType.REFERENCEABLE.typeName;
+        }
+
+        if (this.typeGUID == null)
+        {
+            TypeDef typeDef = repositoryHelper.getTypeDefByName(serviceName, this.typeName);
+            if (typeDef != null)
+            {
+                this.typeGUID = typeDef.getGUID();
+            }
+        }
+
+        this.errorHandler = new RepositoryErrorHandler(repositoryHelper, serviceName, serverName);
+    }
+
+
+    /**
+     * Add a classification to the entity.  This overrides any existing value for this classification.
+     *
+     * @param newClassification classification object ready for the repository
+     */
+    public void setClassification(Classification  newClassification)
+    {
+        newClassifications.put(newClassification.getName(), newClassification);
+    }
+
+
+    /**
+     * Set up a new classification in the builder.
+     *
+     * @param userId calling user
+     * @param externalSourceGUID      guid of the software capability entity that represented the external source - null for local
+     * @param externalSourceName      name of the software capability entity that represented the external source
+     * @param propertyMap list of properties for the classification
+     * @param effectiveFrom date to make the element active in the governance program (null for now)
+     * @param effectiveTo date to remove the element from the governance program (null = until deleted)
+     * @param methodName calling method
+     * @throws InvalidParameterException unknown classification name
+     */
+    public void setClassification(String                             userId,
+                                  String                             externalSourceGUID,
+                                  String                             externalSourceName,
+                                  String                             classificationName,
+                                  Map<String, InstancePropertyValue> propertyMap,
+                                  Date                               effectiveFrom,
+                                  Date                               effectiveTo,
+                                  String                             methodName) throws InvalidParameterException
+    {
+        InstanceProvenanceType instanceProvenanceType = InstanceProvenanceType.LOCAL_COHORT;
+
+        if (externalSourceGUID != null)
+        {
+            instanceProvenanceType = InstanceProvenanceType.EXTERNAL_SOURCE;
+        }
+
+        InstanceProperties properties = null;
+
+        if ((propertyMap != null) || (effectiveFrom != null) || (effectiveTo != null))
+        {
+            properties = new InstanceProperties();
+
+            properties.setInstanceProperties(propertyMap);
+            properties.setEffectiveFromTime(effectiveFrom);
+            properties.setEffectiveToTime(effectiveTo);
+        }
+
+        try
+        {
+            Classification classification = repositoryHelper.getNewClassification(serviceName,
+                                                                                  externalSourceGUID,
+                                                                                  externalSourceName,
+                                                                                  instanceProvenanceType,
+                                                                                  userId,
+                                                                                  classificationName,
+                                                                                  typeName,
+                                                                                  ClassificationOrigin.ASSIGNED,
+                                                                                  null,
+                                                                                  properties);
+            this.setClassification(classification);
+        }
+        catch (TypeErrorException error)
+        {
+            errorHandler.handleUnsupportedType(error, methodName, classificationName);
+        }
+
+    }
+
+
+    /**
+     * Return a proposed classification for this element
+     *
+     * @return  classification object ready for the repository
+     */
+    public Classification getClassification(String  classificationName)
+    {
+        return newClassifications.get(classificationName);
+    }
+
+
+    /**
+     * Retrieve the initial zones.
+     *
+     * @return list of null
+     */
+    public List<String> getInitialGovernanceZones()
+    {
+        final String methodName = "getInitialGovernanceZones";
+
+        Classification zoneMembershipClassification = newClassifications.get(OpenMetadataType.ZONE_MEMBERSHIP_CLASSIFICATION.typeName);
+
+        if (zoneMembershipClassification != null)
+        {
+            return repositoryHelper.getStringArrayProperty(serviceName, OpenMetadataProperty.ZONE_MEMBERSHIP.name, zoneMembershipClassification.getProperties(), methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Set up the ZoneMembership classification for this entity.
+     * This method overrides any previously defined ZoneMembership classification for this entity.
+     *
+     * @param userId calling user
+     * @param zoneMembership list of zone names for the zones this asset is a member of
+     * @param methodName calling method
+     * @throws InvalidParameterException AssetZones is not supported in the local repository, or any repository
+     *                                   connected by an open metadata repository cohort
+     */
+    protected void setGovernanceZones(String       userId,
+                                      List<String> zoneMembership,
+                                      String       methodName) throws InvalidParameterException
+    {
+        if (zoneMembership != null)
+        {
+            try
+            {
+                Classification classification = repositoryHelper.getNewClassification(serviceName,
+                                                                                      null,
+                                                                                      null,
+                                                                                      InstanceProvenanceType.LOCAL_COHORT,
+                                                                                      userId,
+                                                                                      OpenMetadataType.ZONE_MEMBERSHIP_CLASSIFICATION.typeName,
+                                                                                      typeName,
+                                                                                      ClassificationOrigin.ASSIGNED,
+                                                                                      null,
+                                                                                      getZoneMembershipProperties(zoneMembership, methodName));
+                newClassifications.put(classification.getName(), classification);
+            }
+            catch (TypeErrorException error)
+            {
+                errorHandler.handleUnsupportedType(error, methodName, OpenMetadataType.ZONE_MEMBERSHIP_CLASSIFICATION.typeName);
+            }
+        }
+        else
+        {
+            newClassifications.remove(OpenMetadataType.ZONE_MEMBERSHIP_CLASSIFICATION.typeName);
+        }
+    }
+
+
+    /**
+     * Return the bean properties describing the asset's zone membership in an InstanceProperties object.
+     *
+     * @param zoneMembership list of zone names for the zones this asset is a member of
+     * @param methodName name of the calling method
+     * @return InstanceProperties object
+     */
+    InstanceProperties getZoneMembershipProperties(List<String> zoneMembership,
+                                                   String       methodName)
+    {
+        InstanceProperties properties = null;
+
+        if (zoneMembership != null)
+        {
+            properties = repositoryHelper.addStringArrayPropertyToInstance(serviceName,
+                                                                           null,
+                                                                           OpenMetadataProperty.ZONE_MEMBERSHIP.name,
+                                                                           zoneMembership,
+                                                                           methodName);
+        }
+
+        setEffectivityDates(properties);
+
+        return properties;
+    }
+
+
+
+    /**
+     * Return whether a particular classification has been set up by the caller.
+     *
+     * @param classificationName name of the classification to test for
+     * @return boolean
+     */
+    public boolean isClassificationSet(String classificationName)
+    {
+        return newClassifications.get(classificationName) != null;
+    }
+
+
+    /**
+     * Set up the list of classifications from a template entity.  This resolves any placeholders in the properties.
+     *
+     * @param userId                  calling user
+     * @param externalSourceGUID      guid of the software capability entity that represented the external source - null for local
+     * @param externalSourceName      name of the software capability entity that represented the external source
+     * @param templateClassifications list of classifications from the template
+     * @param placeholderProperties   map of placeholder names to placeholder values to substitute into the template properties
+     * @param methodName              calling method
+     * @throws InvalidParameterException the type of one of the classifications is not supported
+     */
+    public void setTemplateClassifications(String               userId,
+                                           String               externalSourceGUID,
+                                           String               externalSourceName,
+                                           List<Classification> templateClassifications,
+                                           Map<String, String>  placeholderProperties,
+                                           String               methodName) throws InvalidParameterException
+    {
+        if (templateClassifications != null)
+        {
+            InstanceProvenanceType instanceProvenanceType = InstanceProvenanceType.LOCAL_COHORT;
+
+            if (externalSourceGUID != null)
+            {
+                instanceProvenanceType = InstanceProvenanceType.EXTERNAL_SOURCE;
+            }
+
+            for (Classification templateClassification : templateClassifications)
+            {
+                /*
+                 * The anchor classification from the template is skipped because the new entity may have a
+                 * different anchor.  The anchor classification is therefore set up explicitly. The Template
+                 * classification is also skipped because the new element will not be a template because the
+                 * placeholders have been resolved.
+                 */
+                if ((templateClassification != null) &&
+                        (!OpenMetadataType.ANCHORS_CLASSIFICATION.typeName.equals(templateClassification.getName())) &&
+                        (!OpenMetadataType.TEMPLATE_CLASSIFICATION.typeName.equals(templateClassification.getName())))
+                {
+                    try
+                    {
+                        Classification classification;
+
+                        InstanceProperties classificationProperties = templateClassification.getProperties();
+
+                        if (classificationProperties != null)
+                        {
+                            classificationProperties = replacePropertiesWithPlaceholders(classificationProperties,
+                                                                                         placeholderProperties);
+                        }
+
+                        if (templateClassification.getInstanceProvenanceType() == InstanceProvenanceType.LOCAL_COHORT)
+                        {
+                            classification = repositoryHelper.getNewClassification(serviceName,
+                                                                                   null,
+                                                                                   null,
+                                                                                   InstanceProvenanceType.LOCAL_COHORT,
+                                                                                   userId,
+                                                                                   templateClassification.getName(),
+                                                                                   typeName,
+                                                                                   ClassificationOrigin.ASSIGNED,
+                                                                                   null,
+                                                                                   classificationProperties);
+                        }
+                        else
+                        {
+                            classification = repositoryHelper.getNewClassification(serviceName,
+                                                                                   externalSourceGUID,
+                                                                                   externalSourceName,
+                                                                                   instanceProvenanceType,
+                                                                                   userId,
+                                                                                   templateClassification.getName(),
+                                                                                   typeName,
+                                                                                   ClassificationOrigin.ASSIGNED,
+                                                                                   null,
+                                                                                   classificationProperties);
+                        }
+
+                        this.templateClassifications.put(classification.getName(), classification);
+                    }
+                    catch (TypeErrorException error)
+                    {
+                        errorHandler.handleUnsupportedType(error, methodName, templateClassification.getName());
+                    }
+                }
+            }
+        }
+    }
+
+
+    /**
+     * Set up the "TemplateSubstitute" classification for this entity.  This is used when a new entity is being created, and it is known to be
+     * created as a template substitute.
+     *
+     * @param userId calling user
+     * @param methodName calling method
+     * @throws PropertyServerException a null anchors GUID has been supplied
+     */
+    public void setTemplateSubstitute(String userId,
+                                      String methodName) throws PropertyServerException
+    {
+        try
+        {
+            Classification classification = repositoryHelper.getNewClassification(serviceName,
+                                                                                  null,
+                                                                                  null,
+                                                                                  InstanceProvenanceType.LOCAL_COHORT,
+                                                                                  userId,
+                                                                                  OpenMetadataType.TEMPLATE_SUBSTITUTE_CLASSIFICATION.typeName,
+                                                                                  typeName,
+                                                                                  ClassificationOrigin.ASSIGNED,
+                                                                                  null,
+                                                                                  null);
+            newClassifications.put(classification.getName(), classification);
+        }
+        catch (Exception error)
+        {
+            errorHandler.handleUnsupportedAnchorsType(error, methodName, OpenMetadataType.TEMPLATE_SUBSTITUTE_CLASSIFICATION.typeName);
+        }
+    }
+
+
+    /**
+     * Set up the "Anchors" classification for this entity.  This is used when a new entity is being created, and it is known to be
+     * connected to a specific anchor.
+     *
+     * @param userId calling user
+     * @param anchorIdentifiers values for anchors classification
+     * @param methodName calling method
+     * @throws PropertyServerException a null anchors GUID has been supplied
+     */
+    public void setAnchors(String                                         userId,
+                           OpenMetadataAPIAnchorHandler.AnchorIdentifiers anchorIdentifiers,
+                           String                                         methodName) throws PropertyServerException
+    {
+        if (anchorIdentifiers != null)
+        {
+            setAnchors(userId,
+                       anchorIdentifiers.anchorGUID,
+                       anchorIdentifiers.anchorTypeName,
+                       anchorIdentifiers.anchorDomainName,
+                       anchorIdentifiers.anchorScopeGUIDs,
+                       anchorIdentifiers.zoneMembership,
+                       methodName);
+        }
+    }
+
+
+    /**
+     * Set up the "Anchors" classification for this entity.  This is used when a new entity is being created, and it is known to be
+     * connected to a specific anchor.
+     *
+     * @param userId calling user
+     * @param anchorGUID unique identifier of the anchor entity that this entity is linked to directly or indirectly
+     * @param anchorTypeName unique name of the anchor entity's type
+     * @param anchorDomainName unique name of the anchor entity's domain
+     * @param anchorScopeGUIDs unique identifiers of the anchor's scope
+     * @param zoneMembership zone membership from the anchor
+     * @param methodName calling method
+     * @throws PropertyServerException a null anchors GUID has been supplied
+     */
+    public void setAnchors(String       userId,
+                           String       anchorGUID,
+                           String       anchorTypeName,
+                           String       anchorDomainName,
+                           List<String> anchorScopeGUIDs,
+                           List<String> zoneMembership,
+                           String       methodName) throws PropertyServerException
+    {
+        final String localMethodName = "setAnchors";
+
+        try
+        {
+            /*
+             * This is an attempt to trap an intermittent error recorded in issue #4680.
+             */
+            if ("<unknown>".equals(anchorGUID))
+            {
+                throw new PropertyServerException(GenericHandlersErrorCode.UNKNOWN_ANCHOR_GUID.getMessageDefinition(localMethodName,
+                                                                                                                    serviceName,
+                                                                                                                    methodName),
+                                                  this.getClass().getName(),
+                                                  localMethodName);
+            }
+
+            Classification classification = repositoryHelper.getNewClassification(serviceName,
+                                                                                  null,
+                                                                                  null,
+                                                                                  InstanceProvenanceType.LOCAL_COHORT,
+                                                                                  userId,
+                                                                                  OpenMetadataType.ANCHORS_CLASSIFICATION.typeName,
+                                                                                  typeName,
+                                                                                  ClassificationOrigin.ASSIGNED,
+                                                                                  null,
+                                                                                  getAnchorsProperties(anchorGUID, anchorTypeName, anchorDomainName, anchorScopeGUIDs, zoneMembership, methodName));
+            newClassifications.put(classification.getName(), classification);
+        }
+        catch (Exception error)
+        {
+            errorHandler.handleUnsupportedAnchorsType(error, methodName, typeName);
+        }
+    }
+
+
+    /**
+     * Return the Anchors properties in an InstanceProperties object.
+     *
+     * @param anchorGUID unique identifier of the anchor entity that this entity is linked to directly or indirectly
+     * @param anchorTypeName unique name of the anchor entity's type
+     * @param anchorDomainName unique name of the anchor entity's domain
+     * @param anchorScopeGUIDs unique identifiers of the anchor entity's scope
+     * @param methodName name of the calling method
+     * @return InstanceProperties object
+     */
+    InstanceProperties getAnchorsProperties(String       anchorGUID,
+                                            String       anchorTypeName,
+                                            String       anchorDomainName,
+                                            List<String> anchorScopeGUIDs,
+                                            List<String> zoneMembership,
+                                            String       methodName)
+    {
+        InstanceProperties properties = repositoryHelper.addStringPropertyToInstance(serviceName,
+                                                                                     null,
+                                                                                     OpenMetadataProperty.ANCHOR_GUID.name,
+                                                                                     anchorGUID,
+                                                                                     methodName);
+
+        properties = repositoryHelper.addStringPropertyToInstance(serviceName,
+                                                                  properties,
+                                                                  OpenMetadataProperty.ANCHOR_TYPE_NAME.name,
+                                                                  anchorTypeName,
+                                                                  methodName);
+
+        properties = repositoryHelper.addStringPropertyToInstance(serviceName,
+                                                                  properties,
+                                                                  OpenMetadataProperty.ANCHOR_DOMAIN_NAME.name,
+                                                                  anchorDomainName,
+                                                                  methodName);
+
+        properties = repositoryHelper.addStringArrayPropertyToInstance(serviceName,
+                                                                       properties,
+                                                                       OpenMetadataProperty.ANCHOR_SCOPE_GUIDS.name,
+                                                                       anchorScopeGUIDs,
+                                                                       methodName);
+
+        properties = repositoryHelper.addStringArrayPropertyToInstance(serviceName,
+                                                                       properties,
+                                                                       OpenMetadataProperty.ZONE_MEMBERSHIP.name,
+                                                                       zoneMembership,
+                                                                       methodName);
+
+        return properties;
+    }
+
+
+    /**
+     * Set up the effective dates for the entity.  This determines
+     *
+     * @param effectiveFrom date that the element is effective from
+     * @param effectiveTo date that the element is effective to
+     */
+    public void setEffectivityDates(Date effectiveFrom,
+                                    Date effectiveTo)
+    {
+        this.effectiveFrom = effectiveFrom;
+        this.effectiveTo   = effectiveTo;
+    }
+
+
+    /**
+     * Set up any properties that are present in the template.  These will be overridden by any properties passed
+     * on the constructor of the builder when getInstanceProperties is called.
+     *
+     * @param templateProperties properties from template
+     * @param placeholderProperties map of placeholder names to placeholder values to substitute into the template
+     *                              properties
+     */
+    void setTemplateProperties(InstanceProperties  templateProperties,
+                               Map<String, String> placeholderProperties)
+    {
+        this.templateProperties = this.replacePropertiesWithPlaceholders(templateProperties, placeholderProperties);
+    }
+
+
+    /**
+     * Resolve placeholder in the properties that are present in the template.  These will be overridden by any properties passed
+     * on the constructor of the builder when getInstanceProperties is called.
+     *
+     * @param templateProperties properties from template
+     * @param placeholderProperties map of placeholder names to placeholder values to substitute into the template
+     *                              properties
+     * @return updated instance properties
+     */
+    InstanceProperties replacePropertiesWithPlaceholders(InstanceProperties  templateProperties,
+                                                         Map<String, String> placeholderProperties)
+    {
+        final String methodName = "replacePropertiesWithPlaceholders";
+
+        if (templateProperties != null)
+        {
+            if ((templateProperties.getPropertyCount() == 0) ||
+                    (placeholderProperties == null) ||
+                    (placeholderProperties.isEmpty()))
+            {
+                return new InstanceProperties(templateProperties);
+            }
+            else
+            {
+                InstanceProperties newTemplateProperties = new InstanceProperties(templateProperties);
+
+                Map<String, InstancePropertyValue> instancePropertyValueMap = templateProperties.getInstanceProperties();
+                for (String propertyName : instancePropertyValueMap.keySet())
+                {
+                    InstancePropertyValue instancePropertyValue = newTemplateProperties.getPropertyValue(propertyName);
+
+                    if (instancePropertyValue instanceof PrimitivePropertyValue primitivePropertyValue)
+                    {
+                        if (primitivePropertyValue.getPrimitiveDefCategory() == PrimitiveDefCategory.OM_PRIMITIVE_TYPE_STRING)
+                        {
+                            String newProperty = replacePrimitiveStringWithPlaceholders(primitivePropertyValue,
+                                                                                        placeholderProperties);
+
+                            if (newProperty != null)
+                            {
+                                repositoryHelper.addStringPropertyToInstance(serviceName,
+                                                                             newTemplateProperties,
+                                                                             propertyName,
+                                                                             newProperty,
+                                                                             methodName);
+                            }
+                            else
+                            {
+                                repositoryHelper.removeStringProperty(serviceName,
+                                                                      propertyName,
+                                                                      newTemplateProperties,
+                                                                      methodName);
+                            }
+                        }
+                        else if (primitivePropertyValue.getPrimitiveDefCategory() == PrimitiveDefCategory.OM_PRIMITIVE_TYPE_INT)
+                        {
+                            String newProperty = replacePrimitiveStringWithPlaceholders(primitivePropertyValue,
+                                                                                        placeholderProperties);
+
+                            if (newProperty != null)
+                            {
+                                repositoryHelper.addIntPropertyToInstance(serviceName,
+                                                                              newTemplateProperties,
+                                                                              propertyName,
+                                                                              Integer.parseInt(newProperty),
+                                                                              methodName);
+                            }
+                            else
+                            {
+                                repositoryHelper.removeIntProperty(serviceName,
+                                                                   propertyName,
+                                                                   newTemplateProperties,
+                                                                   methodName);
+                            }
+                        }
+                        else if (primitivePropertyValue.getPrimitiveDefCategory() == PrimitiveDefCategory.OM_PRIMITIVE_TYPE_LONG)
+                        {
+                            String newProperty = replacePrimitiveStringWithPlaceholders(primitivePropertyValue,
+                                                                                        placeholderProperties);
+
+                            if (newProperty != null)
+                            {
+                                repositoryHelper.addLongPropertyToInstance(serviceName,
+                                                                           newTemplateProperties,
+                                                                           propertyName,
+                                                                           Long.parseLong(newProperty),
+                                                                           methodName);
+                            }
+                            else
+                            {
+                                repositoryHelper.removeLongProperty(serviceName,
+                                                                    propertyName,
+                                                                    newTemplateProperties,
+                                                                    methodName);
+                            }
+                        }
+                        else if (primitivePropertyValue.getPrimitiveDefCategory() == PrimitiveDefCategory.OM_PRIMITIVE_TYPE_DATE)
+                        {
+                            String newProperty = replacePrimitiveStringWithPlaceholders(primitivePropertyValue,
+                                                                                        placeholderProperties);
+
+                            if (newProperty != null)
+                            {
+                                repositoryHelper.addDatePropertyToInstance(serviceName,
+                                                                           newTemplateProperties,
+                                                                           propertyName,
+                                                                           new Date(Long.parseLong(newProperty)),
+                                                                           methodName);
+                            }
+                            else
+                            {
+                                repositoryHelper.removeDateProperty(serviceName,
+                                                                    propertyName,
+                                                                    newTemplateProperties,
+                                                                    methodName);
+                            }
+                        }
+                        else if (primitivePropertyValue.getPrimitiveDefCategory() == PrimitiveDefCategory.OM_PRIMITIVE_TYPE_UNKNOWN)
+                        {
+                            String newProperty = replacePrimitiveStringWithPlaceholders(primitivePropertyValue,
+                                                                                        placeholderProperties);
+
+                            if (newProperty != null)
+                            {
+                                repositoryHelper.addObjectPropertyToInstance(serviceName,
+                                                                             newTemplateProperties,
+                                                                             propertyName,
+                                                                             newProperty,
+                                                                             methodName);
+                            }
+                            else
+                            {
+                                repositoryHelper.removeStringProperty(serviceName,
+                                                                      propertyName,
+                                                                      newTemplateProperties,
+                                                                      methodName);
+                            }
+                        }
+                    }
+                    else if (instancePropertyValue instanceof ArrayPropertyValue arrayPropertyValue)
+                    {
+                        /*
+                         * A new ArrayPropertyValue is created here rather than updating arrayPropertyValue in place.
+                         * arrayPropertyValue may be a reference to the same, shared instance held by the template
+                         * entity (InstanceProperties' copy constructor only shallow-copies property value objects),
+                         * so mutating it directly would permanently corrupt the template's own stored array values
+                         * with this specific instantiation's substituted values - visible as every subsequent clone
+                         * of the template inheriting this instantiation's values instead of having its own
+                         * placeholders substituted.
+                         */
+                        ArrayPropertyValue newArrayPropertyValue = new ArrayPropertyValue(arrayPropertyValue);
+
+                        newArrayPropertyValue.setArrayValues(this.replacePropertiesWithPlaceholders(arrayPropertyValue.getArrayValues(),
+                                                                                                     placeholderProperties));
+
+                        newTemplateProperties.setProperty(propertyName, newArrayPropertyValue);
+                    }
+                    else if (instancePropertyValue instanceof MapPropertyValue mapPropertyValue)
+                    {
+                        /*
+                         * See the comment above for ArrayPropertyValue - the same reasoning applies here to avoid
+                         * mutating a map property value that may be shared with the template entity itself.
+                         */
+                        MapPropertyValue newMapPropertyValue = new MapPropertyValue(mapPropertyValue);
+
+                        newMapPropertyValue.setMapValues(this.replacePropertiesWithPlaceholders(mapPropertyValue.getMapValues(),
+                                                                                                 placeholderProperties));
+                        newTemplateProperties.setProperty(propertyName, newMapPropertyValue);
+                    }
+                }
+
+                return newTemplateProperties;
+            }
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Replace any placeholders found in the string property with the supplied values.
+     *
+     * @param primitivePropertyValue string property from the template
+     * @param placeholderProperties map of placeholder names to placeholder values to substitute into the template
+     *                              properties
+     * @return updated property
+     */
+    private String replacePrimitiveStringWithPlaceholders(PrimitivePropertyValue primitivePropertyValue,
+                                                          Map<String, String>    placeholderProperties)
+    {
+        String propertyValue = primitivePropertyValue.valueAsString();
+
+        if ((propertyValue == null) || (! propertyValue.contains("~{")))
+        {
+            /*
+             * No placeholders in property.
+             */
+            return propertyValue;
+        }
+
+        if ((placeholderProperties != null) && (! placeholderProperties.isEmpty()))
+        {
+            for (String placeholderName : placeholderProperties.keySet())
+            {
+                String placeholderMatchString = "~{" + placeholderName + "}~";
+
+                if (propertyValue.equals(placeholderMatchString))
+                {
+                    return placeholderProperties.get(placeholderName);
+                }
+                else
+                {
+                    String regExMatchString = Pattern.quote(placeholderMatchString);
+                    String[] configBits = propertyValue.split(regExMatchString);
+
+                    if (configBits.length == 1)
+                    {
+                        if (! propertyValue.equals(configBits[0]))
+                        {
+                            if (placeholderProperties.get(placeholderName) != null)
+                            {
+                                propertyValue = configBits[0] + placeholderProperties.get(placeholderName);
+                            }
+                            else
+                            {
+                                propertyValue = configBits[0];
+                            }
+                        }
+                    }
+                    else if (configBits.length > 1)
+                    {
+                        StringBuilder newConfigString = new StringBuilder();
+                        boolean       firstPart       = true;
+
+                        for (String configBit : configBits)
+                        {
+                            if (! firstPart)
+                            {
+                                if (placeholderProperties.get(placeholderName) != null)
+                                {
+                                    newConfigString.append(placeholderProperties.get(placeholderName));
+                                }
+                            }
+
+                            firstPart = false;
+
+                            if (configBit != null)
+                            {
+                                newConfigString.append(configBit);
+                            }
+                        }
+
+                        if (propertyValue.endsWith(placeholderMatchString))
+                        {
+                            if (placeholderProperties.get(placeholderName) != null)
+                            {
+                                newConfigString.append(placeholderProperties.get(placeholderName));
+                            }
+                        }
+
+                        propertyValue = newConfigString.toString();
+                    }
+                }
+            }
+        }
+
+        return propertyValue;
+    }
+
+
+    /**
+     * Return the bean's type name
+     *
+     * @return string name
+     */
+    public String getTypeName()
+    {
+        return typeName;
+    }
+
+
+    /**
+     * Return the bean's type id
+     *
+     * @return string id
+     */
+    public String getTypeGUID()
+    {
+        return typeGUID;
+    }
+
+
+    /**
+     * Return the supplied bean properties in an InstanceProperties object.
+     *
+     * @param methodName name of the calling method
+     * @return InstanceProperties object
+     * @throws InvalidParameterException a problem with the properties
+     */
+    public InstanceProperties getInstanceProperties(String  methodName) throws InvalidParameterException
+    {
+        InstanceProperties properties = templateProperties;
+
+        if (extendedProperties != null)
+        {
+            try
+            {
+                properties = repositoryHelper.addPropertyMapToInstance(serviceName,
+                                                                       properties,
+                                                                       extendedProperties,
+                                                                       methodName);
+            }
+            catch (InvalidParameterException error)
+            {
+                final String  propertyName = "extendedProperties";
+
+                errorHandler.handleUnsupportedProperty(error, methodName, propertyName);
+            }
+        }
+
+        return setEffectivityDates(properties, effectiveFrom, effectiveTo);
+    }
+
+
+    /**
+     * Return the properties based on the parameters supplied.  This is typically used for
+     * relationship and classification properties.
+     *
+     * @param propertyMap map of property names to values
+     * @param effectiveFrom date to make the element active in the governance program (null for now)
+     * @param effectiveTo date to remove the element from the governance program (null = until deleted)
+     * @return repository services properties
+     * @throws InvalidParameterException problem mapping properties
+     */
+    public InstanceProperties getInstanceProperties(Map<String, InstancePropertyValue> propertyMap,
+                                                    Date                               effectiveFrom,
+                                                    Date                               effectiveTo) throws InvalidParameterException
+    {
+        InstanceProperties properties = null;
+
+        if ((propertyMap != null) && (! propertyMap.isEmpty()))
+        {
+            properties = new InstanceProperties();
+
+            properties.setInstanceProperties(propertyMap);
+        }
+
+        return setEffectivityDates(properties, effectiveFrom, effectiveTo);
+    }
+
+
+    /**
+     * Add the supplied properties to the supplied instance properties object.
+     *
+     * @param properties current accumulated properties
+     * @param propertyMap map of property names to values
+     * @return repository services properties
+     * @throws InvalidParameterException problem mapping properties
+     */
+    protected InstanceProperties updateInstanceProperties(InstanceProperties                 properties,
+                                                          Map<String, InstancePropertyValue> propertyMap) throws InvalidParameterException
+    {
+        if (propertyMap != null)
+        {
+            try
+            {
+                if (properties == null)
+                {
+                    return getInstanceProperties(propertyMap, null, null);
+                }
+
+                Map<String, InstancePropertyValue> existingProperties = properties.getInstanceProperties();
+
+                if (existingProperties == null)
+                {
+                    properties.setInstanceProperties(propertyMap);
+                }
+                else
+                {
+                    existingProperties.putAll(propertyMap);
+
+                    properties.setInstanceProperties(existingProperties);
+                }
+            }
+            catch (OMFCheckedExceptionBase error)
+            {
+                final String propertyName = "properties";
+
+                throw new InvalidParameterException(error, propertyName);
+            }
+        }
+
+        return properties;
+    }
+
+
+    /**
+     * Set the supplied effectivity dates into the instance properties.
+     *
+     * @param properties current accumulated properties
+     * @param effectiveFrom date to make the element active in the governance program (null for now)
+     * @param effectiveTo date to remove the element from the governance program (null = until deleted)
+     * @return augmented instance properties
+     */
+    InstanceProperties setEffectivityDates(InstanceProperties properties,
+                                           Date               effectiveFrom,
+                                           Date               effectiveTo)
+    {
+        if ((effectiveFrom != null) || (effectiveTo != null))
+        {
+            if (properties == null)
+            {
+                properties = new InstanceProperties();
+            }
+
+            properties.setEffectiveFromTime(effectiveFrom);
+            properties.setEffectiveToTime(effectiveTo);
+        }
+
+        return properties;
+    }
+
+
+    /**
+     * Set the supplied effectivity dates into the instance properties.
+     *
+     * @param properties current accumulated properties
+     * @return augmented instance properties
+     */
+    protected InstanceProperties setEffectivityDates(InstanceProperties properties)
+    {
+        if ((effectiveFrom != null) || (effectiveTo != null))
+        {
+            if (properties == null)
+            {
+                properties = new InstanceProperties();
+            }
+
+            properties.setEffectiveFromTime(effectiveFrom);
+            properties.setEffectiveToTime(effectiveTo);
+        }
+
+        return properties;
+    }
+
+
+    /**
+     * Return a list of entity classifications that can be stored in the metadata
+     * repository.
+     *
+     * @return list of entity classification objects
+     */
+    public List<Classification> getEntityClassifications()
+    {
+        List<Classification> entityClassifications = new ArrayList<>();
+
+        if ((newClassifications != null) && (! newClassifications.isEmpty()))
+        {
+            entityClassifications = new ArrayList<>(newClassifications.values());
+        }
+
+        /*
+         * Retrieve the classifications provided by the caller.  Add them to the list unless they have been overridden.
+         */
+        if ((existingClassifications != null) && (! existingClassifications.isEmpty()))
+        {
+            for (Classification classification : entityClassifications)
+            {
+                if ((classification != null) && (newClassifications.get(classification.getName()) == null))
+                {
+                    entityClassifications.add(classification);
+                }
+            }
+        }
+
+        if (entityClassifications.isEmpty())
+        {
+            return null;
+        }
+
+        return entityClassifications;
+    }
+
+
+    /**
+     * Return the transformed classifications from the template entity.
+     *
+     * @return list of classification objects from the template entity
+     */
+    public List<Classification> getTemplateClassifications()
+    {
+        if ((templateClassifications != null) && (!templateClassifications.isEmpty()))
+        {
+            return new ArrayList<>(templateClassifications.values());
+        }
+
+        return null;
+    }
+}

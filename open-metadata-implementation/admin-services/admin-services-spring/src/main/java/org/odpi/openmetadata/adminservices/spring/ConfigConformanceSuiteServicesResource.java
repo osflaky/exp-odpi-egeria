@@ -1,0 +1,204 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Copyright Contributors to the ODPi Egeria project. */
+package org.odpi.openmetadata.adminservices.spring;
+
+import io.swagger.v3.oas.annotations.ExternalDocumentation;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.enums.SecuritySchemeIn;
+import io.swagger.v3.oas.annotations.enums.SecuritySchemeType;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.security.SecurityScheme;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import org.odpi.openmetadata.adminservices.server.OMAGConformanceSuiteConfigServices;
+import org.odpi.openmetadata.adminservices.configuration.properties.RepositoryConformanceWorkbenchConfig;
+import org.odpi.openmetadata.adminservices.configuration.properties.RepositoryPerformanceWorkbenchConfig;
+import org.odpi.openmetadata.adminservices.rest.URLRequestBody;
+import org.odpi.openmetadata.commonservices.ffdc.rest.VoidResponse;
+import org.springframework.web.bind.annotation.*;
+
+/**
+ * ConfigAccessServicesResource provides the configuration for setting up the Open Metadata
+ * Conformance Suite services in an OMAG server.
+ */
+@RestController
+@RequestMapping("/open-metadata/admin-services/servers/{serverName}")
+@SecurityScheme(
+        name = "BearerAuthorization",
+        type = SecuritySchemeType.HTTP,
+        bearerFormat = "JWT",
+        scheme = "bearer",
+        in = SecuritySchemeIn.HEADER
+)
+
+@Tag(name="Server Configuration", description="The server configuration administration services support the configuration" +
+        " of the open metadata and governance services within an OMAG Server. This configuration determines which of the Open Metadata and " +
+        "Governance (OMAG) services are active.",
+        externalDocs=@ExternalDocumentation(description="Further information",
+                url="https://egeria-project.org/guides/admin/servers/"))
+
+public class ConfigConformanceSuiteServicesResource
+{
+    private final OMAGConformanceSuiteConfigServices adminAPI = new OMAGConformanceSuiteConfigServices();
+
+    /**
+     * Request that the conformance suite services are activated in this server to test the
+     * support of the repository services running in the server named tutRepositoryServerName.
+     *
+     * @param serverName  local server name.
+     * @param delegatingUserId external userId making request
+     * @param repositoryConformanceWorkbenchConfig configuration for the repository conformance workbench.
+     * @return void response or
+     * UserNotAuthorizedException the supplied userId is not authorized to issue this command or
+     * InvalidParameterException invalid serverName parameter or
+     * OMAGConfigurationErrorException unexpected exception.
+     */
+    @PostMapping(path = "/conformance-suite-workbenches/repository-workbench/repositories")
+    @SecurityRequirement(name = "BearerAuthorization")
+
+    @Operation(summary="enableRepositoryConformanceSuiteWorkbench",
+               description="Request that the conformance suite services are activated in this server to test the" +
+                                   " support of the repository services running in the server named tutRepositoryServerName.",
+               externalDocs=@ExternalDocumentation(description="Further Information",
+                                                   url="https://egeria-project.org/guides/cts/"))
+
+    public VoidResponse enableRepositoryConformanceSuiteWorkbench(@PathVariable String                               serverName,
+                                                                  @Parameter(description="delegating user id")  @RequestParam(required = false) String delegatingUserId,
+                                                                  @RequestBody  RepositoryConformanceWorkbenchConfig repositoryConformanceWorkbenchConfig)
+    {
+        return adminAPI.enableRepositoryConformanceSuiteWorkbench(serverName, delegatingUserId, repositoryConformanceWorkbenchConfig);
+    }
+
+
+    /**
+     * Request that the conformance suite services are activated in this server to test the
+     * performance of the repository services running in the server named tutRepositoryServerName.
+     *
+     * @param serverName  local server name.
+     * @param delegatingUserId external userId making request
+     * @param repositoryPerformanceWorkbenchConfig configuration for the repository performance workbench.
+     * @return void response or
+     * UserNotAuthorizedException the supplied userId is not authorized to issue this command or
+     * InvalidParameterException invalid serverName parameter or
+     * OMAGConfigurationErrorException unexpected exception.
+     */
+    @PostMapping(path = "/conformance-suite-workbenches/repository-workbench/performance")
+    @SecurityRequirement(name = "BearerAuthorization")
+
+    @Operation(summary="enableRepositoryPerformanceSuiteWorkbench",
+               description="Request that the conformance suite services are activated in this server to test the" +
+                                   " performance of the repository services running in the server named tutRepositoryServerName.",
+               externalDocs=@ExternalDocumentation(description="Further Information",
+                                                   url="https://egeria-project.org/guides/cts/"))
+
+    public VoidResponse enableRepositoryPerformanceSuiteWorkbench(@PathVariable String                               serverName,
+                                                                  @Parameter(description="delegating user id")  @RequestParam(required = false) String delegatingUserId,
+                                                                  @RequestBody  RepositoryPerformanceWorkbenchConfig repositoryPerformanceWorkbenchConfig)
+    {
+        return adminAPI.enableRepositoryPerformanceSuiteWorkbench(serverName, delegatingUserId, repositoryPerformanceWorkbenchConfig);
+    }
+
+
+    /**
+     * Request that the conformance suite services are activated in this server to test the
+     * support of the platform services running in the platform at tutPlatformRootURL.
+     *
+     * @param serverName  local server name.
+     * @param delegatingUserId external userId making request
+     * @param requestBody url of the OMAG platform to test.
+     * @return void response or
+     * UserNotAuthorizedException the supplied userId is not authorized to issue this command or
+     * InvalidParameterException invalid serverName parameter or
+     * OMAGConfigurationErrorException unexpected exception.
+     */
+    @PostMapping(path = "/conformance-suite-workbenches/platform-workbench/platforms")
+    @SecurityRequirement(name = "BearerAuthorization")
+
+    @Operation(summary="enablePlatformConformanceSuiteWorkbench",
+               description="Request that the conformance suite services are activated in this server to test the" +
+                                   " support of the platform services running in the server named tutPlatformRootURL.",
+               externalDocs=@ExternalDocumentation(description="Further Information",
+                                                   url="https://egeria-project.org/guides/cts/"))
+
+    public VoidResponse enablePlatformConformanceSuiteWorkbench(@PathVariable String         serverName,
+                                                                @Parameter(description="delegating user id")  @RequestParam(required = false) String delegatingUserId,
+                                                                @RequestBody  URLRequestBody requestBody)
+    {
+        return adminAPI.enablePlatformConformanceSuiteWorkbench(serverName, delegatingUserId, requestBody);
+    }
+
+
+    /**
+     * Request that the repository conformance suite tests are deactivated in this server.
+     *
+     * @param serverName  local server name.
+     * @param delegatingUserId external userId making request
+     * @return void response or
+     * UserNotAuthorizedException the supplied userId is not authorized to issue this command or
+     * InvalidParameterException invalid serverName parameter or
+     * OMAGConfigurationErrorException unexpected exception.
+     */
+    @DeleteMapping(path = "/conformance-suite-workbenches/repository-workbench")
+    @SecurityRequirement(name = "BearerAuthorization")
+
+    @Operation(summary="disableRepositoryConformanceSuiteServices",
+               description="Request that the repository conformance suite tests are deactivated in this server.",
+               externalDocs=@ExternalDocumentation(description="Further Information",
+                                                   url="https://egeria-project.org/guides/cts/"))
+
+    public VoidResponse disableRepositoryConformanceSuiteServices(@PathVariable String    serverName,
+                                                                  @Parameter(description="delegating user id")  @RequestParam(required = false) String delegatingUserId)
+    {
+        return adminAPI.disableRepositoryConformanceSuiteServices(serverName, delegatingUserId);
+    }
+
+
+    /**
+     * Request that the platform conformance suite tests are deactivated in this server.
+     *
+     * @param serverName  local server name.
+     * @param delegatingUserId external userId making request
+     * @return void response or
+     * UserNotAuthorizedException the supplied userId is not authorized to issue this command or
+     * InvalidParameterException invalid serverName parameter or
+     * OMAGConfigurationErrorException unexpected exception.
+     */
+    @DeleteMapping(path = "/conformance-suite-workbenches/platform-workbench")
+    @SecurityRequirement(name = "BearerAuthorization")
+
+    @Operation(summary="disablePlatformConformanceSuiteServices",
+               description="Request that the platform conformance suite tests are deactivated in this server.",
+               externalDocs=@ExternalDocumentation(description="Further Information",
+                                                   url="https://egeria-project.org/guides/cts/"))
+
+    public VoidResponse disablePlatformConformanceSuiteServices(@PathVariable String    serverName,
+                                                                @Parameter(description="delegating user id")  @RequestParam(required = false) String delegatingUserId)
+    {
+        return adminAPI.disablePlatformConformanceSuiteServices(serverName, delegatingUserId);
+    }
+
+
+    /**
+     * Request that all the conformance suite services are deactivated in this server.
+     *
+     * @param serverName  local server name.
+     * @param delegatingUserId external userId making request
+     * @return void response or
+     * UserNotAuthorizedException the supplied userId is not authorized to issue this command or
+     * InvalidParameterException invalid serverName parameter or
+     * OMAGConfigurationErrorException unexpected exception.
+     */
+    @DeleteMapping(path = "/conformance-suite-workbenches")
+    @SecurityRequirement(name = "BearerAuthorization")
+
+    @Operation(summary="disableAllConformanceSuiteWorkbenches",
+               description="Request that all the conformance suite services are deactivated in this server.",
+               externalDocs=@ExternalDocumentation(description="Further Information",
+                                                   url="https://egeria-project.org/guides/cts/"))
+
+    public VoidResponse disableAllConformanceSuiteWorkbenches(@PathVariable String    serverName,
+                                                              @Parameter(description="delegating user id")  @RequestParam(required = false) String delegatingUserId)
+    {
+        return adminAPI.disableAllConformanceSuiteWorkbenches(serverName, delegatingUserId);
+    }
+}

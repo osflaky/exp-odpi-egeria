@@ -1,0 +1,2684 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Copyright Contributors to the ODPi Egeria project. */
+package org.odpi.openmetadata.commonservices.generichandlers;
+
+import org.odpi.openmetadata.commonservices.generichandlers.ffdc.GenericHandlersErrorCode;
+import org.odpi.openmetadata.frameworks.openmetadata.search.ElementOriginCategory;
+import org.odpi.openmetadata.frameworks.openmetadata.search.ElementStatus;
+import org.odpi.openmetadata.frameworks.openmetadata.ffdc.PropertyServerException;
+import org.odpi.openmetadata.frameworks.openmetadata.mapper.OpenMetadataValidValues;
+import org.odpi.openmetadata.frameworks.openmetadata.metadataelements.*;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.AttachedClassification;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.OpenMetadataTypeDefCategory;
+import org.odpi.openmetadata.frameworks.openmetadata.search.*;
+import org.odpi.openmetadata.frameworks.openmetadata.types.OpenMetadataProperty;
+import org.odpi.openmetadata.repositoryservices.connectors.stores.metadatacollectionstore.properties.instances.*;
+import org.odpi.openmetadata.repositoryservices.connectors.stores.metadatacollectionstore.properties.typedefs.PrimitiveDefCategory;
+import org.odpi.openmetadata.repositoryservices.connectors.stores.metadatacollectionstore.properties.typedefs.TypeDef;
+import org.odpi.openmetadata.repositoryservices.connectors.stores.metadatacollectionstore.properties.typedefs.TypeDefCategory;
+import org.odpi.openmetadata.repositoryservices.connectors.stores.metadatacollectionstore.properties.typedefs.TypeDefLink;
+import org.odpi.openmetadata.repositoryservices.connectors.stores.metadatacollectionstore.repositoryconnector.OMRSRepositoryHelper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.*;
+
+
+/**
+ * OpenMetadataAPIGenericConverter provides the generic methods for the bean converters used to provide translation between
+ * specific Open Metadata API beans and the repository services API beans.
+ * Generic classes have limited knowledge of the classes these are working on and this means creating a new instance of a
+ * class from within a generic is a little involved.  This class provides the generic method for creating
+ * and initializing an Open Metadata API bean.
+ */
+public abstract class OpenMetadataAPIGenericConverter<B>
+{
+    protected OMRSRepositoryHelper   repositoryHelper;
+    protected String                 serviceName;
+    protected String                 serverName;
+
+    protected static final PropertyHelper propertyHelper = new PropertyHelper();
+
+    private static final Logger log = LoggerFactory.getLogger(OpenMetadataAPIGenericConverter.class);
+
+
+    /**
+     * Constructor captures the initial content
+     *
+     * @param repositoryHelper helper object to parse entity
+     * @param serviceName name of this component
+     * @param serverName name of this server
+     */
+    public OpenMetadataAPIGenericConverter(OMRSRepositoryHelper   repositoryHelper,
+                                           String                 serviceName,
+                                           String                 serverName)
+    {
+        this.repositoryHelper = repositoryHelper;
+        this.serviceName = serviceName;
+        this.serverName = serverName;
+    }
+
+
+    /* ====================================================================================================
+     * This first set of methods represents the external interface of the converter.  These are the methods
+     * called from the generic handlers.  They define which type of bean is required and provide a set
+     * of repository instances to use to fill the bean.  These methods are overridden by the specific
+     * converters.
+     *
+     * To decide which methods to implement, look at the code in the generic handler that the OMAS is using.
+     * If an OMAS does not implement one of the methods that the handlers they are using call then there will be a
+     * PropertyServerException.
+     */
+
+
+    /**
+     * Using the supplied entity, return a new instance of the bean. This is used for most beans that have
+     * a one to one correspondence with the repository instances.
+     *
+     * @param beanClass name of the class to create
+     * @param entity entity containing the properties
+     * @param methodName calling method
+     * @return bean populated with properties from the entity supplied
+     * @throws PropertyServerException a problem instantiating the bean
+     */
+    @SuppressWarnings(value = "unused")
+    public B getNewBean(Class<B>     beanClass,
+                        EntityDetail entity,
+                        String       methodName) throws PropertyServerException
+    {
+        final String thisMethodName = "getNewBean(entity)";
+
+        handleUnimplementedConverterMethod(beanClass.getName(), thisMethodName, this.getClass().getName(), methodName);
+
+        return null;
+    }
+
+
+    /**
+     * Using the supplied instances, return a new instance of the bean. This is used for beans that
+     * contain a combination of the properties from an entity and that of a connected relationship.
+     *
+     * @param beanClass name of the class to create
+     * @param entity entity containing the properties
+     * @param relationship relationship used to access the entity
+     * @param methodName calling method
+     * @return bean populated with properties from the instances supplied
+     * @throws PropertyServerException a problem instantiating the bean
+     */
+    @SuppressWarnings(value = "unused")
+    public B getNewBean(Class<B>     beanClass,
+                        EntityDetail entity,
+                        Relationship relationship,
+                        String       methodName) throws PropertyServerException
+    {
+        final String thisMethodName = "getNewBean(entity, relationship)";
+
+        handleUnimplementedConverterMethod(beanClass.getName(), thisMethodName, this.getClass().getName(), methodName);
+
+        return null;
+    }
+
+
+    /**
+     * Using the supplied instances, return a new instance of the bean.  It is used for beans such as
+     * an AnnotationProperties or DataField bean which combine knowledge from the entity and its linked relationships.
+     *
+     * @param beanClass name of the class to create
+     * @param primaryEntity entity that is the root of the collection of entities that make up the
+     *                      content of the bean
+     * @param relationships relationships linking the entities
+     * @param methodName calling method
+     * @return bean populated with properties from the instances supplied
+     * @throws PropertyServerException a problem instantiating the bean
+     */
+    @SuppressWarnings(value = "unused")
+    public B getNewComplexBean(Class<B>           beanClass,
+                               EntityDetail       primaryEntity,
+                               List<Relationship> relationships,
+                               String             methodName) throws PropertyServerException
+    {
+        final String thisMethodName = "getNewComplexBean";
+
+        handleUnimplementedConverterMethod(beanClass.getName(), thisMethodName, this.getClass().getName(), methodName);
+
+        return null;
+    }
+
+
+    /**
+     * Using the supplied instances, return a new instance of the bean.  It is used for beans such as
+     * an AnnotationProperties or DataField bean which combine knowledge from the entity and its linked relationships.
+     *
+     * @param beanClass name of the class to create
+     * @param primaryEntity entity that is the root of the collection of entities that make up the
+     *                      content of the bean
+     * @param relationship relationship used to access the entity
+     * @param relatedEntities relationships linking the entities
+     * @param methodName calling method
+     * @return bean populated with properties from the instances supplied
+     * @throws PropertyServerException a problem instantiating the bean
+     */
+    @SuppressWarnings(value = "unused")
+    public B getNewComplexRelatedEntityBean(Class<B>            beanClass,
+                                            EntityDetail        primaryEntity,
+                                            Relationship        relationship,
+                                            List<RelatedEntity> relatedEntities,
+                                            String              methodName) throws PropertyServerException
+    {
+        final String thisMethodName = "getNewComplexRelatedEntityBean";
+
+        handleUnimplementedConverterMethod(beanClass.getName(), thisMethodName, this.getClass().getName(), methodName);
+
+        return null;
+    }
+
+
+    /**
+     * Using the supplied instances, return a new instance of the bean.  It is used for beans such as
+     * a connection bean which made up of 3 entities (Connection, ConnectorType and Endpoint) plus the
+     * relationships between them.  The relationships may be omitted if they do not have any properties.
+     *
+     * @param beanClass name of the class to create
+     * @param primaryEntity entity that is the root of the collection of entities that make up the content of the bean
+     * @param supplementaryEntities entities connected to the primary entity by the relationships
+     * @param relationships relationships linking the entities
+     * @param methodName calling method
+     * @return bean populated with properties from the instances supplied
+     * @throws PropertyServerException a problem instantiating the bean
+     */
+    @SuppressWarnings(value = "unused")
+    public B getNewComplexGraphBean(Class<B>           beanClass,
+                                    EntityDetail       primaryEntity,
+                                    List<EntityDetail> supplementaryEntities,
+                                    List<Relationship> relationships,
+                                    String             methodName) throws PropertyServerException
+    {
+        final String thisMethodName = "getNewComplexGraphBean";
+
+        handleUnimplementedConverterMethod(beanClass.getName(), thisMethodName, this.getClass().getName(), methodName);
+
+        return null;
+    }
+
+
+    /**
+     * Using the supplied relationship, return a new instance of the bean.  It is used for beans that
+     * represent a simple relationship between two entities.
+     *
+     * @param beanClass name of the class to create
+     * @param relationship relationship linking the entities
+     * @param methodName calling method
+     * @return bean populated with properties from the instances supplied
+     * @throws PropertyServerException a problem instantiating the bean
+     */
+    @SuppressWarnings(value = "unused")
+    public B getNewRelationshipBean(Class<B>     beanClass,
+                                    Relationship relationship,
+                                    String       methodName) throws PropertyServerException
+    {
+        final String thisMethodName = "getNewRelationshipBean";
+
+        handleUnimplementedConverterMethod(beanClass.getName(), thisMethodName, this.getClass().getName(), methodName);
+
+        return null;
+    }
+
+
+    /**
+     * Return the converted bean.  This is a special method used for schema types since they are stored
+     * as a collection of instances.
+     *
+     * @param beanClass name of the class to create
+     * @param schemaRootHeader header of the schema element that holds the root information
+     * @param schemaTypeTypeName name of type of the schema type to create
+     * @param instanceProperties properties describing the schema type
+     * @param schemaRootClassifications classifications from the schema root entity
+     * @param attributeCount number of attributes (for a complex schema type)
+     * @param validValueSetGUID unique identifier of the set of valid values (for an enum schema type)
+     * @param externalSchemaType unique identifier for the properties of the schema type that is shared by multiple attributes/assets
+     * @param mapFromSchemaType bean containing the properties of the schema type that is part of a map definition
+     * @param mapToSchemaType bean containing the properties of the schema type that is part of a map definition
+     * @param schemaTypeOptions list of schema types that could be the type for this attribute
+     * @param methodName calling method
+     * @return bean populated with properties from the instances supplied
+     * @throws PropertyServerException a problem instantiating the bean
+     */
+    @SuppressWarnings(value = "unused")
+    public B getNewSchemaTypeBean(Class<B>             beanClass,
+                                  InstanceHeader       schemaRootHeader,
+                                  String               schemaTypeTypeName,
+                                  InstanceProperties   instanceProperties,
+                                  List<Classification> schemaRootClassifications,
+                                  int                  attributeCount,
+                                  String               validValueSetGUID,
+                                  B                    externalSchemaType,
+                                  B                    mapFromSchemaType,
+                                  B                    mapToSchemaType,
+                                  List<B>              schemaTypeOptions,
+                                  String               methodName) throws PropertyServerException
+    {
+        final String thisMethodName = "getNewSchemaTypeBean";
+
+        handleUnimplementedConverterMethod(beanClass.getName(), thisMethodName, this.getClass().getName(), methodName);
+
+        return null;
+    }
+
+
+    /**
+     * Return the converted bean.  This is a special method used for schema types since they are stored
+     * as a collection of instances.  For external schema types and map elements, both the GUID and the bean are returned to
+     * allow the consuming OMAS to choose whether it is returning GUIDs of the linked to schema or the schema type bean itself.
+     *
+     * @param beanClass name of the class to create
+     * @param schemaRootHeader header of the schema element that holds the root information
+     * @param schemaTypeTypeName name of type of the schema type to create
+     * @param instanceProperties properties describing the schema type
+     * @param schemaRootClassifications classifications from the schema root entity
+     * @param attributeCount number of attributes (for a complex schema type)
+     * @param validValueSetGUID unique identifier of the set of valid values (for an enum schema type)
+     * @param externalSchemaTypeGUID unique identifier of the external schema type
+     * @param externalSchemaType unique identifier for the properties of the schema type that is shared by multiple attributes/assets
+     * @param mapFromSchemaTypeGUID unique identifier of the mapFrom schema type
+     * @param mapFromSchemaType bean containing the properties of the schema type that is part of a map definition
+     * @param mapToSchemaTypeGUID unique identifier of the mapTo schema type
+     * @param mapToSchemaType bean containing the properties of the schema type that is part of a map definition
+     * @param schemaTypeOptionGUIDs list of unique identifiers for schema types that could be the type for this attribute
+     * @param schemaTypeOptions list of schema types that could be the type for this attribute
+     * @param queryTargets list of relationships to schema types that contain data values used to derive the schema type value(s)
+     * @param methodName calling method
+     * @return bean populated with properties from the instances supplied
+     * @throws PropertyServerException a problem instantiating the bean
+     */
+    @SuppressWarnings(value = "unused")
+    public B getNewSchemaTypeBean(Class<B>             beanClass,
+                                  InstanceHeader       schemaRootHeader,
+                                  String               schemaTypeTypeName,
+                                  InstanceProperties   instanceProperties,
+                                  List<Classification> schemaRootClassifications,
+                                  int                  attributeCount,
+                                  String               validValueSetGUID,
+                                  String               externalSchemaTypeGUID,
+                                  B                    externalSchemaType,
+                                  String               mapFromSchemaTypeGUID,
+                                  B                    mapFromSchemaType,
+                                  String               mapToSchemaTypeGUID,
+                                  B                    mapToSchemaType,
+                                  List<String>         schemaTypeOptionGUIDs,
+                                  List<B>              schemaTypeOptions,
+                                  List<Relationship>   queryTargets,
+                                  String               methodName) throws PropertyServerException
+    {
+        return this.getNewSchemaTypeBean(beanClass,
+                                         schemaRootHeader,
+                                         schemaTypeTypeName,
+                                         instanceProperties,
+                                         schemaRootClassifications,
+                                         attributeCount,
+                                         validValueSetGUID,
+                                         externalSchemaType,
+                                         mapFromSchemaType,
+                                         mapToSchemaType,
+                                         schemaTypeOptions,
+                                         methodName);
+    }
+
+
+    /**
+     * Extract the properties from the schema attribute entity.  Each API creates a specialization of this method for its beans.
+     *
+     * @param beanClass name of the class to create
+     * @param schemaAttributeEntity entity containing the properties for the main schema attribute
+     * @param typeClass name of type used to describe the schema type
+     * @param schemaType bean containing the properties of the schema type - this is filled out by the schema type converter
+     * @param schemaAttributeRelationships relationships containing the links to other schema attributes
+     * @param methodName calling method
+     * @param <T> bean type used to create the schema type
+     * @return bean populated with properties from the instances supplied
+     * @throws PropertyServerException a problem instantiating the bean
+     */
+    public <T> B getNewSchemaAttributeBean(Class<B>           beanClass,
+                                           EntityDetail       schemaAttributeEntity,
+                                           Class<T>           typeClass,
+                                           T                  schemaType,
+                                           List<Relationship> schemaAttributeRelationships,
+                                           String             methodName) throws PropertyServerException
+    {
+        final String thisMethodName = "getNewSchemaAttributeBean)";
+
+        handleUnimplementedConverterMethod(beanClass.getName(), thisMethodName, this.getClass().getName(), methodName);
+
+        return null;
+    }
+
+
+    /* ==========================================================
+     * This method throws the exception that occurs if an OMAS fails to implement one of the updateXXXBean methods or
+     * the converter is configured with an invalid bean class.
+     */
+
+    /**
+     * Throw an exception to indicate that one of the update methods has not been implemented by an OMAS.
+     *
+     * @param beanClassName class name of bean
+     * @param missingMethodName method tha has not been implemented
+     * @param converterClassName class that detected the missing method
+     * @param methodName method that is missing
+     * @throws PropertyServerException a problem in the use of the generic handlers because
+     * the converter has been called with a method that is unexpected for the specific type of
+     * bean that this converter is implemented for.
+     */
+    private void handleUnimplementedConverterMethod(String beanClassName,
+                                                    String missingMethodName,
+                                                    String converterClassName,
+                                                    String methodName) throws PropertyServerException
+    {
+        throw new PropertyServerException(GenericHandlersErrorCode.MISSING_CONVERTER_METHOD.getMessageDefinition(serviceName,
+                                                                                                                 missingMethodName,
+                                                                                                                 converterClassName,
+                                                                                                                 beanClassName,
+                                                                                                                 methodName),
+                                          this.getClass().getName(),
+                                          methodName);
+    }
+
+
+    /**
+     * Throw an exception to indicate that one of the update methods has not been implemented by an OMAS.
+     *
+     * @param beanClassName class name of bean
+     * @param error exception generated when the new bean is created
+     * @param methodName method that is missing
+     * @throws PropertyServerException a problem in the use of the generic handlers because
+     * the converter has been configured with a type of bean that is not a known class
+     */
+    protected void handleInvalidBeanClass(String    beanClassName,
+                                          Exception error,
+                                          String    methodName) throws PropertyServerException
+    {
+        throw new PropertyServerException(GenericHandlersErrorCode.INVALID_BEAN_CLASS.getMessageDefinition(beanClassName,
+                                                                                                           methodName,
+                                                                                                           serviceName,
+                                                                                                           serverName,
+                                                                                                           error.getMessage()),
+                                          this.getClass().getName(),
+                                          methodName,
+                                          error);
+    }
+
+
+    /**
+     * Throw an exception to indicate that one of the update methods has not been implemented by an OMAS.
+     *
+     * @param beanClassName class name of bean
+     * @param expectedBeanClass class name that the converter is able to process
+     * @param methodName method that is missing
+     * @throws PropertyServerException a problem in the use of the generic handlers because
+     * the converter has been configured with a type of bean that is incompatible with the handler
+     */
+    protected void handleUnexpectedBeanClass(String    beanClassName,
+                                             String    expectedBeanClass,
+                                             String    methodName) throws PropertyServerException
+    {
+        throw new PropertyServerException(GenericHandlersErrorCode.UNEXPECTED_BEAN_CLASS.getMessageDefinition(beanClassName,
+                                                                                                           methodName,
+                                                                                                           serviceName,
+                                                                                                           serverName,
+                                                                                                           expectedBeanClass),
+                                          this.getClass().getName(),
+                                          methodName);
+    }
+
+
+    /**
+     * Throw an exception to indicate that a critical instance (typically the main entity) has not been passed
+     * to the converter.
+     *
+     * @param beanClassName class name of bean
+     * @param typeDefCategory class name that the converter is able to process
+     * @param methodName method that is missing
+     * @throws PropertyServerException a problem in the use of the generic handlers because
+     * the converter has been configured with a type of bean that is incompatible with the handler
+     */
+    protected void handleMissingMetadataInstance(String          beanClassName,
+                                                 TypeDefCategory typeDefCategory,
+                                                 String          methodName) throws PropertyServerException
+    {
+        throw new PropertyServerException(GenericHandlersErrorCode.MISSING_METADATA_INSTANCE.getMessageDefinition(serviceName,
+                                                                                                                  beanClassName,
+                                                                                                                  typeDefCategory.getName(),
+                                                                                                                  methodName),
+                                          this.getClass().getName(),
+                                          methodName);
+    }
+
+
+    /**
+     * Throw an exception to indicate that a critical instance (typically the main entity) has not been passed
+     * to the converter.
+     *
+     * @param expectedTypeName name of the type that the instance should match
+     * @param beanClassName class name of bean
+     * @param instanceAuditHeader header section of the instance
+     * @param methodName calling method
+     * @throws PropertyServerException a problem in the use of the generic handlers because
+     * the converter has been configured with a type of bean that is incompatible with the handler
+     */
+    void validateInstanceType(String              expectedTypeName,
+                              String              beanClassName,
+                              InstanceAuditHeader instanceAuditHeader,
+                              String              methodName) throws PropertyServerException
+    {
+        String actualTypeName = "<null>";
+
+        if ((instanceAuditHeader.getType() != null) && (instanceAuditHeader.getType().getTypeDefName() != null))
+        {
+            actualTypeName = instanceAuditHeader.getType().getTypeDefName();
+        }
+
+        validateInstanceType(expectedTypeName,
+                             beanClassName,
+                             actualTypeName,
+                             methodName);
+    }
+
+
+    /**
+     * Throw an exception to indicate that a critical instance (typically the main entity) has not been passed
+     * to the converter.
+     *
+     * @param expectedTypeName name of the type that the instance should match
+     * @param beanClassName class name of bean
+     * @param actualTypeName type of instance
+     * @param methodName calling method
+     * @throws PropertyServerException a problem in the use of the generic handlers because
+     * the converter has been configured with a type of bean that is incompatible with the handler
+     */
+    protected void validateInstanceType(String expectedTypeName,
+                                        String beanClassName,
+                                        String actualTypeName,
+                                        String methodName) throws PropertyServerException
+    {
+
+        if (repositoryHelper.isTypeOf(serviceName, actualTypeName, expectedTypeName))
+        {
+                return;
+        }
+
+        throw new PropertyServerException(GenericHandlersErrorCode.BAD_INSTANCE_TYPE.getMessageDefinition(serviceName,
+                                                                                                          beanClassName,
+                                                                                                          actualTypeName,
+                                                                                                          methodName,
+                                                                                                          expectedTypeName),
+                                          this.getClass().getName(),
+                                          methodName);
+    }
+
+
+    /**
+     * Throw an exception to indicate that a retrieved entity has missing information.
+     *
+     * @param beanClassName class name of bean
+     * @param entity the entity with the bad header
+     * @param methodName calling method
+     * @throws PropertyServerException an invalid instance has been returned from the metadata repositories
+     */
+    protected void handleBadEntity(String          beanClassName,
+                                   EntityDetail    entity,
+                                   String          methodName) throws PropertyServerException
+    {
+        if (entity == null)
+        {
+            handleMissingMetadataInstance(beanClassName, TypeDefCategory.ENTITY_DEF, methodName);
+        }
+        else
+        {
+            throw new PropertyServerException(GenericHandlersErrorCode.BAD_ENTITY.getMessageDefinition(methodName,
+                                                                                                       serviceName,
+                                                                                                       entity.toString()),
+                                              this.getClass().getName(),
+                                              methodName);
+        }
+    }
+
+
+    /**
+     * Throw an exception to indicate that a critical instance (typically the main entity) has not been passed
+     * to the converter.
+     *
+     * @param beanClassName class name of bean
+     * @param relationship the relationship with the bad header
+     * @param methodName calling method
+     * @throws PropertyServerException an invalid instance has been returned from the metadata repositories
+     */
+    protected void handleBadRelationship(String       beanClassName,
+                                         Relationship relationship,
+                                         String       methodName) throws PropertyServerException
+    {
+        if (relationship == null)
+        {
+            handleMissingMetadataInstance(beanClassName, TypeDefCategory.RELATIONSHIP_DEF, methodName);
+        }
+        else
+        {
+            throw new PropertyServerException(GenericHandlersErrorCode.BAD_RELATIONSHIP.getMessageDefinition(methodName,
+                                                                                                             serviceName,
+                                                                                                             relationship.toString()),
+                                              this.getClass().getName(),
+                                              methodName);
+        }
+    }
+
+
+    /* ======================================================
+     * The methods that follow are used by the subclasses to extract specific properties from the instance properties.
+     * They are used for all properties except enums which need a specific method in the OMAS converters.
+     */
+
+    /**
+     * Extract the properties for the requested classification from the entity.
+     *
+     * @param classificationName name of classification
+     * @param entity entity containing classification
+     * @return list of properties for the named classification
+     */
+    protected InstanceProperties getClassificationProperties(String       classificationName,
+                                                             EntityDetail entity)
+    {
+        if (entity != null)
+        {
+            List<Classification> entityClassifications = entity.getClassifications();
+
+            if (entityClassifications != null)
+            {
+                return getClassificationProperties(classificationName, entityClassifications);
+            }
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract the properties for the requested classification from the list of classifications.
+     *
+     * @param classificationName name of classification
+     * @param entityClassifications list of classifications from an entity
+     * @return list of properties for the named classification
+     */
+    protected InstanceProperties getClassificationProperties(String               classificationName,
+                                                             List<Classification> entityClassifications)
+    {
+        if (entityClassifications != null)
+        {
+            for (Classification entityClassification : entityClassifications)
+            {
+                if (entityClassification != null)
+                {
+                    if (classificationName.equals(entityClassification.getName()))
+                    {
+                        return entityClassification.getProperties();
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract the properties from the entity.
+     *
+     * @param beanClass name of the class to create
+     * @param entity entity containing the properties
+     * @param methodName calling method
+     * @return filled out element header
+     * @throws PropertyServerException a problem in the use of the generic handlers because
+     * the converter has been configured with a type of bean that is incompatible with the handler
+     */
+    protected ElementHeader getMetadataElementHeader(Class<B>     beanClass,
+                                                     EntityDetail entity,
+                                                     String       methodName) throws PropertyServerException
+    {
+        if (entity != null)
+        {
+            return getMetadataElementHeader(beanClass,
+                                            entity,
+                                            entity.getClassifications(),
+                                            methodName);
+        }
+        else
+        {
+            this.handleMissingMetadataInstance(beanClass.getName(),
+                                                TypeDefCategory.ENTITY_DEF,
+                                                methodName);
+        }
+
+        return null;
+    }
+
+
+
+    /**
+     * Fill an omf control header from the information in a repository services element header.
+     *
+     * @param elementControlHeader omf object control header
+     * @param header OMRS element header
+     */
+    public void fillElementControlHeader(ElementControlHeader elementControlHeader,
+                                         InstanceAuditHeader  header)
+    {
+        if (header != null)
+        {
+            elementControlHeader.setStatus(this.getElementStatus(header.getStatus()));
+            elementControlHeader.setType(this.getElementType(header));
+
+            ElementOrigin elementOrigin = new ElementOrigin();
+
+            elementOrigin.setSourceServer(serverName);
+            elementOrigin.setOriginCategory(this.getElementOriginCategory(header.getInstanceProvenanceType()));
+            elementOrigin.setHomeMetadataCollectionId(header.getMetadataCollectionId());
+            elementOrigin.setHomeMetadataCollectionName(header.getMetadataCollectionName());
+            elementOrigin.setLicense(header.getInstanceLicense());
+
+            elementControlHeader.setOrigin(elementOrigin);
+
+            elementControlHeader.setVersions(this.getElementVersions(header));
+        }
+    }
+
+
+
+    /**
+     * Convert OMRS value in omf value.
+     *
+     * @param primitiveDefCategory OMRS value
+     * @return omf equivalent
+     */
+    protected PrimitiveTypeCategory mapPrimitiveDefCategory(PrimitiveDefCategory primitiveDefCategory)
+    {
+        return switch (primitiveDefCategory)
+        {
+            case OM_PRIMITIVE_TYPE_INT -> PrimitiveTypeCategory.OM_PRIMITIVE_TYPE_INT;
+            case OM_PRIMITIVE_TYPE_BYTE -> PrimitiveTypeCategory.OM_PRIMITIVE_TYPE_BYTE;
+            case OM_PRIMITIVE_TYPE_CHAR -> PrimitiveTypeCategory.OM_PRIMITIVE_TYPE_CHAR;
+            case OM_PRIMITIVE_TYPE_DATE -> PrimitiveTypeCategory.OM_PRIMITIVE_TYPE_DATE;
+            case OM_PRIMITIVE_TYPE_LONG -> PrimitiveTypeCategory.OM_PRIMITIVE_TYPE_LONG;
+            case OM_PRIMITIVE_TYPE_FLOAT -> PrimitiveTypeCategory.OM_PRIMITIVE_TYPE_FLOAT;
+            case OM_PRIMITIVE_TYPE_SHORT -> PrimitiveTypeCategory.OM_PRIMITIVE_TYPE_SHORT;
+            case OM_PRIMITIVE_TYPE_DOUBLE -> PrimitiveTypeCategory.OM_PRIMITIVE_TYPE_DOUBLE;
+            case OM_PRIMITIVE_TYPE_STRING -> PrimitiveTypeCategory.OM_PRIMITIVE_TYPE_STRING;
+            case OM_PRIMITIVE_TYPE_BOOLEAN -> PrimitiveTypeCategory.OM_PRIMITIVE_TYPE_BOOLEAN;
+            case OM_PRIMITIVE_TYPE_BIGDECIMAL -> PrimitiveTypeCategory.OM_PRIMITIVE_TYPE_BIGDECIMAL;
+            case OM_PRIMITIVE_TYPE_BIGINTEGER -> PrimitiveTypeCategory.OM_PRIMITIVE_TYPE_BIGINTEGER;
+            default -> PrimitiveTypeCategory.OM_PRIMITIVE_TYPE_UNKNOWN;
+        };
+
+    }
+
+
+    /**
+     * Fill out the properties for the omf Open Metadata Element bean with values from an OMRS entity.
+     *
+     * @param instanceProperties retrieve properties
+     * @return  properties mapped to omf
+     */
+    public ElementProperties mapElementProperties(InstanceProperties instanceProperties)
+    {
+        if (instanceProperties != null)
+        {
+            if (instanceProperties.getInstanceProperties() != null)
+            {
+                ElementProperties                  omfElementProperties = new ElementProperties();
+                Map<String, InstancePropertyValue> omrsProperties       = instanceProperties.getInstanceProperties();
+
+                for (String propertyName : omrsProperties.keySet())
+                {
+                    log.debug("=================================");
+                    log.debug("Processing property: " + propertyName);
+                    InstancePropertyValue omrsPropertyValue = omrsProperties.get(propertyName);
+
+                    if (omrsPropertyValue != null)
+                    {
+                        log.debug("OMRS Property value: " + omrsPropertyValue);
+                        log.debug("OMRS Property category: " + omrsPropertyValue.getInstancePropertyCategory());
+
+                        switch (omrsPropertyValue.getInstancePropertyCategory())
+                        {
+                            case PRIMITIVE:
+                                PrimitivePropertyValue omrsPrimitivePropertyValue = (PrimitivePropertyValue) omrsPropertyValue;
+                                PrimitiveTypePropertyValue primitiveTypePropertyValue = new PrimitiveTypePropertyValue();
+
+                                primitiveTypePropertyValue.setTypeName(omrsPrimitivePropertyValue.getTypeName());
+                                primitiveTypePropertyValue.setPrimitiveValue(omrsPrimitivePropertyValue.getPrimitiveValue());
+                                primitiveTypePropertyValue.setPrimitiveTypeCategory(mapPrimitiveDefCategory(omrsPrimitivePropertyValue.getPrimitiveDefCategory()));
+
+                                omfElementProperties.setProperty(propertyName, primitiveTypePropertyValue);
+                                break;
+
+                            case ENUM:
+                                EnumPropertyValue omrsEnumPropertyValue = (EnumPropertyValue) omrsPropertyValue;
+                                EnumTypePropertyValue enumTypePropertyValue = new EnumTypePropertyValue();
+
+                                enumTypePropertyValue.setTypeName(omrsEnumPropertyValue.getTypeName());
+                                enumTypePropertyValue.setSymbolicName(omrsEnumPropertyValue.getSymbolicName());
+
+                                omfElementProperties.setProperty(propertyName, enumTypePropertyValue);
+                                break;
+
+                            case MAP:
+                                MapPropertyValue omrsMapPropertyValue = (MapPropertyValue) omrsPropertyValue;
+                                MapTypePropertyValue mapTypePropertyValue = new MapTypePropertyValue();
+
+                                mapTypePropertyValue.setTypeName(omrsMapPropertyValue.getTypeName());
+                                mapTypePropertyValue.setMapValues(this.mapElementProperties(omrsMapPropertyValue.getMapValues()));
+
+                                omfElementProperties.setProperty(propertyName, mapTypePropertyValue);
+                                break;
+
+                            case ARRAY:
+                                ArrayPropertyValue omrsArrayPropertyValue = (ArrayPropertyValue) omrsPropertyValue;
+                                ArrayTypePropertyValue arrayTypePropertyValue = new ArrayTypePropertyValue();
+
+                                arrayTypePropertyValue.setTypeName(omrsArrayPropertyValue.getTypeName());
+                                arrayTypePropertyValue.setArrayValues(this.mapElementProperties(omrsArrayPropertyValue.getArrayValues()));
+                                if (arrayTypePropertyValue.getArrayValues() != null)
+                                {
+                                    arrayTypePropertyValue.setArrayCount(arrayTypePropertyValue.getArrayValues().getPropertyCount());
+                                }
+
+                                omfElementProperties.setProperty(propertyName, arrayTypePropertyValue);
+                                break;
+
+                            case STRUCT:
+                                StructPropertyValue omrsStructPropertyValue = (StructPropertyValue) omrsPropertyValue;
+                                StructTypePropertyValue structTypePropertyValue = new StructTypePropertyValue();
+
+                                structTypePropertyValue.setTypeName(omrsStructPropertyValue.getTypeName());
+                                structTypePropertyValue.setAttributes(this.mapElementProperties(omrsStructPropertyValue.getAttributes()));
+
+                                omfElementProperties.setProperty(propertyName, structTypePropertyValue);
+                                break;
+                        }
+                    }
+                    else
+                    {
+                        log.debug("Ignoring property: " + propertyName);
+                    }
+                }
+
+                log.debug("omf properties: " + omfElementProperties);
+                return omfElementProperties;
+            }
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract the classifications from the entity.
+     *
+     * @param entityClassifications classifications direct from the entity
+     * @return list of bean classifications
+     */
+    public List<AttachedClassification> getAttachedClassifications(List<Classification> entityClassifications)
+    {
+        List<AttachedClassification> beanClassifications = null;
+
+        if (entityClassifications != null)
+        {
+            beanClassifications = new ArrayList<>();
+
+            for (Classification entityClassification : entityClassifications)
+            {
+                if (entityClassification != null)
+                {
+                    AttachedClassification beanClassification = new AttachedClassification();
+
+                    fillElementControlHeader(beanClassification, entityClassification);
+
+                    beanClassification.setClassificationName(entityClassification.getName());
+
+                    if (entityClassification.getProperties() != null)
+                    {
+                        beanClassification.setClassificationProperties(mapElementProperties(entityClassification.getProperties()));
+                        beanClassification.setEffectiveFromTime(entityClassification.getProperties().getEffectiveFromTime());
+                        beanClassification.setEffectiveToTime(entityClassification.getProperties().getEffectiveToTime());
+                    }
+
+                    beanClassifications.add(beanClassification);
+                }
+            }
+        }
+
+        return beanClassifications;
+    }
+
+
+    /**
+     * Extract the properties from the entity.
+     *
+     * @param beanClass name of the class to create
+     * @param header header from the entity containing the properties
+     * @param entityClassifications classification if this is an entity
+     * @param methodName calling method
+     * @return filled out element header
+     * @throws PropertyServerException a problem in the use of the generic handlers because
+     * the converter has been configured with a type of bean that is incompatible with the handler
+     */
+    public ElementHeader getMetadataElementHeader(Class<B>             beanClass,
+                                                  InstanceHeader       header,
+                                                  List<Classification> entityClassifications,
+                                                  String               methodName) throws PropertyServerException
+    {
+        if (header != null)
+        {
+            ElementHeader elementHeader = new ElementHeader();
+
+            elementHeader.setGUID(header.getGUID());
+            elementHeader.setStatus(this.getElementStatus(header.getStatus()));
+            propertyHelper.addClassificationsToElementHeader(elementHeader,
+                                                             this.getAttachedClassifications(entityClassifications));
+            elementHeader.setType(this.getElementType(header));
+
+            ElementOrigin elementOrigin = new ElementOrigin();
+
+            elementOrigin.setSourceServer(serverName);
+            elementOrigin.setOriginCategory(this.getElementOriginCategory(header.getInstanceProvenanceType()));
+            elementOrigin.setHomeMetadataCollectionId(header.getMetadataCollectionId());
+            elementOrigin.setHomeMetadataCollectionName(header.getMetadataCollectionName());
+            elementOrigin.setLicense(header.getInstanceLicense());
+
+            elementHeader.setOrigin(elementOrigin);
+
+            elementHeader.setVersions(this.getElementVersions(header));
+
+            return elementHeader;
+        }
+        else
+        {
+            this.handleMissingMetadataInstance(beanClass.getName(), TypeDefCategory.ENTITY_DEF, methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Translate the repository services' InstanceStatus to an ElementStatus.
+     *
+     * @param instanceStatus value from the repository services
+     * @return ElementStatus enum
+     */
+    protected ElementStatus getElementStatus(InstanceStatus instanceStatus)
+    {
+        if (instanceStatus != null)
+        {
+            switch (instanceStatus)
+            {
+                case UNKNOWN ->
+                {
+                    return ElementStatus.UNKNOWN;
+                }
+                case ACTIVE ->
+                {
+                    return ElementStatus.ACTIVE;
+                }
+                case INVALID ->
+                {
+                    return ElementStatus.INVALID;
+                }
+                case DELETED ->
+                {
+                    return ElementStatus.DELETED;
+                }
+                case OTHER ->
+                {
+                    return ElementStatus.OTHER;
+                }
+            }
+        }
+
+        return ElementStatus.UNKNOWN;
+    }
+
+
+    /**
+     * Extract the properties from the entity.
+     *
+     * @param beanClass name of the class to create
+     * @param entityProxy entityProxy from the relationship containing the properties
+     * @param methodName calling method
+     * @return filled out element header
+     * @throws PropertyServerException a problem in the use of the generic handlers because
+     * the converter has been configured with a type of bean that is incompatible with the handler
+     */
+    public ElementStub getElementStub(Class<B>    beanClass,
+                                      EntityProxy entityProxy,
+                                      String      methodName) throws PropertyServerException
+    {
+        if (entityProxy != null)
+        {
+            ElementHeader elementHeader = getMetadataElementHeader(beanClass, entityProxy, entityProxy.getClassifications(), methodName);
+            ElementStub   elementStub   = new ElementStub(elementHeader);
+
+            elementStub.setUniqueName(repositoryHelper.getStringProperty(serviceName,
+                                                                         OpenMetadataProperty.QUALIFIED_NAME.name,
+                                                                         entityProxy.getUniqueProperties(),
+                                                                         methodName));
+
+            return elementStub;
+        }
+        else
+        {
+            this.handleMissingMetadataInstance(beanClass.getName(),
+                                               TypeDefCategory.ENTITY_DEF,
+                                               methodName);
+        }
+
+        return null;
+    }
+
+
+
+    /**
+     * Convert information from a repository instance into an Open Metadata Framework ElementType.
+     *
+     * @param instanceHeader values from the server
+     * @return OCF ElementType object
+     */
+    public ElementType getElementType(InstanceAuditHeader instanceHeader)
+    {
+        ElementType elementType = new ElementType();
+
+        InstanceType instanceType = instanceHeader.getType();
+
+        if (instanceType != null)
+        {
+            String typeDefName = instanceType.getTypeDefName();
+            TypeDef typeDef = repositoryHelper.getTypeDefByName(serviceName, typeDefName);
+
+            elementType.setTypeId(instanceType.getTypeDefGUID());
+            elementType.setTypeName(typeDefName);
+            elementType.setTypeVersion(instanceType.getTypeDefVersion());
+            elementType.setTypeDescription(typeDef.getDescription());
+
+            if (instanceType.getTypeDefCategory() == TypeDefCategory.ENTITY_DEF)
+            {
+                elementType.setTypeCategory(OpenMetadataTypeDefCategory.ENTITY_DEF);
+            }
+            else if (instanceType.getTypeDefCategory() == TypeDefCategory.CLASSIFICATION_DEF)
+            {
+                elementType.setTypeCategory(OpenMetadataTypeDefCategory.CLASSIFICATION_DEF);
+            }
+            else if (instanceType.getTypeDefCategory() == TypeDefCategory.RELATIONSHIP_DEF)
+            {
+                elementType.setTypeCategory(OpenMetadataTypeDefCategory.RELATIONSHIP_DEF);
+            }
+            else
+            {
+                elementType.setTypeCategory(OpenMetadataTypeDefCategory.UNKNOWN_DEF);
+            }
+
+            List<TypeDefLink> typeDefSuperTypes = repositoryHelper.getSuperTypes(serviceName, typeDefName);
+
+            if ((typeDefSuperTypes != null) && (! typeDefSuperTypes.isEmpty()))
+            {
+                List<String>   superTypes = new ArrayList<>();
+
+                for (TypeDefLink typeDefLink : typeDefSuperTypes)
+                {
+                    if (typeDefLink != null)
+                    {
+                        superTypes.add(typeDefLink.getName());
+                    }
+                }
+
+                if (! superTypes.isEmpty())
+                {
+                    elementType.setSuperTypeNames(superTypes);
+                }
+            }
+        }
+
+        return elementType;
+    }
+
+
+    /**
+     * Extract detail of the version of the element and the user's maintaining it.
+     *
+     * @param header audit header from the repository
+     * @return ElementVersions object
+     */
+    protected ElementVersions getElementVersions(InstanceAuditHeader header)
+    {
+        ElementVersions elementVersions = new ElementVersions();
+
+        elementVersions.setCreatedBy(header.getCreatedBy());
+        elementVersions.setCreateTime(header.getCreateTime());
+        elementVersions.setUpdatedBy(header.getUpdatedBy());
+        elementVersions.setUpdateTime(header.getUpdateTime());
+        elementVersions.setMaintainedBy(header.getMaintainedBy());
+        elementVersions.setVersion(header.getVersion());
+        elementVersions.setLastRequestId(header.getLastRequestId());
+
+        return elementVersions;
+    }
+
+
+    /**
+     * Translate the repository services' InstanceProvenanceType to an ElementOrigin.
+     *
+     * @param instanceProvenanceType value from the repository services
+     * @return ElementOrigin enum
+     */
+    protected ElementOriginCategory getElementOriginCategory(InstanceProvenanceType instanceProvenanceType)
+    {
+        if (instanceProvenanceType != null)
+        {
+            return switch (instanceProvenanceType)
+                           {
+                               case DEREGISTERED_REPOSITORY -> ElementOriginCategory.DEREGISTERED_REPOSITORY;
+                               case EXTERNAL_SOURCE -> ElementOriginCategory.EXTERNAL_SOURCE;
+                               case EXPORT_ARCHIVE -> ElementOriginCategory.EXPORT_ARCHIVE;
+                               case LOCAL_COHORT -> ElementOriginCategory.LOCAL_COHORT;
+                               case CONTENT_PACK -> ElementOriginCategory.CONTENT_PACK;
+                               case CONFIGURATION -> ElementOriginCategory.CONFIGURATION;
+                               case UNKNOWN -> ElementOriginCategory.UNKNOWN;
+                           };
+        }
+
+        return ElementOriginCategory.UNKNOWN;
+    }
+
+
+    /**
+     * Extract the qualifiedName property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string name or null
+     */
+    protected String getQualifiedName(InstanceProperties  instanceProperties)
+    {
+        final String methodName = "getQualifiedName";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.getStringProperty(serviceName,
+                                                      OpenMetadataProperty.QUALIFIED_NAME.name,
+                                                      instanceProperties,
+                                                      methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract and delete the qualifiedName property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string name or null
+     */
+    protected String removeQualifiedName(InstanceProperties  instanceProperties)
+    {
+        final String methodName = "removeQualifiedName";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeStringProperty(serviceName,
+                                                         OpenMetadataProperty.QUALIFIED_NAME.name,
+                                                         instanceProperties,
+                                                         methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract and delete the qualifiedName property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return map or null
+     */
+    protected Map<String, String> removeAdditionalProperties(InstanceProperties  instanceProperties)
+    {
+        final String methodName = "removeAdditionalProperties";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeStringMapFromProperty(serviceName,
+                                                                OpenMetadataProperty.ADDITIONAL_PROPERTIES.name,
+                                                                instanceProperties,
+                                                                methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Convert the remaining properties into a map that is returned as the extended properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return map or null
+     */
+    protected Map<String, Object> getRemainingExtendedProperties(InstanceProperties  instanceProperties)
+    {
+        if (instanceProperties != null)
+        {
+            Map<String, Object> extendedProperties = repositoryHelper.getInstancePropertiesAsMap(instanceProperties);
+
+            if ((extendedProperties != null) && (! extendedProperties.isEmpty()))
+            {
+                return extendedProperties;
+            }
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract and delete the displayName property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string name or null
+     */
+    protected String removeDisplayName(InstanceProperties  instanceProperties)
+    {
+        final String methodName = "removeDisplayName";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeStringProperty(serviceName,
+                                                         OpenMetadataProperty.DISPLAY_NAME.name,
+                                                         instanceProperties,
+                                                         methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract and delete the property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string name or null
+     */
+    protected String removeURL(InstanceProperties  instanceProperties)
+    {
+        final String methodName = "removeURL";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeStringProperty(serviceName,
+                                                         OpenMetadataProperty.URL.name,
+                                                         instanceProperties,
+                                                         methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract the displayName property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string name or null
+     */
+    protected String getDisplayName(InstanceProperties  instanceProperties)
+    {
+        final String methodName = "getDisplayName";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.getStringProperty(serviceName,
+                                                      OpenMetadataProperty.DISPLAY_NAME.name,
+                                                      instanceProperties,
+                                                      methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract and delete the name property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string name or null
+     */
+    protected String removeName(InstanceProperties  instanceProperties)
+    {
+        final String methodName = "removeName";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeStringProperty(serviceName,
+                                                         OpenMetadataProperty.DISPLAY_NAME.name,
+                                                         instanceProperties,
+                                                         methodName);
+        }
+
+        return null;
+    }
+
+
+
+    /**
+     * Extract and delete the version identifier property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string name or null
+     */
+    protected String removeVersionIdentifier(InstanceProperties  instanceProperties)
+    {
+        final String methodName = "removeVersionIdentifier";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeStringProperty(serviceName,
+                                                         OpenMetadataProperty.VERSION_IDENTIFIER.name,
+                                                         instanceProperties,
+                                                         methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract the description property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string text or null
+     */
+    protected String getDescription(InstanceProperties  instanceProperties)
+    {
+        final String methodName = "getDescription";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.getStringProperty(serviceName,
+                                                      OpenMetadataProperty.DESCRIPTION.name,
+                                                      instanceProperties,
+                                                      methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract and delete the description property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string text or null
+     */
+    protected String removeDescription(InstanceProperties  instanceProperties)
+    {
+        final String methodName = "removeDescription";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeStringProperty(serviceName,
+                                                         OpenMetadataProperty.DESCRIPTION.name,
+                                                         instanceProperties,
+                                                         methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract and delete the networkAddress property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string text or null
+     */
+    protected String removeNetworkAddress(InstanceProperties  instanceProperties)
+    {
+        final String methodName = "removeNetworkAddress";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeStringProperty(serviceName,
+                                                         OpenMetadataProperty.NETWORK_ADDRESS.name,
+                                                         instanceProperties,
+                                                         methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract and delete the protocol property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string text or null
+     */
+    protected String removeProtocol(InstanceProperties  instanceProperties)
+    {
+        final String methodName = "removeProtocol";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeStringProperty(serviceName,
+                                                         OpenMetadataProperty.PROTOCOL.name,
+                                                         instanceProperties,
+                                                         methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract and delete the encryption method property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string text or null
+     */
+    protected String removeEncryptionMethod(InstanceProperties  instanceProperties)
+    {
+        final String methodName = "removeEncryptionMethod";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeStringProperty(serviceName,
+                                                         OpenMetadataProperty.ENCRYPTION_METHOD.name,
+                                                         instanceProperties,
+                                                         methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract and delete the connector provider class name property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string text or null
+     */
+    protected String removeConnectorProviderClassName(InstanceProperties  instanceProperties)
+    {
+        final String methodName = "removeConnectorProviderClassName";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeStringProperty(serviceName,
+                                                         OpenMetadataProperty.CONNECTOR_PROVIDER_CLASS_NAME.name,
+                                                         instanceProperties,
+                                                         methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract and delete the supported asset type name property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string text or null
+     */
+    protected String removeSupportedAssetTypeName(InstanceProperties  instanceProperties)
+    {
+        final String methodName = "removeSupportedAssetTypeName";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeStringProperty(serviceName,
+                                                         OpenMetadataProperty.SUPPORTED_ASSET_TYPE_NAME.name,
+                                                         instanceProperties,
+                                                         methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract and delete the expected data format property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string text or null
+     */
+    protected String removeExpectedDataFormat(InstanceProperties  instanceProperties)
+    {
+        final String methodName = "removeExpectedDataFormat";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeStringProperty(serviceName,
+                                                         OpenMetadataProperty.EXPECTED_DATA_FORMAT.name,
+                                                         instanceProperties,
+                                                         methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract and delete the connector framework name property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string text or null
+     */
+    protected String removeConnectorFrameworkName(InstanceProperties  instanceProperties)
+    {
+        final String methodName = "removeConnectorFrameworkName";
+
+        if (instanceProperties != null)
+        {
+            String connectorFrameworkName = repositoryHelper.removeStringProperty(serviceName,
+                                                                                  OpenMetadataProperty.CONNECTOR_FRAMEWORK_NAME.name,
+                                                                                  instanceProperties,
+                                                                                  methodName);
+            if (connectorFrameworkName != null)
+            {
+                return connectorFrameworkName;
+            }
+        }
+
+        return OpenMetadataValidValues.CONNECTOR_FRAMEWORK_NAME_DEFAULT;
+    }
+
+
+    /**
+     * Extract and delete the connector interface language property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string text or null
+     */
+    protected String removeConnectorInterfaceLanguage(InstanceProperties  instanceProperties)
+    {
+        final String methodName = "removeConnectorInterfaceLanguage";
+
+        if (instanceProperties != null)
+        {
+            String connectorInterfaceLanguage = repositoryHelper.removeStringProperty(serviceName,
+                                                                                      OpenMetadataProperty.CONNECTOR_INTERFACE_LANGUAGE.name,
+                                                                                      instanceProperties,
+                                                                                      methodName);
+            if (connectorInterfaceLanguage != null)
+            {
+                return connectorInterfaceLanguage;
+            }
+        }
+
+        return OpenMetadataValidValues.CONNECTOR_INTERFACE_LANGUAGE_DEFAULT;
+    }
+
+
+    /**
+     * Extract and delete the connector interfaces property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string list or null
+     */
+    protected List<String> removeConnectorInterfaces(InstanceProperties  instanceProperties)
+    {
+        final String methodName = "removeConnectorInterfaces";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeStringArrayProperty(serviceName,
+                                                              OpenMetadataProperty.CONNECTOR_INTERFACES.name,
+                                                              instanceProperties,
+                                                              methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract and delete the target technology source property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string text or null
+     */
+    protected String removeTargetTechnologySource(InstanceProperties  instanceProperties)
+    {
+        final String methodName = "removeTargetTechnologySource";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeStringProperty(serviceName,
+                                                         OpenMetadataProperty.TARGET_TECHNOLOGY_SOURCE.name,
+                                                         instanceProperties,
+                                                         methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract and delete the target technology name property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string text or null
+     */
+    protected String removeTargetTechnologyName(InstanceProperties  instanceProperties)
+    {
+        final String methodName = "removeTargetTechnologyName";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeStringProperty(serviceName,
+                                                         OpenMetadataProperty.TARGET_TECHNOLOGY_NAME.name,
+                                                         instanceProperties,
+                                                         methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract and delete the target technology interfaces property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string list or null
+     */
+    protected List<String> removeTargetTechnologyInterfaces(InstanceProperties  instanceProperties)
+    {
+        final String methodName = "removeTargetTechnologyInterfaces";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeStringArrayProperty(serviceName,
+                                                              OpenMetadataProperty.TARGET_TECHNOLOGY_INTERFACES.name,
+                                                              instanceProperties,
+                                                              methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract and delete the target technology versions property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string list or null
+     */
+    protected List<String> removeTargetTechnologyVersions(InstanceProperties  instanceProperties)
+    {
+        final String methodName = "removeTargetTechnologyVersions";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeStringArrayProperty(serviceName,
+                                                              OpenMetadataProperty.TARGET_TECHNOLOGY_VERSIONS.name,
+                                                              instanceProperties,
+                                                              methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract and delete the recognizedAdditionalProperties property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string list or null
+     */
+    protected List<String> removeRecognizedAdditionalProperties(InstanceProperties  instanceProperties)
+    {
+        final String methodName = "removeRecognizedAdditionalProperties";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeStringArrayProperty(serviceName,
+                                                              OpenMetadataProperty.RECOGNIZED_ADDITIONAL_PROPERTIES.name,
+                                                              instanceProperties,
+                                                              methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract and delete the recognizedSecuredProperties property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string list or null
+     */
+    protected List<String> removeRecognizedSecuredProperties(InstanceProperties  instanceProperties)
+    {
+        final String methodName = "removeRecognizedSecuredProperties";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeStringArrayProperty(serviceName,
+                                                              OpenMetadataProperty.RECOGNIZED_SECURED_PROPERTIES.name,
+                                                              instanceProperties,
+                                                              methodName);
+        }
+
+        return null;
+    }
+
+
+
+    /**
+     * Extract and delete the recognized configuration properties property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string list or null
+     */
+    protected List<String> removeRecognizedConfigurationProperties(InstanceProperties  instanceProperties)
+    {
+        final String methodName = "removeRecognizedConfigurationProperties";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeStringArrayProperty(serviceName,
+                                                              OpenMetadataProperty.RECOGNIZED_CONFIGURATION_PROPERTIES.name,
+                                                              instanceProperties,
+                                                              methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract and delete the securedProperties property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string list or null
+     */
+    protected Map<String, String> removeSecuredProperties(InstanceProperties  instanceProperties)
+    {
+        final String methodName = "removeSecuredProperties";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeStringMapFromProperty(serviceName,
+                                                                OpenMetadataProperty.SECURED_PROPERTIES.name,
+                                                                instanceProperties,
+                                                                methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract and delete the  configuration properties property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string list or null
+     */
+    protected Map<String, Object> removeConfigurationProperties(InstanceProperties  instanceProperties)
+    {
+        final String methodName = "removeConfigurationProperties";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeMapFromProperty(serviceName,
+                                                          OpenMetadataProperty.CONFIGURATION_PROPERTIES.name,
+                                                          instanceProperties,
+                                                          methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract and delete the userId property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string text or null
+     */
+    protected String removeUserId(InstanceProperties  instanceProperties)
+    {
+        final String methodName = "removeUserId";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeStringProperty(serviceName,
+                                                         OpenMetadataProperty.USER_ID.name,
+                                                         instanceProperties,
+                                                         methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract and delete the clear password property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string text or null
+     */
+    protected String removeClearPassword(InstanceProperties  instanceProperties)
+    {
+        final String methodName = "removeClearPassword";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeStringProperty(serviceName,
+                                                         OpenMetadataProperty.CLEAR_PASSWORD.name,
+                                                         instanceProperties,
+                                                         methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract and delete the encrypted password property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string text or null
+     */
+    protected String removeEncryptedPassword(InstanceProperties  instanceProperties)
+    {
+        final String methodName = "removeEncryptedPassword";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeStringProperty(serviceName,
+                                                         OpenMetadataProperty.ENCRYPTED_PASSWORD.name,
+                                                         instanceProperties,
+                                                         methodName);
+        }
+
+        return null;
+    }
+
+
+
+    /**
+     * Extract the "arguments" property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string text or null
+     */
+    protected Map<String, Object> getArguments(InstanceProperties  instanceProperties)
+    {
+        final String methodName = "getArguments";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.getMapFromProperty(serviceName,
+                                                       OpenMetadataProperty.ARGUMENTS.name,
+                                                       instanceProperties,
+                                                       methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract and delete the type property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string text or null
+     */
+    protected String removeSupportedDeployedImplementationType(InstanceProperties  instanceProperties)
+    {
+        final String methodName = "removeDeployedImplementationType";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeStringProperty(serviceName,
+                                                         OpenMetadataProperty.SUPPORTED_DEPLOYED_IMPLEMENTATION_TYPE.name,
+                                                         instanceProperties,
+                                                         methodName);
+        }
+
+        return null;
+    }
+
+
+
+    /**
+     * Extract and delete the type property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string text or null
+     */
+    protected String removeCapabilityType(InstanceProperties  instanceProperties)
+    {
+        final String methodName = "removeCapabilityType";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeStringProperty(serviceName,
+                                                         OpenMetadataProperty.DEPLOYED_IMPLEMENTATION_TYPE.name,
+                                                         instanceProperties,
+                                                         methodName);
+
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract and delete the capabilityVersion property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string text or null
+     */
+    protected String removeCapabilityVersion(InstanceProperties  instanceProperties)
+    {
+        final String methodName = "removeCapabilityVersion";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeStringProperty(serviceName,
+                                                         OpenMetadataProperty.VERSION_IDENTIFIER.name,
+                                                         instanceProperties,
+                                                         methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract and delete the patchLevel property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string text or null
+     */
+    protected String removePatchLevel(InstanceProperties  instanceProperties)
+    {
+        final String methodName = "removePatchLevel";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeStringProperty(serviceName,
+                                                         OpenMetadataProperty.PATCH_LEVEL.name,
+                                                         instanceProperties,
+                                                         methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract the position property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return integer - default 0
+     */
+    protected int getPosition(InstanceProperties  instanceProperties)
+    {
+        final String methodName = "getPosition";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.getIntProperty(serviceName,
+                                                   OpenMetadataProperty.POSITION.name,
+                                                   instanceProperties,
+                                                   methodName);
+        }
+
+        return 0;
+    }
+
+
+    /**
+     * Extract and delete the formula property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string text or null
+     */
+    protected String removeFormula(InstanceProperties  instanceProperties)
+    {
+        final String methodName = "removeFormula";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeStringProperty(serviceName,
+                                                         OpenMetadataProperty.FORMULA.name,
+                                                         instanceProperties,
+                                                         methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract and delete the formulaType property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string text or null
+     */
+    protected String removeFormulaType(InstanceProperties  instanceProperties)
+    {
+        final String methodName = "removeFormulaType";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeStringProperty(serviceName,
+                                                         OpenMetadataProperty.FORMULA_TYPE.name,
+                                                         instanceProperties,
+                                                         methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract and delete the processStartTime property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string text or null
+     */
+    protected Date removeProcessStartTime(InstanceProperties  instanceProperties)
+    {
+        final String methodName = "removeProcessStartTime";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeDateProperty(serviceName,
+                                                         OpenMetadataProperty.START_TIME.name,
+                                                         instanceProperties,
+                                                         methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract and delete the processStartTime property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string text or null
+     */
+    protected Date removeProcessEndTime(InstanceProperties  instanceProperties)
+    {
+        final String methodName = "removeProcessEndTime";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeDateProperty(serviceName,
+                                                       OpenMetadataProperty.COMPLETION_TIME.name,
+                                                       instanceProperties,
+                                                       methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract and remove the usesBlockingCalls property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string text or null
+     */
+    protected boolean removeUsesBlockingCalls(InstanceProperties  instanceProperties)
+    {
+        final String methodName = "removeUsesBlockingCalls";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeBooleanProperty(serviceName,
+                                                          OpenMetadataProperty.USES_BLOCKING_CALLS.name,
+                                                          instanceProperties,
+                                                          methodName);
+        }
+
+        return false;
+    }
+
+
+    /**
+     * Extract and delete the type property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string text or null
+     */
+    protected String removeSource(InstanceProperties  instanceProperties)
+    {
+        final String methodName = "removeSource";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeStringProperty(serviceName,
+                                                         OpenMetadataProperty.SOURCE.name,
+                                                         instanceProperties,
+                                                         methodName);
+        }
+
+        return null;
+    }
+
+
+
+    /**
+     * Extract and delete the domain identifier property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return integer = default is 0 which is ALL
+     */
+    protected int removeDomainIdentifier(InstanceProperties instanceProperties)
+
+    {
+        final String methodName = "removeDomainIdentifier";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeIntProperty(serviceName,
+                                                      OpenMetadataProperty.DOMAIN_IDENTIFIER.name,
+                                                      instanceProperties,
+                                                      methodName);
+        }
+
+        return 0;
+    }
+
+
+
+    /**
+     * Extract and delete the processingEngineUserId property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string
+     */
+    protected String removeProcessingEngineUserId(InstanceProperties instanceProperties)
+
+    {
+        final String methodName = "removeProcessingEngineUserId";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeStringProperty(serviceName,
+                                                         OpenMetadataProperty.PROCESSING_ENGINE_USER_ID.name,
+                                                         instanceProperties,
+                                                         methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract and delete the requesterUserId property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string
+     */
+    protected String removeRequesterUserId(InstanceProperties instanceProperties)
+
+    {
+        final String methodName = "removeRequesterUserId";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeStringProperty(serviceName,
+                                                         OpenMetadataProperty.REQUESTER_USER_ID.name,
+                                                         instanceProperties,
+                                                         methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract and delete the requestType property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string
+     */
+    protected String removeRequestType(InstanceProperties instanceProperties)
+    {
+        final String methodName = "removeRequestType";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeStringProperty(serviceName,
+                                                         OpenMetadataProperty.REQUEST_TYPE.name,
+                                                         instanceProperties,
+                                                         methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract and delete the requestParameters property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string
+     */
+    protected Map<String, String> removeRequestParameters(InstanceProperties instanceProperties)
+
+    {
+        final String methodName = "removeRequestParameters";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeStringMapFromProperty(serviceName,
+                                                                OpenMetadataProperty.REQUEST_PARAMETERS.name,
+                                                                instanceProperties,
+                                                                methodName);
+        }
+
+        return null;
+    }
+
+
+
+
+    /**
+     * Extract and delete the executorEngineGUID property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string
+     */
+    protected String removeExecutorEngineGUID(InstanceProperties instanceProperties)
+
+    {
+        final String methodName = "removeExecutorEngineGUID";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeStringProperty(serviceName,
+                                                         OpenMetadataProperty.EXECUTOR_ENGINE_GUID.name,
+                                                         instanceProperties,
+                                                         methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract and delete the executorEngineName property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string
+     */
+    protected String removeExecutorEngineName(InstanceProperties instanceProperties)
+
+    {
+        final String methodName = "removeExecutorEngineName";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeStringProperty(serviceName,
+                                                         OpenMetadataProperty.EXECUTOR_ENGINE_NAME.name,
+                                                         instanceProperties,
+                                                         methodName);
+        }
+
+        return null;
+    }
+
+
+
+    /**
+     * Extract and delete the processName property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string
+     */
+    protected String removeProcessName(InstanceProperties instanceProperties)
+
+    {
+        final String methodName = "removeProcessName";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeStringProperty(serviceName,
+                                                         OpenMetadataProperty.PROCESS_NAME.name,
+                                                         instanceProperties,
+                                                         methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract and delete the processStepGUID property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string
+     */
+    protected String removeProcessStepGUID(InstanceProperties instanceProperties)
+
+    {
+        final String methodName = "removeProcessStepGUID";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeStringProperty(serviceName,
+                                                         OpenMetadataProperty.PROCESS_STEP_GUID.name,
+                                                         instanceProperties,
+                                                         methodName);
+
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract and delete the processStepName property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string
+     */
+    protected String removeProcessStepName(InstanceProperties instanceProperties)
+
+    {
+        final String methodName = "removeProcessStepName";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeStringProperty(serviceName,
+                                                         OpenMetadataProperty.PROCESS_STEP_NAME.name,
+                                                         instanceProperties,
+                                                         methodName);
+
+        }
+
+        return null;
+    }
+
+
+
+    /**
+     * Extract and delete the governanceActionTypeGUID property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string
+     */
+    protected String removeGovernanceActionTypeGUID(InstanceProperties instanceProperties)
+
+    {
+        final String methodName = "removeGovernanceActionTypeGUID";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeStringProperty(serviceName,
+                                                         OpenMetadataProperty.GOVERNANCE_ACTION_TYPE_GUID.name,
+                                                         instanceProperties,
+                                                         methodName);
+
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract and delete the governanceActionTypeName property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string
+     */
+    protected String removeGovernanceActionTypeName(InstanceProperties instanceProperties)
+
+    {
+        final String methodName = "removeGovernanceActionTypeName";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeStringProperty(serviceName,
+                                                         OpenMetadataProperty.GOVERNANCE_ACTION_TYPE_NAME.name,
+                                                         instanceProperties,
+                                                         methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract and delete the guard property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string
+     */
+    protected String removeGuard(InstanceProperties instanceProperties)
+
+    {
+        final String methodName = "removeGuard";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeStringProperty(serviceName,
+                                                         OpenMetadataProperty.GUARD.name,
+                                                         instanceProperties,
+                                                         methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract and delete the mandatoryGuards property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return list of guards
+     */
+    protected List<String> removeMandatoryGuards(InstanceProperties instanceProperties)
+
+    {
+        final String methodName = "removeMandatoryGuards";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeStringArrayProperty(serviceName,
+                                                              OpenMetadataProperty.MANDATORY_GUARDS.name,
+                                                              instanceProperties,
+                                                              methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract and delete the mandatoryGuard property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return flag
+     */
+    protected boolean removeMandatoryGuard(InstanceProperties instanceProperties)
+
+    {
+        final String methodName = "removeMandatoryGuard";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeBooleanProperty(serviceName,
+                                                          OpenMetadataProperty.MANDATORY_GUARD.name,
+                                                          instanceProperties,
+                                                          methodName);
+        }
+
+        return false;
+    }
+
+
+    /**
+     * Extract and delete the ignoreMultipleTriggers property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return flag
+     */
+    protected boolean removeIgnoreMultipleTriggers(InstanceProperties instanceProperties)
+
+    {
+        final String methodName = "removeIgnoreMultipleTriggers";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeBooleanProperty(serviceName,
+                                                          OpenMetadataProperty.IGNORE_MULTIPLE_TRIGGERS.name,
+                                                          instanceProperties,
+                                                          methodName);
+        }
+
+        return false;
+    }
+
+
+    /**
+     * Extract and delete the waitTime property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return integer
+     */
+    protected int removeWaitTime(InstanceProperties instanceProperties)
+
+    {
+        final String methodName = "removeWaitTime";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeIntProperty(serviceName,
+                                                      OpenMetadataProperty.WAIT_TIME.name,
+                                                      instanceProperties,
+                                                      methodName);
+        }
+
+        return 0;
+    }
+
+
+    /**
+     * Extract and delete the receivedGuards property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return list of guards
+     */
+    protected List<String> removeReceivedGuards(InstanceProperties instanceProperties)
+
+    {
+        final String methodName = "removeReceivedGuards";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeStringArrayProperty(serviceName,
+                                                              OpenMetadataProperty.RECEIVED_GUARDS.name,
+                                                              instanceProperties,
+                                                              methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract and delete the completionGuards property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return list of guards
+     */
+    protected List<String> removeCompletionGuards(InstanceProperties instanceProperties)
+
+    {
+        final String methodName = "removeCompletionGuards";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeStringArrayProperty(serviceName,
+                                                              OpenMetadataProperty.COMPLETION_GUARDS.name,
+                                                              instanceProperties,
+                                                              methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract and delete the completionMessage property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string
+     */
+    protected String removeCompletionMessage(InstanceProperties instanceProperties)
+
+    {
+        final String methodName = "removeCompletionMessage";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeStringProperty(serviceName,
+                                                         OpenMetadataProperty.COMPLETION_MESSAGE.name,
+                                                         instanceProperties,
+                                                         methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract and delete the startDate property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return date
+     */
+    protected Date removeStartTime(InstanceProperties instanceProperties)
+
+    {
+        final String methodName = "removeStartTime";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeDateProperty(serviceName,
+                                                       OpenMetadataProperty.START_TIME.name,
+                                                       instanceProperties,
+                                                       methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract and delete the requestedStartDate property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return date
+     */
+    protected Date removeRequestedStartDate(InstanceProperties instanceProperties)
+
+    {
+        final String methodName = "removeRequestedStartDate";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeDateProperty(serviceName,
+                                                       OpenMetadataProperty.REQUESTED_START_TIME.name,
+                                                       instanceProperties,
+                                                       methodName);
+        }
+
+        return null;
+    }
+
+
+
+    /**
+     * Extract and delete the completionDate property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return date
+     */
+    protected Date removeCompletionDate(InstanceProperties instanceProperties)
+
+    {
+        final String methodName = "removeCompletionDate";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeDateProperty(serviceName,
+                                                       OpenMetadataProperty.COMPLETION_TIME.name,
+                                                       instanceProperties,
+                                                       methodName);
+        }
+
+        return null;
+    }
+
+
+
+    /**
+     * Extract and delete the actionTargetName property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return String text or null
+     */
+    protected String removeActionTargetName(InstanceProperties instanceProperties)
+
+    {
+        final String methodName = "removeActionTargetName";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.removeStringProperty(serviceName,
+                                                         OpenMetadataProperty.ACTION_TARGET_NAME.name,
+                                                         instanceProperties,
+                                                         methodName);
+        }
+
+        return null;
+    }
+
+
+
+    /**
+     * Extract the "conditions" property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from entity
+     * @return string text or null
+     */
+    protected String getConditions(InstanceProperties instanceProperties)
+    {
+        final String methodName = "getConditions";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.getStringProperty(serviceName,
+                                                      OpenMetadataProperty.CONDITIONS.name,
+                                                      instanceProperties,
+                                                      methodName);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Extract the "attributeName" property from the supplied instance properties.
+     *
+     * @param instanceProperties properties from ReferenceValueAssignment relationship
+     * @return string text or null
+     */
+    protected String getAttributeName(InstanceProperties  instanceProperties)
+    {
+        final String methodName = "getAttributeName";
+
+        if (instanceProperties != null)
+        {
+            return repositoryHelper.getStringProperty(serviceName,
+                                                      OpenMetadataProperty.ATTRIBUTE_NAME.name,
+                                                      instanceProperties,
+                                                      methodName);
+        }
+
+        return null;
+    }
+}

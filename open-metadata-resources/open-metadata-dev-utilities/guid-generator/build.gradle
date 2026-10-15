@@ -1,0 +1,27 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ * Copyright Contributors to the ODPi Egeria project.
+ */
+
+plugins {
+    id 'application'
+    id "com.gradleup.shadow"
+}
+
+dependencies {
+
+}
+
+description = 'GUID Generator'
+
+java {
+    withJavadocJar()
+}
+
+application {
+    mainClass = 'org.odpi.openmetadata.utilities.guidgenerator.GUIDGenerator'
+}
+
+shadowJar {
+    archiveClassifier = 'jar-with-dependencies'
+}

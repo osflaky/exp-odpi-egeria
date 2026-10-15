@@ -1,0 +1,234 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Copyright Contributors to the ODPi Egeria project. */
+package org.odpi.openmetadata.samples.archiveutilities.businesssystems;
+
+
+import org.odpi.openmetadata.contentpacks.core.core.CorePackArchiveWriter;
+import org.odpi.openmetadata.contentpacks.core.egeria.EgeriaArchiveWriter;
+import org.odpi.openmetadata.contentpacks.core.files.FilesArchiveWriter;
+import org.odpi.openmetadata.contentpacks.core.postgres.PostgresPackArchiveWriter;
+import org.odpi.openmetadata.contentpacks.core.unitycatalog.UnityCatalogPackArchiveWriter;
+import org.odpi.openmetadata.frameworks.openmetadata.enums.DeploymentStatus;
+import org.odpi.openmetadata.frameworks.openmetadata.types.OpenMetadataProperty;
+import org.odpi.openmetadata.frameworks.openmetadata.types.OpenMetadataType;
+import org.odpi.openmetadata.repositoryservices.connectors.stores.archivestore.properties.OpenMetadataArchive;
+import org.odpi.openmetadata.repositoryservices.connectors.stores.metadatacollectionstore.properties.instances.Classification;
+import org.odpi.openmetadata.samples.archiveutilities.EgeriaBaseArchiveWriter;
+import org.odpi.openmetadata.samples.archiveutilities.governanceengines.CocoGovernanceEnginesArchiveWriter;
+import org.odpi.openmetadata.samples.archiveutilities.governanceengines.SolutionComponent;
+import org.odpi.openmetadata.samples.archiveutilities.governanceprogram.CocoGovernanceProgramArchiveWriter;
+import org.odpi.openmetadata.samples.archiveutilities.organization.CocoOrganizationArchiveWriter;
+import org.odpi.openmetadata.samples.archiveutilities.sustainability.CocoSustainabilityArchiveWriter;
+
+import java.util.*;
+
+
+/**
+ * CocoBusinessSystemsArchiveWriter creates a physical open metadata archive file containing the descriptions of the
+ * data flows from Coco Pharmaceuticals business systems to the data lake.
+ */
+public class CocoBusinessSystemsArchiveWriter extends EgeriaBaseArchiveWriter
+{
+    private static final String archiveFileName = "CocoBusinessSystemsArchive.omarchive";
+
+    /*
+     * This is the header information for the archive.
+     */
+    private static final String                  archiveGUID        = "ac202586-4042-407b-ae51-8096dfda223e";
+    private static final String                  archiveName        = "Coco Pharmaceuticals Business Systems";
+    private static final String                  archiveDescription = "The data flows from Coco Pharmaceuticals business systems to the data lake.";
+    private static final Date                    creationDate       = new Date(1639984840038L);
+
+
+    /**
+     * Default constructor initializes the archive.
+     */
+    public CocoBusinessSystemsArchiveWriter()
+    {
+        super(archiveGUID,
+              archiveName,
+              archiveDescription,
+              creationDate,
+              archiveFileName,
+              new OpenMetadataArchive[]{
+                      new CorePackArchiveWriter().getOpenMetadataArchive(),
+                      new EgeriaArchiveWriter().getOpenMetadataArchive(),
+                      new FilesArchiveWriter().getOpenMetadataArchive(),
+                      new PostgresPackArchiveWriter().getOpenMetadataArchive(),
+                      new UnityCatalogPackArchiveWriter().getOpenMetadataArchive(),
+                      new CocoOrganizationArchiveWriter().getOpenMetadataArchive(),
+                      new CocoSustainabilityArchiveWriter().getOpenMetadataArchive(),
+                      new CocoGovernanceEnginesArchiveWriter().getOpenMetadataArchive(),
+                      new CocoGovernanceProgramArchiveWriter().getOpenMetadataArchive()});
+    }
+
+
+    /**
+     * Add the content to the archive builder.
+     */
+    @Override
+    public void getArchiveContent()
+    {
+        addHosts();
+        addSystems();
+        addSystemLineage();
+    }
+
+
+    /**
+     * The systems define the hosts.
+     */
+    private void addHosts()
+    {
+        for (HostDefinition hostDefinition : HostDefinition.values())
+        {
+            Map<String, Object> extendedProperties = new HashMap<>();
+
+            extendedProperties.put(OpenMetadataProperty.IDENTIFIER.name, hostDefinition.getHostId());
+
+            Map<String, String> additionalProperties = new HashMap<>();
+
+            additionalProperties.put(OpenMetadataProperty.OPERATING_SYSTEM.name, hostDefinition.getOperatingSystem());
+            additionalProperties.put(OpenMetadataProperty.PATCH_LEVEL.name, hostDefinition.getPatchLevel());
+
+            archiveHelper.addInfrastructureAsset(hostDefinition.getHostType().getOpenMetadataTypeName(),
+                                                 hostDefinition.getQualifiedName(),
+                                                 hostDefinition.getDisplayName(),
+                                                 hostDefinition.getResourceName(),
+                                                 hostDefinition.getNetworkAddress(),
+                                                 hostDefinition.getCategory(),
+                                                 hostDefinition.getHostType().getDeployedImplementationType(),
+                                                 versionName,
+                                                 hostDefinition.getDescription(),
+                                                 DeploymentStatus.ACTIVE,
+                                                 hostDefinition.getZones(),
+                                                 additionalProperties,
+                                                 extendedProperties,
+                                                 null);
+
+            archiveHelper.addKnownLocationRelationship(hostDefinition.getHostLocation().getQualifiedName(),
+                                                       hostDefinition.getQualifiedName());
+        }
+    }
+
+
+    /**
+     * The systems define the software servers.
+     */
+    private void addSystems()
+    {
+        for (SystemDefinition systemDefinition : SystemDefinition.values())
+        {
+            Map<String, Object> extendedProperties = null;
+
+            if (systemDefinition.getUserId() != null)
+            {
+                extendedProperties = new HashMap<>();
+                extendedProperties.put(OpenMetadataProperty.USER_ID.name, systemDefinition.getUserId());
+            }
+
+            archiveHelper.setGUID(systemDefinition.getQualifiedName(), systemDefinition.getSystemGUID());
+            String serverGUID = archiveHelper.addInfrastructureAsset(systemDefinition.getSystemType().getOpenMetadataTypeName(),
+                                                                     systemDefinition.getQualifiedName(),
+                                                                     systemDefinition.getDisplayName(),
+                                                                     systemDefinition.getSystemId(),
+                                                                     systemDefinition.getNetworkAddress(),
+                                                                     systemDefinition.getCategory(),
+                                                                     systemDefinition.getSystemType().getPreferredValue(),
+                                                                     systemDefinition.getVersionIdentifier(),
+                                                                     systemDefinition.getDescription(),
+                                                                     DeploymentStatus.ACTIVE,
+                                                                     systemDefinition.getZones(),
+                                                                     null,
+                                                                     extendedProperties,
+                                                                     null);
+            assert(serverGUID.equals(systemDefinition.getSystemGUID()));
+
+            if (systemDefinition.getFolder() != null)
+            {
+                archiveHelper.addMemberToCollection(systemDefinition.getFolder().getGUID(), systemDefinition.getSystemGUID(), null);
+            }
+
+            if (systemDefinition.getSystemType().getSoftwareServerCapabilities() != null)
+            {
+                for (String softwareCapabilityTypeName : systemDefinition.getSystemType().getSoftwareServerCapabilities())
+                {
+                    String softwareCapabilityQName = softwareCapabilityTypeName + " for " + systemDefinition.getQualifiedName();
+
+                    archiveHelper.addSoftwareCapability(softwareCapabilityTypeName,
+                                                        softwareCapabilityQName,
+                                                        softwareCapabilityQName,
+                                                        null,
+                                                        null,
+                                                        null,
+                                                        null,
+                                                        null,
+                                                        null,
+                                                        null,
+                                                        (Classification)null,
+                                                        serverGUID,
+                                                        OpenMetadataType.SOFTWARE_SERVER.typeName,
+                                                        OpenMetadataType.ASSET.typeName,
+                                                        null);
+
+                    archiveHelper.addSupportedSoftwareCapabilityRelationship(softwareCapabilityQName,
+                                                                             systemDefinition.getQualifiedName(),
+                                                                             null,
+                                                                             null,
+                                                                             null,
+                                                                             null);
+                }
+            }
+
+            if (systemDefinition.getSystemLocation() != null)
+            {
+                archiveHelper.addKnownLocationRelationship(systemDefinition.getSystemLocation().getQualifiedName(),
+                                                           systemDefinition.getQualifiedName());
+            }
+
+            if (systemDefinition.getDeployedOn() != null)
+            {
+                for (HostDefinition hostDefinition : systemDefinition.getDeployedOn())
+                {
+                    archiveHelper.addDeployedOnRelationship(systemDefinition.getQualifiedName(),
+                                                            hostDefinition.getQualifiedName(),
+                                                            null,
+                                                            null,
+                                                            null,
+                                                            null);
+                }
+            }
+
+
+            if (systemDefinition.getImplementingComponents() != null)
+            {
+                for (SolutionComponent solutionComponent : systemDefinition.getImplementingComponents())
+                {
+                    archiveHelper.addImplementedByRelationship(solutionComponent.getGUID(),
+                                                               systemDefinition.getSystemGUID(),
+                                                               "archaeological mapping",
+                                                               "supports required capability",
+                                                               null,
+                                                               null);
+                }
+            }
+        }
+    }
+
+
+    /**
+     * The systems define the hosts.
+     */
+    private void addSystemLineage()
+    {
+        for (SystemLevelLineage systemLevelLineage : SystemLevelLineage.values())
+        {
+            archiveHelper.addLineageRelationship(systemLevelLineage.getSourceSystem().getSystemGUID(),
+                                                 systemLevelLineage.getDestinationSystem().getSystemGUID(),
+                                                 systemLevelLineage.getRelationshipName(),
+                                                 systemLevelLineage.getRelationshipLabel(),
+                                                 systemLevelLineage.getISCQualifiedName());
+        }
+    }
+}
+

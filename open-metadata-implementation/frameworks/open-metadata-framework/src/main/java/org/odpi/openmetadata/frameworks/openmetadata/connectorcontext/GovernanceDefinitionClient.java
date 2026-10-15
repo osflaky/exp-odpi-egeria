@@ -1,0 +1,1742 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Copyright Contributors to the ODPi Egeria project. */
+
+package org.odpi.openmetadata.frameworks.openmetadata.connectorcontext;
+
+import org.odpi.openmetadata.frameworks.auditlog.AuditLog;
+import org.odpi.openmetadata.frameworks.openmetadata.client.OpenMetadataClient;
+import org.odpi.openmetadata.frameworks.openmetadata.ffdc.InvalidParameterException;
+import org.odpi.openmetadata.frameworks.openmetadata.ffdc.PropertyServerException;
+import org.odpi.openmetadata.frameworks.openmetadata.ffdc.UserNotAuthorizedException;
+import org.odpi.openmetadata.frameworks.openmetadata.handlers.GovernanceDefinitionHandler;
+import org.odpi.openmetadata.frameworks.openmetadata.metadataelements.OpenMetadataRootElement;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.ClassificationProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.EntityProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.RelationshipProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.actors.AssignmentScopeProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.governance.*;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.implementations.ImplementationResourceProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.implementations.ImplementedByProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.security.ZoneHierarchyProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.search.*;
+
+import java.util.List;
+import java.util.Map;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.dataprocessing.DataProcessingSpecificationProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.dataprocessing.DetailedProcessingActionProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.security.AssociatedSecurityListProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.security.ZoneMembershipProfileProperties;
+
+/**
+ * Provides services for connectors to work with governance definition elements.
+ */
+public class GovernanceDefinitionClient extends ConnectorContextClientBase
+{
+    protected final GovernanceDefinitionHandler governanceDefinitionHandler;
+
+
+    /**
+     * Constructor for connector context client.
+     *
+     * @param parentContext connector's context
+     * @param localServerName local server where this client is running - used for error handling
+     * @param localServiceName local service that his connector is hosted by - used for error handling
+     * @param connectorUserId the userId to use with all requests for open metadata
+     * @param connectorGUID the unique identifier that represents this connector in open metadata
+     * @param externalSourceGUID unique identifier of the software server capability for the source of metadata
+     * @param externalSourceName unique name of the software server capability for the source of metadata
+     * @param openMetadataClient client to access the open metadata store
+     * @param auditLog logging destination
+     * @param maxPageSize max number of elements that can be returned on a query
+     */
+    public GovernanceDefinitionClient(ConnectorContextBase     parentContext,
+                                      String                   localServerName,
+                                      String                   localServiceName,
+                                      String                   connectorUserId,
+                                      String                   connectorGUID,
+                                      String                   externalSourceGUID,
+                                      String                   externalSourceName,
+                                      OpenMetadataClient       openMetadataClient,
+                                      AuditLog                 auditLog,
+                                      int                      maxPageSize)
+    {
+        super(parentContext, localServerName, localServiceName, connectorUserId, connectorGUID, externalSourceGUID, externalSourceName, auditLog, maxPageSize);
+
+        this.governanceDefinitionHandler = new GovernanceDefinitionHandler(localServerName, auditLog, localServiceName, openMetadataClient);
+    }
+
+
+    /**
+     * Copy/clone constructor.
+     *
+     * @param template client to copy
+     * @param specificTypeName type name override
+     */
+    public GovernanceDefinitionClient(GovernanceDefinitionClient template,
+                                      String                     specificTypeName)
+    {
+        super(template);
+
+        this.governanceDefinitionHandler = new GovernanceDefinitionHandler(template.governanceDefinitionHandler, specificTypeName);
+    }
+
+
+    /**
+     * Create a new governance definition.
+     *
+     * @param newElementOptions details of the element to create
+     * @param initialClassifications map of classification names to classification properties to include in the entity creation request
+     * @param properties                   properties for the new element.
+     * @param parentRelationshipProperties properties to include in parent relationship
+     * @return unique identifier of the newly created element
+     * @throws InvalidParameterException  one of the parameters is invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public String createGovernanceDefinition(NewElementOptions                     newElementOptions,
+                                             Map<String, ClassificationProperties> initialClassifications,
+                                             GovernanceDefinitionProperties        properties,
+                                             RelationshipProperties                parentRelationshipProperties) throws InvalidParameterException,
+                                                                                                                        PropertyServerException,
+                                                                                                                        UserNotAuthorizedException
+    {
+        String elementGUID = governanceDefinitionHandler.createGovernanceDefinition(connectorUserId, newElementOptions, initialClassifications, properties, parentRelationshipProperties);
+
+        if (parentContext.getActivityReportWriter() != null)
+        {
+            parentContext.getActivityReportWriter().reportElementCreation(elementGUID);
+        }
+
+        return elementGUID;
+    }
+
+
+    /**
+     * Create a new metadata element to represent a governance definition using an existing element as a template.
+     * The template defines additional classifications and relationships that should be added to the new governance definition.
+     *
+     * @param templateOptions details of the element to create
+     * @param templateGUID the unique identifier of the existing governance definition to copy (this will copy all the attachments such as nested content, schema
+     *                     governance definition etc)
+     * @param replacementProperties properties of the new metadata element.  These override the template values
+     * @param replacementClassifications map of classification names to classification properties to include in the entity creation request. These override the template values.
+     * @param placeholderProperties property name-to-property value map to replace any placeholder values in the
+     *                              template element - and their anchored elements, which are also copied as part of this operation.
+     * @param parentRelationshipProperties properties to include in parent relationship
+     * @return unique identifier of the new metadata element
+     * @throws InvalidParameterException  one of the parameters is invalid
+     * @throws UserNotAuthorizedException the user is not authorized to issue this request
+     * @throws PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    public String createGovernanceDefinitionFromTemplate(TemplateOptions                       templateOptions,
+                                                         String                                templateGUID,
+                                                         EntityProperties                      replacementProperties,
+                                                         Map<String, ClassificationProperties> replacementClassifications,
+                                                         Map<String, String>                   placeholderProperties,
+                                                         RelationshipProperties                parentRelationshipProperties) throws InvalidParameterException,
+                                                                                                                                    UserNotAuthorizedException,
+                                                                                                                                    PropertyServerException
+    {
+        String elementGUID = governanceDefinitionHandler.createGovernanceDefinitionFromTemplate(connectorUserId, templateOptions, templateGUID, replacementProperties, replacementClassifications, placeholderProperties, parentRelationshipProperties);
+
+        if (parentContext.getActivityReportWriter() != null)
+        {
+            parentContext.getActivityReportWriter().reportElementCreation(elementGUID);
+        }
+
+        return elementGUID;
+    }
+
+
+    /**
+     * Update the properties of a governance definition.
+     *
+     * @param governanceDefinitionGUID       unique identifier of the governance definition (returned from create)
+     * @param updateOptions provides a structure for the additional options when updating an element.
+     * @param properties             properties for the element.
+     * @return boolean - true if an update occurred
+     * @throws InvalidParameterException  one of the parameters is invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public boolean updateGovernanceDefinition(String                         governanceDefinitionGUID,
+                                              UpdateOptions                  updateOptions,
+                                              GovernanceDefinitionProperties properties) throws InvalidParameterException,
+                                                                                                PropertyServerException,
+                                                                                                UserNotAuthorizedException
+    {
+        boolean updateOccurred = governanceDefinitionHandler.updateGovernanceDefinition(connectorUserId, governanceDefinitionGUID, updateOptions, properties);
+
+        if ((updateOccurred) && (parentContext.getActivityReportWriter() != null))
+        {
+            parentContext.getActivityReportWriter().reportElementUpdate(governanceDefinitionGUID);
+        }
+
+        return updateOccurred;
+    }
+
+
+    /**
+     * Attach two peer governance definitions.
+     *
+     * @param governanceDefinitionOneGUID unique identifier of the first governance definition
+     * @param governanceDefinitionTwoGUID unique identifier of the second governance definition
+     * @param relationshipTypeName name of the relationship to use
+     * @param makeAnchorOptions  options to control access to open metadata
+     * @param relationshipProperties  additional properties for the relationship.
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void linkPeerDefinitions(String                    governanceDefinitionOneGUID,
+                                    String                    governanceDefinitionTwoGUID,
+                                    String                    relationshipTypeName,
+                                    MakeAnchorOptions         makeAnchorOptions,
+                                    PeerDefinitionProperties  relationshipProperties) throws InvalidParameterException,
+                                                                                             PropertyServerException,
+                                                                                             UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.linkPeerDefinitions(connectorUserId,
+                                                        governanceDefinitionOneGUID,
+                                                        governanceDefinitionTwoGUID,
+                                                        relationshipTypeName,
+                                                        makeAnchorOptions,
+                                                        relationshipProperties);
+    }
+
+
+    /**
+     * Detach a governance definition from one of its peers.
+     *
+     * @param governanceDefinitionOneGUID unique identifier of the first governance definition
+     * @param governanceDefinitionTwoGUID unique identifier of the second governance definition
+     * @param relationshipTypeName name of the relationship to use
+     * @param deleteOptions  options to control access to open metadata
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void detachPeerDefinitions(String        governanceDefinitionOneGUID,
+                                      String        governanceDefinitionTwoGUID,
+                                      String        relationshipTypeName,
+                                      DeleteOptions deleteOptions) throws InvalidParameterException,
+                                                                          PropertyServerException,
+                                                                          UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.detachPeerDefinitions(connectorUserId,
+                                                          governanceDefinitionOneGUID,
+                                                          governanceDefinitionTwoGUID,
+                                                          relationshipTypeName,
+                                                          deleteOptions);
+    }
+
+
+    /**
+     * Attach a supporting governance definition.
+     *
+     * @param governanceDefinitionOneGUID unique identifier of the parent governance definition
+     * @param governanceDefinitionTwoGUID unique identifier of the child governance definition
+     * @param relationshipTypeName name of the relationship to use
+     * @param makeAnchorOptions  options to control access to open metadata
+     * @param relationshipProperties  additional properties for the relationship.
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void attachSupportingDefinition(String                         governanceDefinitionOneGUID,
+                                           String                         governanceDefinitionTwoGUID,
+                                           String                         relationshipTypeName,
+                                           MakeAnchorOptions              makeAnchorOptions,
+                                           SupportingDefinitionProperties relationshipProperties) throws InvalidParameterException,
+                                                                                                         PropertyServerException,
+                                                                                                         UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.attachSupportingDefinition(connectorUserId,
+                                                               governanceDefinitionOneGUID,
+                                                               governanceDefinitionTwoGUID,
+                                                               relationshipTypeName,
+                                                               makeAnchorOptions,
+                                                               relationshipProperties);
+
+    }
+
+
+    /**
+     * Detach a governance definition from a supporting governance definition.
+     *
+     * @param governanceDefinitionOneGUID unique identifier of the parent governance definition
+     * @param governanceDefinitionTwoGUID unique identifier of the child governance definition
+     * @param relationshipTypeName name of the relationship to use
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void detachSupportingDefinition(String        governanceDefinitionOneGUID,
+                                           String        governanceDefinitionTwoGUID,
+                                           String        relationshipTypeName,
+                                           DeleteOptions deleteOptions) throws InvalidParameterException,
+                                                                               PropertyServerException,
+                                                                               UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.detachSupportingDefinition(connectorUserId,
+                                                               governanceDefinitionOneGUID,
+                                                               governanceDefinitionTwoGUID,
+                                                               relationshipTypeName,
+                                                               deleteOptions);
+    }
+
+
+
+    /**
+     * Link a governance definition to an element using the GovernedBy relationship.
+     *
+     * @param elementGUID unique identifier of the metadata element to link
+     * @param definitionGUID identifier of the governance definition to link
+     * @param makeAnchorOptions  options to control access to open metadata
+     *
+     * @throws InvalidParameterException  one of the parameters is invalid
+     * @throws UserNotAuthorizedException the user is not authorized to issue this request
+     * @throws PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    public void addGovernanceDefinitionToElement(String               elementGUID,
+                                                 String               definitionGUID,
+                                                 MakeAnchorOptions    makeAnchorOptions,
+                                                 GovernedByProperties properties) throws InvalidParameterException,
+                                                                                         UserNotAuthorizedException,
+                                                                                         PropertyServerException
+    {
+        governanceDefinitionHandler.addGovernanceDefinitionToElement(connectorUserId,
+                                                                     elementGUID,
+                                                                     definitionGUID,
+                                                                     makeAnchorOptions,
+                                                                     properties);
+    }
+
+
+    /**
+     * Remove the GovernedBy relationship between a governance definition and an element.
+     *
+     * @param elementGUID unique identifier of the metadata element to update
+     * @param definitionGUID identifier of the governance definition to link
+     * @param deleteOptions  options to control access to open metadata
+     *
+     * @throws InvalidParameterException  one of the parameters is invalid
+     * @throws UserNotAuthorizedException the user is not authorized to issue this request
+     * @throws PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    public void removeGovernanceDefinitionFromElement(String        elementGUID,
+                                                      String        definitionGUID,
+                                                      DeleteOptions deleteOptions) throws InvalidParameterException,
+                                                                                          UserNotAuthorizedException,
+                                                                                          PropertyServerException
+    {
+        governanceDefinitionHandler.removeGovernanceDefinitionFromElement(connectorUserId, elementGUID, definitionGUID, deleteOptions);
+    }
+
+
+    /**
+     * Link a regulation governance definition to an organization using the Regulator relationship.
+     *
+     * @param regulationGUID unique identifier of the regulation
+     * @param regulatorGUID identifier of the organization to link
+     * @param makeAnchorOptions  options to control access to open metadata
+     *
+     * @throws InvalidParameterException  one of the parameters is invalid
+     * @throws UserNotAuthorizedException the user is not authorized to issue this request
+     * @throws PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    public void addRegulatorToRegulation(String              regulationGUID,
+                                         String              regulatorGUID,
+                                         MakeAnchorOptions   makeAnchorOptions,
+                                         RegulatorProperties properties) throws InvalidParameterException,
+                                                                                UserNotAuthorizedException,
+                                                                                PropertyServerException
+    {
+        governanceDefinitionHandler.addRegulatorToRegulation(connectorUserId, regulationGUID, regulatorGUID, makeAnchorOptions, properties);
+    }
+
+
+    /**
+     * Remove the Regulator relationship between a regulation governance definition and an organization.
+     *
+     * @param regulationGUID unique identifier of the regulation
+     * @param regulatorGUID identifier of the organization to link
+     * @param deleteOptions  options to control access to open metadata
+     *
+     * @throws InvalidParameterException  one of the parameters is invalid
+     * @throws UserNotAuthorizedException the user is not authorized to issue this request
+     * @throws PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    public void removeRegulatorFromRegulation(String        regulationGUID,
+                                              String        regulatorGUID,
+                                              DeleteOptions deleteOptions) throws InvalidParameterException,
+                                                                                  UserNotAuthorizedException,
+                                                                                  PropertyServerException
+    {
+        governanceDefinitionHandler.removeRegulatorFromRegulation(connectorUserId, regulationGUID, regulatorGUID, deleteOptions);
+    }
+
+
+    /**
+     * Attach an actor to an element that describes its scope.
+     *
+     * @param scopeElementGUID            unique identifier of the element
+     * @param actorGUID unique identifier of the actor
+     * @param makeAnchorOptions         options to control access to open metadata
+     * @param relationshipProperties        description of the relationship.
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void linkAssignmentScope(String                    scopeElementGUID,
+                                    String                    actorGUID,
+                                    MakeAnchorOptions         makeAnchorOptions,
+                                    AssignmentScopeProperties relationshipProperties) throws InvalidParameterException,
+                                                                                             PropertyServerException,
+                                                                                             UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.linkAssignmentScope(connectorUserId,
+                                                        actorGUID,
+                                                        scopeElementGUID,
+                                                        makeAnchorOptions,
+                                                        relationshipProperties);
+    }
+
+
+    /**
+     * Detach an actor from the element that describes its scope.
+     *
+     * @param scopeElementGUID            unique identifier of the element
+     * @param actorGUID                   unique identifier of the actor
+     * @param deleteOptions               options to control access to open metadata
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void detachAssignmentScope(String        scopeElementGUID,
+                                      String        actorGUID,
+                                      DeleteOptions deleteOptions) throws InvalidParameterException,
+                                                                          PropertyServerException,
+                                                                          UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.detachAssignmentScope(connectorUserId, actorGUID, scopeElementGUID, deleteOptions);
+    }
+
+
+    /**
+     * Attach monitored resource to a notification type.
+     *
+     * @param notificationTypeGUID            unique identifier of the notification type
+     * @param elementGUID             unique identifier of the element to monitor
+     * @param makeAnchorOptions         options to control access to open metadata
+     * @param relationshipProperties        description of the relationship.
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void linkMonitoredResource(String                      notificationTypeGUID,
+                                      String                      elementGUID,
+                                      MakeAnchorOptions           makeAnchorOptions,
+                                      MonitoredResourceProperties relationshipProperties) throws InvalidParameterException,
+                                                                                                 PropertyServerException,
+                                                                                                 UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.linkMonitoredResource(connectorUserId, notificationTypeGUID, elementGUID, makeAnchorOptions, relationshipProperties);
+    }
+
+
+    /**
+     * Detach a monitored resource from a notification type.
+     *
+     * @param notificationTypeGUID            unique identifier of the notification type
+     * @param elementGUID             unique identifier of the element to monitor
+     * @param deleteOptions               options to control access to open metadata
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void detachMonitoredResource(String        notificationTypeGUID,
+                                        String        elementGUID,
+                                        DeleteOptions deleteOptions) throws InvalidParameterException,
+                                                                            PropertyServerException,
+                                                                            UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.detachMonitoredResource(connectorUserId, notificationTypeGUID, elementGUID, deleteOptions);
+    }
+
+
+    /**
+     * Attach subscriber to a notification type.
+     *
+     * @param notificationTypeGUID            unique identifier of the notification type
+     * @param elementGUID             unique identifier of the element to monitor
+     * @param makeAnchorOptions         options to control access to open metadata
+     * @param relationshipProperties        description of the relationship.
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void linkNotificationSubscriber(String                           notificationTypeGUID,
+                                           String                           elementGUID,
+                                           MakeAnchorOptions                makeAnchorOptions,
+                                           NotificationSubscriberProperties relationshipProperties) throws InvalidParameterException,
+                                                                                                           PropertyServerException,
+                                                                                                           UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.linkNotificationSubscriber(connectorUserId, notificationTypeGUID, elementGUID, makeAnchorOptions, relationshipProperties);
+    }
+
+
+    /**
+     * Detach a subscriber from a notification type.
+     *
+     * @param notificationTypeGUID            unique identifier of the notification type
+     * @param elementGUID             unique identifier of the element to monitor
+     * @param deleteOptions               options to control access to open metadata
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void detachNotificationSubscriber(String        notificationTypeGUID,
+                                             String        elementGUID,
+                                             DeleteOptions deleteOptions) throws InvalidParameterException,
+                                                                                 PropertyServerException,
+                                                                                 UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.detachNotificationSubscriber(connectorUserId, notificationTypeGUID, elementGUID, deleteOptions);
+    }
+
+
+
+    /**
+     * Attach a governance metric to an asset that represents the data store where the measurements are located.
+     *
+     * @param governanceMetricGUID            unique identifier of the metric
+     * @param dataSourceGUID unique identifier of the asset
+     * @param makeAnchorOptions         options to control access to open metadata
+     * @param relationshipProperties        description of the relationship.
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void linkGovernanceResults(String                      governanceMetricGUID,
+                                      String                      dataSourceGUID,
+                                      MakeAnchorOptions           makeAnchorOptions,
+                                      GovernanceResultsProperties relationshipProperties) throws InvalidParameterException,
+                                                                                                 PropertyServerException,
+                                                                                                 UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.linkGovernanceResults(connectorUserId,
+                                                          dataSourceGUID,
+                                                          governanceMetricGUID,
+                                                          makeAnchorOptions,
+                                                          relationshipProperties);
+    }
+
+
+    /**
+     * Detach a governance metric from an asset that represents the data store where the measurements are located.
+     *
+     * @param governanceMetricGUID            unique identifier of the metric
+     * @param dataSourceGUID                   unique identifier of the asset
+     * @param deleteOptions               options to control access to open metadata
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void detachGovernanceResults(String        governanceMetricGUID,
+                                        String        dataSourceGUID,
+                                        DeleteOptions deleteOptions) throws InvalidParameterException,
+                                                                            PropertyServerException,
+                                                                            UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.detachGovernanceResults(connectorUserId, dataSourceGUID, governanceMetricGUID, deleteOptions);
+    }
+
+
+    /**
+     * Attach governance zones in a hierarchy.
+     *
+     * @param governanceZoneGUID        unique identifier of the parent
+     * @param nestedGovernanceZoneGUID             unique identifier of the actor profile
+     * @param makeAnchorOptions  options to control access to open metadata
+     * @param relationshipProperties  description of the relationship.
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void linkGovernanceZones(String                  governanceZoneGUID,
+                                    String                  nestedGovernanceZoneGUID,
+                                    MakeAnchorOptions       makeAnchorOptions,
+                                    ZoneHierarchyProperties relationshipProperties) throws InvalidParameterException,
+                                                                                           PropertyServerException,
+                                                                                           UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.linkGovernanceZones(connectorUserId,
+                                                        governanceZoneGUID,
+                                                        nestedGovernanceZoneGUID,
+                                                        makeAnchorOptions,
+                                                        relationshipProperties);
+    }
+
+
+    /**
+     * Detach governance zone from a hierarchical relationship.
+     *
+     * @param governanceZoneGUID       unique identifier of the parent actor profile
+     * @param nestedGovernanceZoneGUID            unique identifier of the nested actor profile
+     * @param deleteOptions  options to control access to open metadata
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void detachGovernanceZones(String        governanceZoneGUID,
+                                      String        nestedGovernanceZoneGUID,
+                                      DeleteOptions deleteOptions) throws InvalidParameterException,
+                                                                          PropertyServerException,
+                                                                          UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.detachGovernanceZones(connectorUserId, governanceZoneGUID, nestedGovernanceZoneGUID, deleteOptions);
+    }
+
+
+    /**
+     * Link subject area definitions in a hierarchy.
+     *
+     * @param subjectAreaGUID        unique identifier of the parent
+     * @param nestedSubjectAreaGUID             unique identifier of the actor profile
+     * @param makeAnchorOptions  options to control access to open metadata
+     * @param relationshipProperties  description of the relationship.
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void linkSubjectAreas(String                         subjectAreaGUID,
+                                 String                         nestedSubjectAreaGUID,
+                                 MakeAnchorOptions              makeAnchorOptions,
+                                 SubjectAreaHierarchyProperties relationshipProperties) throws InvalidParameterException,
+                                                                                               PropertyServerException,
+                                                                                               UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.linkSubjectAreas(connectorUserId,
+                                                     subjectAreaGUID,
+                                                     nestedSubjectAreaGUID,
+                                                     makeAnchorOptions,
+                                                     relationshipProperties);
+    }
+
+
+    /**
+     * Detach subject area definitions from their hierarchical relationship..
+     *
+     * @param subjectAreaGUID       unique identifier of the parent actor profile
+     * @param nestedSubjectAreaGUID            unique identifier of the nested actor profile
+     * @param deleteOptions  options to control access to open metadata
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void detachSubjectAreas(String        subjectAreaGUID,
+                                   String        nestedSubjectAreaGUID,
+                                   DeleteOptions deleteOptions) throws InvalidParameterException,
+                                                                       PropertyServerException,
+                                                                       UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.detachSubjectAreas(connectorUserId,
+                                                       subjectAreaGUID,
+                                                       nestedSubjectAreaGUID,
+                                                       deleteOptions);
+    }
+
+
+    /**
+     * Create a link between a license type and an element that has achieved the license.
+     *
+     * @param elementGUID unique identifier of the element
+     * @param licenseTypeGUID unique identifier of the license type
+     * @param properties   additional information, endorsements etc
+     * @param metadataSourceOptions  options to control access to open metadata
+     *
+     * @return guid of license relationship
+     * @throws InvalidParameterException  one of the parameters is invalid
+     * @throws UserNotAuthorizedException the user is not authorized to issue this request
+     * @throws PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    public String licenseElement(String            elementGUID,
+                                 String            licenseTypeGUID,
+                                 MakeAnchorOptions metadataSourceOptions,
+                                 LicenseProperties properties) throws InvalidParameterException,
+                                                                      UserNotAuthorizedException,
+                                                                      PropertyServerException
+    {
+        return governanceDefinitionHandler.licenseElement(connectorUserId,
+                                                          elementGUID,
+                                                          licenseTypeGUID,
+                                                          metadataSourceOptions,
+                                                          properties);
+    }
+
+
+    /**
+     * Update the license relationship.
+     *
+     * @param licenseGUID unique identifier for the relationship
+     * @param updateOptions options for the request
+     * @param properties properties of the relationship
+     * @throws InvalidParameterException  one of the parameters is invalid
+     * @throws UserNotAuthorizedException the user is not authorized to issue this request
+     * @throws PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    public void updateLicense(String            licenseGUID,
+                              UpdateOptions     updateOptions,
+                              LicenseProperties properties) throws InvalidParameterException,
+                                                                   UserNotAuthorizedException,
+                                                                   PropertyServerException
+    {
+        governanceDefinitionHandler.updateLicense(connectorUserId, licenseGUID, updateOptions, properties);
+    }
+
+
+    /**
+     * Remove a relationship between two definitions.
+     *
+     * @param licenseGUID unique identifier of the license relationship
+     * @param deleteOptions  options to control access to open metadata
+     *
+     * @throws InvalidParameterException  one of the parameters is invalid
+     * @throws UserNotAuthorizedException the user is not authorized to issue this request
+     * @throws PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    public void unlicenseElement(String        licenseGUID,
+                                 DeleteOptions deleteOptions) throws InvalidParameterException,
+                                                                     UserNotAuthorizedException,
+                                                                     PropertyServerException
+    {
+        governanceDefinitionHandler.unlicenseElement(connectorUserId, licenseGUID, deleteOptions);
+    }
+
+
+    /**
+     * Create a link between a certification type and an element that has achieved the certification.
+     *
+     * @param elementGUID unique identifier of the element
+     * @param certificationTypeGUID unique identifier of the certification type
+     * @param makeAnchorOptions  options to control access to open metadata
+     * @param properties additional information, endorsements etc
+     *
+     * @return guid of certification relationship
+     * @throws InvalidParameterException  one of the parameters is invalid
+     * @throws UserNotAuthorizedException the user is not authorized to issue this request
+     * @throws PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    public String certifyElement(String                  elementGUID,
+                                 String                  certificationTypeGUID,
+                                 MakeAnchorOptions       makeAnchorOptions,
+                                 CertificationProperties properties) throws InvalidParameterException,
+                                                                            UserNotAuthorizedException,
+                                                                            PropertyServerException
+    {
+        return governanceDefinitionHandler.certifyElement(connectorUserId,
+                                                          elementGUID,
+                                                          certificationTypeGUID,
+                                                          makeAnchorOptions,
+                                                          properties);
+    }
+
+
+    /**
+     * Update the certification relationship.
+     *
+     * @param certificationGUID unique identifier for the relationship
+     * @param properties additional information, endorsements etc
+     * @param updateOptions provides a structure for the additional options when updating a relationship.
+     *
+     * @throws InvalidParameterException  one of the parameters is invalid
+     * @throws UserNotAuthorizedException the user is not authorized to issue this request
+     * @throws PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    public void updateCertification(String                  certificationGUID,
+                                    UpdateOptions           updateOptions,
+                                    CertificationProperties properties) throws InvalidParameterException,
+                                                                               UserNotAuthorizedException,
+                                                                               PropertyServerException
+    {
+        governanceDefinitionHandler.updateCertification(connectorUserId, certificationGUID, updateOptions, properties);
+    }
+
+
+    /**
+     * Remove a certification relationship.
+     *
+     * @param certificationGUID unique identifier of the certification relationship
+     * @param deleteOptions  options to control access to open metadata
+     *
+     * @throws InvalidParameterException  one of the parameters is invalid
+     * @throws UserNotAuthorizedException the user is not authorized to issue this request
+     * @throws PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    public void decertifyElement(String        certificationGUID,
+                                 DeleteOptions deleteOptions) throws InvalidParameterException,
+                                                                     UserNotAuthorizedException,
+                                                                     PropertyServerException
+    {
+        governanceDefinitionHandler.decertifyElement(connectorUserId, certificationGUID, deleteOptions);
+    }
+
+
+
+
+    /**
+     * Attach a design object such as a solution component or governance definition to its implementation via the ImplementedBy relationship.
+     *
+     * @param designGUID              unique identifier of the  governance definition or solution component etc
+     * @param implementationGUID      unique identifier of the implementation
+     * @param makeAnchorOptions  options to control access to open metadata
+     * @param relationshipProperties  additional properties for the relationship.
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void linkDesignToImplementation(String                  designGUID,
+                                           String                  implementationGUID,
+                                           MakeAnchorOptions       makeAnchorOptions,
+                                           ImplementedByProperties relationshipProperties) throws InvalidParameterException,
+                                                                                                  PropertyServerException,
+                                                                                                  UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.linkDesignToImplementation(connectorUserId, designGUID, implementationGUID, makeAnchorOptions, relationshipProperties);
+    }
+
+
+    /**
+     * Detach a design object such as a solution component or governance definition from its implementation.
+     *
+     * @param designGUID             unique identifier of the  governance definition, solution component etc
+     * @param implementationGUID     unique identifier of the implementation
+     * @param deleteOptions  options to control access to open metadata
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void detachDesignFromImplementation(String        designGUID,
+                                               String        implementationGUID,
+                                               DeleteOptions deleteOptions) throws InvalidParameterException,
+                                                                                   PropertyServerException,
+                                                                                   UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.detachDesignFromImplementation(connectorUserId, designGUID, implementationGUID, deleteOptions);
+    }
+
+
+    /**
+     * Attach a design object such as a solution component or governance definition to one of its implementation resources via the ImplementationResource relationship.
+     *
+     * @param designGUID              unique identifier of the  governance definition or solution component etc
+     * @param implementationResourceGUID      unique identifier of the implementation
+     * @param relationshipProperties  additional properties for the relationship.
+     * @param makeAnchorOptions  options to control access to open metadata
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void linkImplementationResource(String                           designGUID,
+                                           String                           implementationResourceGUID,
+                                           MakeAnchorOptions                makeAnchorOptions,
+                                           ImplementationResourceProperties relationshipProperties) throws InvalidParameterException,
+                                                                                                           PropertyServerException,
+                                                                                                           UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.linkImplementationResource(connectorUserId, designGUID, implementationResourceGUID, makeAnchorOptions, relationshipProperties);
+    }
+
+
+    /**
+     * Detach a design object such as a solution component or governance definition from one of its implementation resources.
+     *
+     * @param designGUID             unique identifier of the  governance definition, solution component etc
+     * @param implementationResourceGUID     unique identifier of the implementation
+     * @param deleteOptions  options to control access to open metadata
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void detachImplementationResource(String        designGUID,
+                                             String        implementationResourceGUID,
+                                             DeleteOptions deleteOptions) throws InvalidParameterException,
+                                                                                 PropertyServerException,
+                                                                                 UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.detachImplementationResource(connectorUserId, designGUID, implementationResourceGUID, deleteOptions);
+    }
+
+
+
+    /**
+     * Delete a governance definition.
+     *
+     * @param governanceDefinitionGUID       unique identifier of the element
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void deleteGovernanceDefinition(String        governanceDefinitionGUID,
+                                           DeleteOptions deleteOptions) throws InvalidParameterException,
+                                                                               PropertyServerException,
+                                                                               UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.deleteGovernanceDefinition(connectorUserId, governanceDefinitionGUID, deleteOptions);
+
+        if (parentContext.getActivityReportWriter() != null)
+        {
+            parentContext.getActivityReportWriter().reportElementDelete(governanceDefinitionGUID);
+        }
+    }
+
+
+    /**
+     * Returns the list of governance definitions with a particular name.
+     *
+     * @param name                   name of the element to return - match is full text match in qualifiedName, resourceName or displayName
+     * @param queryOptions           multiple options to control the query
+     * @return a list of elements
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public List<OpenMetadataRootElement> getGovernanceDefinitionsByName(String       name,
+                                                                        QueryOptions queryOptions) throws InvalidParameterException,
+                                                                                                          PropertyServerException,
+                                                                                                          UserNotAuthorizedException
+    {
+        return governanceDefinitionHandler.getGovernanceDefinitionsByName(connectorUserId, name, queryOptions);
+    }
+
+
+    /**
+     * Return the properties of a specific governance definition.
+     *
+     * @param governanceDefinitionGUID       unique identifier of the required element
+     * @param getOptions multiple options to control the query
+     * @return retrieved properties
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public OpenMetadataRootElement getGovernanceDefinitionByGUID(String     governanceDefinitionGUID,
+                                                                 GetOptions getOptions) throws InvalidParameterException,
+                                                                                               PropertyServerException,
+                                                                                               UserNotAuthorizedException
+    {
+        return governanceDefinitionHandler.getGovernanceDefinitionByGUID(connectorUserId, governanceDefinitionGUID, getOptions);
+    }
+
+
+    /**
+     * Retrieve the list of governance definitions metadata elements that contain the search string and show which solution components (if any) are attached to it.
+     * The returned governance definitions include a list of the components that are associated with it.
+     * The search string is treated as a regular expression.
+     *
+     * @param searchString           string to find in the properties
+     * @param searchOptions multiple options to control the query
+     * @return list of matching metadata elements
+     * @throws InvalidParameterException  one of the parameters is invalid
+     * @throws UserNotAuthorizedException the user is not authorized to issue this request
+     * @throws PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    public List<OpenMetadataRootElement> findGovernanceDefinitions(String        searchString,
+                                                                   SearchOptions searchOptions) throws InvalidParameterException,
+                                                                                                       UserNotAuthorizedException,
+                                                                                                       PropertyServerException
+    {
+        return governanceDefinitionHandler.findGovernanceDefinitions(connectorUserId, searchString, searchOptions);
+    }
+
+
+    /**
+     * Attach a certification type to the regulation that requires it.
+     *
+     * @param regulationGUID unique identifier of the regulation
+     * @param certificationTypeGUID unique identifier of the certification type required by the regulation
+     * @param makeAnchorOptions  options to control access to open metadata
+     * @param relationshipProperties description of the relationship.
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void linkRegulationCertificationType(String                                 regulationGUID,
+                                           String                                 certificationTypeGUID,
+                                           MakeAnchorOptions                      makeAnchorOptions,
+                                           RegulationCertificationTypeProperties  relationshipProperties) throws InvalidParameterException,
+                                                                                                                 PropertyServerException,
+                                                                                                                 UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.linkRegulationCertificationType(connectorUserId, regulationGUID, certificationTypeGUID, makeAnchorOptions, relationshipProperties);
+    }
+
+
+    /**
+     * Detach a certification type from the regulation that required it.
+     *
+     * @param regulationGUID unique identifier of the regulation
+     * @param certificationTypeGUID unique identifier of the certification type required by the regulation
+     * @param deleteOptions  options to control access to open metadata
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void detachRegulationCertificationType(String        regulationGUID,
+                                             String        certificationTypeGUID,
+                                             DeleteOptions deleteOptions) throws InvalidParameterException,
+                                                                                           PropertyServerException,
+                                                                                           UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.detachRegulationCertificationType(connectorUserId, regulationGUID, certificationTypeGUID, deleteOptions);
+    }
+
+
+    /**
+     * Attach an element to an exception type that excludes it from a requirement.  This is a multi-link relationship so a new relationship is always created and its unique identifier is returned.
+     *
+     * @param elementGUID unique identifier of the element that is excluded from the requirement
+     * @param exceptionTypeGUID unique identifier of the exception type
+     * @param makeAnchorOptions  options to control access to open metadata
+     * @param relationshipProperties description of the relationship.
+     * @return unique identifier of the new relationship
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public String linkException(String               elementGUID,
+                           String               exceptionTypeGUID,
+                           MakeAnchorOptions    makeAnchorOptions,
+                           ExceptionProperties  relationshipProperties) throws InvalidParameterException,
+                                                                               PropertyServerException,
+                                                                               UserNotAuthorizedException
+    {
+        return governanceDefinitionHandler.linkException(connectorUserId, elementGUID, exceptionTypeGUID, makeAnchorOptions, relationshipProperties);
+    }
+
+
+    /**
+     * Update the properties of a exception relationship.
+     *
+     * @param exceptionGUID unique identifier of the relationship
+     * @param updateOptions provides a structure for the additional options when updating a relationship.
+     * @param relationshipProperties description of the relationship.
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void updateException(String               exceptionGUID,
+                           UpdateOptions        updateOptions,
+                           ExceptionProperties  relationshipProperties) throws InvalidParameterException,
+                                                                               PropertyServerException,
+                                                                               UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.updateException(connectorUserId, exceptionGUID, updateOptions, relationshipProperties);
+    }
+
+
+    /**
+     * Detach an element from an exception type that excluded it from a requirement.
+     *
+     * @param exceptionGUID unique identifier of the relationship
+     * @param deleteOptions  options to control access to open metadata
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void detachException(String        exceptionGUID,
+                           DeleteOptions deleteOptions) throws InvalidParameterException,
+                                                                         PropertyServerException,
+                                                                         UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.detachException(connectorUserId, exceptionGUID, deleteOptions);
+    }
+
+
+    /**
+     * Attach a data processing description to the element that performs the processing.
+     *
+     * @param elementGUID unique identifier of the element that performs the data processing
+     * @param dataProcessingDescriptionGUID unique identifier of the data processing description
+     * @param makeAnchorOptions  options to control access to open metadata
+     * @param relationshipProperties description of the relationship.
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void linkDataProcessingSpecification(String                                 elementGUID,
+                                           String                                 dataProcessingDescriptionGUID,
+                                           MakeAnchorOptions                      makeAnchorOptions,
+                                           DataProcessingSpecificationProperties  relationshipProperties) throws InvalidParameterException,
+                                                                                                                 PropertyServerException,
+                                                                                                                 UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.linkDataProcessingSpecification(connectorUserId, elementGUID, dataProcessingDescriptionGUID, makeAnchorOptions, relationshipProperties);
+    }
+
+
+    /**
+     * Detach a data processing description from the element that performed the processing.
+     *
+     * @param elementGUID unique identifier of the element that performs the data processing
+     * @param dataProcessingDescriptionGUID unique identifier of the data processing description
+     * @param deleteOptions  options to control access to open metadata
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void detachDataProcessingSpecification(String        elementGUID,
+                                             String        dataProcessingDescriptionGUID,
+                                             DeleteOptions deleteOptions) throws InvalidParameterException,
+                                                                                           PropertyServerException,
+                                                                                           UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.detachDataProcessingSpecification(connectorUserId, elementGUID, dataProcessingDescriptionGUID, deleteOptions);
+    }
+
+
+    /**
+     * Attach a child data processing action to its parent data processing action.
+     *
+     * @param parentProcessingActionGUID unique identifier of the parent data processing action
+     * @param childProcessingActionGUID unique identifier of the child data processing action
+     * @param makeAnchorOptions  options to control access to open metadata
+     * @param relationshipProperties description of the relationship.
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void linkDetailedProcessingAction(String                              parentProcessingActionGUID,
+                                        String                              childProcessingActionGUID,
+                                        MakeAnchorOptions                   makeAnchorOptions,
+                                        DetailedProcessingActionProperties  relationshipProperties) throws InvalidParameterException,
+                                                                                                           PropertyServerException,
+                                                                                                           UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.linkDetailedProcessingAction(connectorUserId, parentProcessingActionGUID, childProcessingActionGUID, makeAnchorOptions, relationshipProperties);
+    }
+
+
+    /**
+     * Detach a child data processing action from its parent data processing action.
+     *
+     * @param parentProcessingActionGUID unique identifier of the parent data processing action
+     * @param childProcessingActionGUID unique identifier of the child data processing action
+     * @param deleteOptions  options to control access to open metadata
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void detachDetailedProcessingAction(String        parentProcessingActionGUID,
+                                          String        childProcessingActionGUID,
+                                          DeleteOptions deleteOptions) throws InvalidParameterException,
+                                                                                        PropertyServerException,
+                                                                                        UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.detachDetailedProcessingAction(connectorUserId, parentProcessingActionGUID, childProcessingActionGUID, deleteOptions);
+    }
+
+
+    /**
+     * Attach a security list to a security access control that uses it.  AssociatedSecurityList is a multi-link
+     * relationship so this always creates a new relationship and returns its unique identifier.
+     *
+     * @param securityAccessControlGUID unique identifier of the security access control
+     * @param securityListGUID       unique identifier of the security list
+     * @param makeAnchorOptions  options to control access to open metadata
+     * @param relationshipProperties description of the relationship.
+     * @return unique identifier of the new relationship
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public String linkAssociatedSecurityList(String                           securityAccessControlGUID,
+                                             String                           securityListGUID,
+                                             MakeAnchorOptions                makeAnchorOptions,
+                                             AssociatedSecurityListProperties relationshipProperties) throws InvalidParameterException,
+                                                                                                             PropertyServerException,
+                                                                                                             UserNotAuthorizedException
+    {
+        return governanceDefinitionHandler.linkAssociatedSecurityList(connectorUserId, securityAccessControlGUID, securityListGUID, makeAnchorOptions, relationshipProperties);
+    }
+
+
+    /**
+     * Update the properties of an associated security list relationship.
+     *
+     * @param associatedSecurityListRelationshipGUID unique identifier of the relationship
+     * @param updateOptions provides a structure for the additional options when updating a relationship.
+     * @param relationshipProperties description of the relationship.
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void updateAssociatedSecurityList(String                           associatedSecurityListRelationshipGUID,
+                                             UpdateOptions                    updateOptions,
+                                             AssociatedSecurityListProperties relationshipProperties) throws InvalidParameterException,
+                                                                                                             PropertyServerException,
+                                                                                                             UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.updateAssociatedSecurityList(connectorUserId, associatedSecurityListRelationshipGUID, updateOptions, relationshipProperties);
+    }
+
+
+    /**
+     * Remove an associated security list relationship.
+     *
+     * @param associatedSecurityListRelationshipGUID unique identifier of the relationship
+     * @param deleteOptions  options to control access to open metadata
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void detachAssociatedSecurityList(String        associatedSecurityListRelationshipGUID,
+                                             DeleteOptions deleteOptions) throws InvalidParameterException,
+                                                                                 PropertyServerException,
+                                                                                 UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.detachAssociatedSecurityList(connectorUserId, associatedSecurityListRelationshipGUID, deleteOptions);
+    }
+
+
+    /*
+     * =====================================================================================================================
+     * Governance point classifications
+     */
+
+
+    /**
+     * Classify an element to say that it is a control point where a governance action is performed.
+     *
+     * @param elementGUID unique identifier of the element
+     * @param properties             properties for the classification
+     * @param metadataSourceOptions  options to control access to open metadata
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void setControlPoint(String                  elementGUID,
+                           ControlPointProperties  properties,
+                           MetadataSourceOptions   metadataSourceOptions) throws InvalidParameterException,
+                                                                                 PropertyServerException,
+                                                                                 UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.setControlPoint(connectorUserId, elementGUID, properties, metadataSourceOptions);
+
+        if (parentContext.getActivityReportWriter() != null)
+        {
+            parentContext.getActivityReportWriter().reportElementUpdate(elementGUID);
+        }
+    }
+
+
+    /**
+     * Remove the control point designation from an element.
+     *
+     * @param elementGUID unique identifier of the element
+     * @param metadataSourceOptions  options to control access to open metadata
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void clearControlPoint(String                elementGUID,
+                             MetadataSourceOptions metadataSourceOptions) throws InvalidParameterException,
+                                                                                   PropertyServerException,
+                                                                                   UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.clearControlPoint(connectorUserId, elementGUID, metadataSourceOptions);
+
+        if (parentContext.getActivityReportWriter() != null)
+        {
+            parentContext.getActivityReportWriter().reportElementUpdate(elementGUID);
+        }
+    }
+
+
+    /**
+     * Classify an element to say that it is a verification point where a governance requirement is checked.
+     *
+     * @param elementGUID unique identifier of the element
+     * @param properties             properties for the classification
+     * @param metadataSourceOptions  options to control access to open metadata
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void setVerificationPoint(String                       elementGUID,
+                                VerificationPointProperties  properties,
+                                MetadataSourceOptions        metadataSourceOptions) throws InvalidParameterException,
+                                                                                           PropertyServerException,
+                                                                                           UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.setVerificationPoint(connectorUserId, elementGUID, properties, metadataSourceOptions);
+
+        if (parentContext.getActivityReportWriter() != null)
+        {
+            parentContext.getActivityReportWriter().reportElementUpdate(elementGUID);
+        }
+    }
+
+
+    /**
+     * Remove the verification point designation from an element.
+     *
+     * @param elementGUID unique identifier of the element
+     * @param metadataSourceOptions  options to control access to open metadata
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void clearVerificationPoint(String                elementGUID,
+                                  MetadataSourceOptions metadataSourceOptions) throws InvalidParameterException,
+                                                                                        PropertyServerException,
+                                                                                        UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.clearVerificationPoint(connectorUserId, elementGUID, metadataSourceOptions);
+
+        if (parentContext.getActivityReportWriter() != null)
+        {
+            parentContext.getActivityReportWriter().reportElementUpdate(elementGUID);
+        }
+    }
+
+
+    /**
+     * Classify an element to say that it is an enforcement point where a governance requirement is enforced.
+     *
+     * @param elementGUID unique identifier of the element
+     * @param properties             properties for the classification
+     * @param metadataSourceOptions  options to control access to open metadata
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void setEnforcementPoint(String                      elementGUID,
+                               EnforcementPointProperties  properties,
+                               MetadataSourceOptions       metadataSourceOptions) throws InvalidParameterException,
+                                                                                         PropertyServerException,
+                                                                                         UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.setEnforcementPoint(connectorUserId, elementGUID, properties, metadataSourceOptions);
+
+        if (parentContext.getActivityReportWriter() != null)
+        {
+            parentContext.getActivityReportWriter().reportElementUpdate(elementGUID);
+        }
+    }
+
+
+    /**
+     * Remove the enforcement point designation from an element.
+     *
+     * @param elementGUID unique identifier of the element
+     * @param metadataSourceOptions  options to control access to open metadata
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void clearEnforcementPoint(String                elementGUID,
+                                 MetadataSourceOptions metadataSourceOptions) throws InvalidParameterException,
+                                                                                       PropertyServerException,
+                                                                                       UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.clearEnforcementPoint(connectorUserId, elementGUID, metadataSourceOptions);
+
+        if (parentContext.getActivityReportWriter() != null)
+        {
+            parentContext.getActivityReportWriter().reportElementUpdate(elementGUID);
+        }
+    }
+
+
+    /**
+     * Classify an element to say that it is an execution point where governance is executed.
+     *
+     * @param elementGUID unique identifier of the element
+     * @param properties             properties for the classification
+     * @param metadataSourceOptions  options to control access to open metadata
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void setExecutionPoint(String                    elementGUID,
+                             ExecutionPointProperties  properties,
+                             MetadataSourceOptions     metadataSourceOptions) throws InvalidParameterException,
+                                                                                     PropertyServerException,
+                                                                                     UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.setExecutionPoint(connectorUserId, elementGUID, properties, metadataSourceOptions);
+
+        if (parentContext.getActivityReportWriter() != null)
+        {
+            parentContext.getActivityReportWriter().reportElementUpdate(elementGUID);
+        }
+    }
+
+
+    /**
+     * Remove the execution point designation from an element.
+     *
+     * @param elementGUID unique identifier of the element
+     * @param metadataSourceOptions  options to control access to open metadata
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void clearExecutionPoint(String                elementGUID,
+                               MetadataSourceOptions metadataSourceOptions) throws InvalidParameterException,
+                                                                                     PropertyServerException,
+                                                                                     UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.clearExecutionPoint(connectorUserId, elementGUID, metadataSourceOptions);
+
+        if (parentContext.getActivityReportWriter() != null)
+        {
+            parentContext.getActivityReportWriter().reportElementUpdate(elementGUID);
+        }
+    }
+
+
+    /**
+     * Classify an element to say that it is a policy administration point where policies are created and maintained.
+     *
+     * @param elementGUID unique identifier of the element
+     * @param properties             properties for the classification
+     * @param metadataSourceOptions  options to control access to open metadata
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void setPolicyAdministrationPoint(String                               elementGUID,
+                                        PolicyAdministrationPointProperties  properties,
+                                        MetadataSourceOptions                metadataSourceOptions) throws InvalidParameterException,
+                                                                                                           PropertyServerException,
+                                                                                                           UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.setPolicyAdministrationPoint(connectorUserId, elementGUID, properties, metadataSourceOptions);
+
+        if (parentContext.getActivityReportWriter() != null)
+        {
+            parentContext.getActivityReportWriter().reportElementUpdate(elementGUID);
+        }
+    }
+
+
+    /**
+     * Remove the policy administration point designation from an element.
+     *
+     * @param elementGUID unique identifier of the element
+     * @param metadataSourceOptions  options to control access to open metadata
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void clearPolicyAdministrationPoint(String                elementGUID,
+                                          MetadataSourceOptions metadataSourceOptions) throws InvalidParameterException,
+                                                                                                PropertyServerException,
+                                                                                                UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.clearPolicyAdministrationPoint(connectorUserId, elementGUID, metadataSourceOptions);
+
+        if (parentContext.getActivityReportWriter() != null)
+        {
+            parentContext.getActivityReportWriter().reportElementUpdate(elementGUID);
+        }
+    }
+
+
+    /**
+     * Classify an element to say that it is a policy decision point where a policy decision is made.
+     *
+     * @param elementGUID unique identifier of the element
+     * @param properties             properties for the classification
+     * @param metadataSourceOptions  options to control access to open metadata
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void setPolicyDecisionPoint(String                         elementGUID,
+                                  PolicyDecisionPointProperties  properties,
+                                  MetadataSourceOptions          metadataSourceOptions) throws InvalidParameterException,
+                                                                                               PropertyServerException,
+                                                                                               UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.setPolicyDecisionPoint(connectorUserId, elementGUID, properties, metadataSourceOptions);
+
+        if (parentContext.getActivityReportWriter() != null)
+        {
+            parentContext.getActivityReportWriter().reportElementUpdate(elementGUID);
+        }
+    }
+
+
+    /**
+     * Remove the policy decision point designation from an element.
+     *
+     * @param elementGUID unique identifier of the element
+     * @param metadataSourceOptions  options to control access to open metadata
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void clearPolicyDecisionPoint(String                elementGUID,
+                                    MetadataSourceOptions metadataSourceOptions) throws InvalidParameterException,
+                                                                                          PropertyServerException,
+                                                                                          UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.clearPolicyDecisionPoint(connectorUserId, elementGUID, metadataSourceOptions);
+
+        if (parentContext.getActivityReportWriter() != null)
+        {
+            parentContext.getActivityReportWriter().reportElementUpdate(elementGUID);
+        }
+    }
+
+
+    /**
+     * Classify an element to say that it is a policy enforcement point where a policy decision is applied.
+     *
+     * @param elementGUID unique identifier of the element
+     * @param properties             properties for the classification
+     * @param metadataSourceOptions  options to control access to open metadata
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void setPolicyEnforcementPoint(String                            elementGUID,
+                                     PolicyEnforcementPointProperties  properties,
+                                     MetadataSourceOptions             metadataSourceOptions) throws InvalidParameterException,
+                                                                                                     PropertyServerException,
+                                                                                                     UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.setPolicyEnforcementPoint(connectorUserId, elementGUID, properties, metadataSourceOptions);
+
+        if (parentContext.getActivityReportWriter() != null)
+        {
+            parentContext.getActivityReportWriter().reportElementUpdate(elementGUID);
+        }
+    }
+
+
+    /**
+     * Remove the policy enforcement point designation from an element.
+     *
+     * @param elementGUID unique identifier of the element
+     * @param metadataSourceOptions  options to control access to open metadata
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void clearPolicyEnforcementPoint(String                elementGUID,
+                                       MetadataSourceOptions metadataSourceOptions) throws InvalidParameterException,
+                                                                                             PropertyServerException,
+                                                                                             UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.clearPolicyEnforcementPoint(connectorUserId, elementGUID, metadataSourceOptions);
+
+        if (parentContext.getActivityReportWriter() != null)
+        {
+            parentContext.getActivityReportWriter().reportElementUpdate(elementGUID);
+        }
+    }
+
+
+    /**
+     * Classify an element to say that it is a policy information point that supplies the information a policy decision needs.
+     *
+     * @param elementGUID unique identifier of the element
+     * @param properties             properties for the classification
+     * @param metadataSourceOptions  options to control access to open metadata
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void setPolicyInformationPoint(String                            elementGUID,
+                                     PolicyInformationPointProperties  properties,
+                                     MetadataSourceOptions             metadataSourceOptions) throws InvalidParameterException,
+                                                                                                     PropertyServerException,
+                                                                                                     UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.setPolicyInformationPoint(connectorUserId, elementGUID, properties, metadataSourceOptions);
+
+        if (parentContext.getActivityReportWriter() != null)
+        {
+            parentContext.getActivityReportWriter().reportElementUpdate(elementGUID);
+        }
+    }
+
+
+    /**
+     * Remove the policy information point designation from an element.
+     *
+     * @param elementGUID unique identifier of the element
+     * @param metadataSourceOptions  options to control access to open metadata
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void clearPolicyInformationPoint(String                elementGUID,
+                                       MetadataSourceOptions metadataSourceOptions) throws InvalidParameterException,
+                                                                                             PropertyServerException,
+                                                                                             UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.clearPolicyInformationPoint(connectorUserId, elementGUID, metadataSourceOptions);
+
+        if (parentContext.getActivityReportWriter() != null)
+        {
+            parentContext.getActivityReportWriter().reportElementUpdate(elementGUID);
+        }
+    }
+
+
+    /**
+     * Classify an element to say that it is a policy management point.
+     *
+     * @param elementGUID unique identifier of the element
+     * @param properties             properties for the classification
+     * @param metadataSourceOptions  options to control access to open metadata
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void setPolicyManagementPoint(String                           elementGUID,
+                                    PolicyManagementPointProperties  properties,
+                                    MetadataSourceOptions            metadataSourceOptions) throws InvalidParameterException,
+                                                                                                   PropertyServerException,
+                                                                                                   UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.setPolicyManagementPoint(connectorUserId, elementGUID, properties, metadataSourceOptions);
+
+        if (parentContext.getActivityReportWriter() != null)
+        {
+            parentContext.getActivityReportWriter().reportElementUpdate(elementGUID);
+        }
+    }
+
+
+    /**
+     * Remove the policy management point designation from an element.
+     *
+     * @param elementGUID unique identifier of the element
+     * @param metadataSourceOptions  options to control access to open metadata
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void clearPolicyManagementPoint(String                elementGUID,
+                                      MetadataSourceOptions metadataSourceOptions) throws InvalidParameterException,
+                                                                                            PropertyServerException,
+                                                                                            UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.clearPolicyManagementPoint(connectorUserId, elementGUID, metadataSourceOptions);
+
+        if (parentContext.getActivityReportWriter() != null)
+        {
+            parentContext.getActivityReportWriter().reportElementUpdate(elementGUID);
+        }
+    }
+
+
+    /**
+     * Classify an element to say that it is a policy retrieval point where policies are retrieved for a decision.
+     *
+     * @param elementGUID unique identifier of the element
+     * @param properties             properties for the classification
+     * @param metadataSourceOptions  options to control access to open metadata
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void setPolicyRetrievalPoint(String                          elementGUID,
+                                   PolicyRetrievalPointProperties  properties,
+                                   MetadataSourceOptions           metadataSourceOptions) throws InvalidParameterException,
+                                                                                                 PropertyServerException,
+                                                                                                 UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.setPolicyRetrievalPoint(connectorUserId, elementGUID, properties, metadataSourceOptions);
+
+        if (parentContext.getActivityReportWriter() != null)
+        {
+            parentContext.getActivityReportWriter().reportElementUpdate(elementGUID);
+        }
+    }
+
+
+    /**
+     * Remove the policy retrieval point designation from an element.
+     *
+     * @param elementGUID unique identifier of the element
+     * @param metadataSourceOptions  options to control access to open metadata
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void clearPolicyRetrievalPoint(String                elementGUID,
+                                     MetadataSourceOptions metadataSourceOptions) throws InvalidParameterException,
+                                                                                           PropertyServerException,
+                                                                                           UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.clearPolicyRetrievalPoint(connectorUserId, elementGUID, metadataSourceOptions);
+
+        if (parentContext.getActivityReportWriter() != null)
+        {
+            parentContext.getActivityReportWriter().reportElementUpdate(elementGUID);
+        }
+    }
+
+
+    /*
+     * =====================================================================================================================
+     * Governance zone profile classification
+     */
+
+
+    /**
+     * Classify a governance zone with a profile of its membership.
+     *
+     * @param governanceZoneGUID unique identifier of the governance zone
+     * @param properties             properties for the classification
+     * @param metadataSourceOptions  options to control access to open metadata
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void setZoneMembershipProfile(String                           governanceZoneGUID,
+                                    ZoneMembershipProfileProperties  properties,
+                                    MetadataSourceOptions            metadataSourceOptions) throws InvalidParameterException,
+                                                                                                   PropertyServerException,
+                                                                                                   UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.setZoneMembershipProfile(connectorUserId, governanceZoneGUID, properties, metadataSourceOptions);
+
+        if (parentContext.getActivityReportWriter() != null)
+        {
+            parentContext.getActivityReportWriter().reportElementUpdate(governanceZoneGUID);
+        }
+    }
+
+
+    /**
+     * Remove the zone membership profile from a governance zone.
+     *
+     * @param governanceZoneGUID unique identifier of the governance zone
+     * @param metadataSourceOptions  options to control access to open metadata
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public void clearZoneMembershipProfile(String                governanceZoneGUID,
+                                      MetadataSourceOptions metadataSourceOptions) throws InvalidParameterException,
+                                                                                            PropertyServerException,
+                                                                                            UserNotAuthorizedException
+    {
+        governanceDefinitionHandler.clearZoneMembershipProfile(connectorUserId, governanceZoneGUID, metadataSourceOptions);
+
+        if (parentContext.getActivityReportWriter() != null)
+        {
+            parentContext.getActivityReportWriter().reportElementUpdate(governanceZoneGUID);
+        }
+    }
+}

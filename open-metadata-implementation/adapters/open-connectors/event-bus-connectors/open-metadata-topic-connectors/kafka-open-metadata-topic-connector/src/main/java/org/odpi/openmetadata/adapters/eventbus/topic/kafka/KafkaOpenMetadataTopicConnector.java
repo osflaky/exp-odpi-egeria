@@ -1,0 +1,611 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Copyright Contributors to the ODPi Egeria project. */
+package org.odpi.openmetadata.adapters.eventbus.topic.kafka;
+
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.DescribeClusterResult;
+import org.apache.kafka.clients.admin.KafkaAdminClient;
+import org.apache.kafka.common.Node;
+import org.odpi.openmetadata.frameworks.connectors.ffdc.ConnectorCheckedException;
+import org.odpi.openmetadata.frameworks.connectors.properties.beans.Endpoint;
+import org.odpi.openmetadata.frameworks.openmetadata.ffdc.UserNotAuthorizedException;
+import org.odpi.openmetadata.repositoryservices.connectors.openmetadatatopic.IncomingEvent;
+import org.odpi.openmetadata.repositoryservices.connectors.openmetadatatopic.OpenMetadataTopicConnector;
+import org.odpi.openmetadata.repositoryservices.connectors.openmetadatatopic.OpenMetadataTopicProvider;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.util.*;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+
+import org.apache.commons.lang3.StringUtils;
+
+/**
+ * KafkaOMRSTopicConnector provides a concrete implementation of the OMRSTopicConnector that
+ * uses native Apache Kafka as the event/messaging infrastructure.
+ */
+public class KafkaOpenMetadataTopicConnector extends OpenMetadataTopicConnector
+{
+    static final String ENABLE_AUTO_COMMIT_PROPERTY = "enable.auto.commit";
+
+    private static final Logger       log      = LoggerFactory.getLogger(KafkaOpenMetadataTopicConnector.class);
+
+    
+    private final Properties producerProperties = new Properties();
+    private final Properties consumerEgeriaProperties = new Properties();
+    private final Properties consumerProperties = new Properties();
+
+    /*
+     * By default, events can flow both in and out of the connector.
+     */
+    private boolean outboundEventsEnabled = true; // Events flow out through the producer
+    private boolean inboundEventsEnabled  = true; // Events are received through the consumer
+
+
+    private KafkaOpenMetadataEventConsumer consumer = null;
+    private KafkaOpenMetadataEventProducer producer = null;
+
+    private String       topicName          = null;
+    private String       serverId           = null;
+
+    /* this buffer is for consumed events */
+    private final List<IncomingEvent> incomingEventsList = Collections.synchronizedList(new ArrayList<>());
+
+    private KafkaConsumerExecutor consumerExecutor = null;
+    private KafkaProducerExecutor producerExecutor = null;
+
+    final String                   threadHeader = "Kafka-";
+    Thread                         consumerThread;
+    Thread                         producerThread;
+
+
+    /* mock up a a SingleThreadProducer with an override for afterExecute */
+    private class KafkaProducerExecutor extends ThreadPoolExecutor {
+        KafkaProducerExecutor() {
+            super(1, 1, Long.MAX_VALUE, TimeUnit.MICROSECONDS, new LinkedBlockingQueue<>(1));
+        }
+
+        @Override
+        public void afterExecute(Runnable r, Throwable t) {
+            super.afterExecute(r, t);
+            /*/
+            This code is executed when the producer thread dies because an wasn't handled.
+            If the Exception was a checked Exception then t is null
+            If the thread encounters a RuntimeException or a JVM Error then this is passed in a t
+             */
+            initializeProducerAndProducerThread();
+            if(KafkaOpenMetadataTopicConnector.this.isActive()) {
+                producerExecutor.execute(producerThread);
+            }
+        }
+    }
+    
+    /* mock up a a SingleThreadProducer with an override for afterExecute */
+    private class KafkaConsumerExecutor extends ThreadPoolExecutor {
+        KafkaConsumerExecutor() {
+            super(1, 1, Long.MAX_VALUE, TimeUnit.MICROSECONDS, new LinkedBlockingQueue<>(1));
+        }
+
+        @Override
+        public void afterExecute(Runnable r, Throwable t) {
+            super.afterExecute(r, t);
+
+            /*/
+            This code is executed when the producer thread dies because an wasn't handled.
+            If the Exception was a checked Exception then t is null
+            If the thread encounters a RuntimeException or a JVM Error then this is passed in a t
+             */
+            initializeConsumerAndConsumerThread();
+            if(KafkaOpenMetadataTopicConnector.this.isActive()) {
+                consumerExecutor.execute(consumerThread);
+            }
+        }
+    }
+
+
+    /**
+     * Constructor sets up the default properties for the producer and consumer.  Any properties passed through
+     * the connection's additional properties will override these values.  For most environments,
+     * The caller only needs to provide details of the bootstrap servers as the default properties
+     * will support the open metadata workloads.
+     */
+    public KafkaOpenMetadataTopicConnector()
+    {
+        super();
+
+        producerProperties.put("bootstrap.servers", "localhost:9092");
+        producerProperties.put("acks", "all");
+        producerProperties.put("retries", 1);
+        producerProperties.put("batch.size", 16384);
+        producerProperties.put("linger.ms", 0);
+        producerProperties.put("buffer.memory", 33554432);
+        producerProperties.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+        producerProperties.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+        producerProperties.put("bring.up.retries", "10");
+        producerProperties.put("bring.up.minSleepTime", "5000");
+
+
+        consumerProperties.put("bootstrap.servers", "localhost:9092");
+        consumerProperties.put(ENABLE_AUTO_COMMIT_PROPERTY, "true");
+        consumerProperties.put("auto.commit.interval.ms", "1000");
+        consumerProperties.put("session.timeout.ms", "30000");
+        consumerProperties.put("max.partition.fetch.bytes",	10485760);
+        consumerProperties.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+        consumerProperties.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+        consumerProperties.put("bring.up.retries", "10");
+        consumerProperties.put("bring.up.minSleepTime", "5000");
+    }
+
+
+    /**
+     * Retrieve information about the topic
+     */
+    private void initializeTopic()
+    {
+        final String actionDescription = "initializeTopic";
+
+        Endpoint endpoint = connectionBean.getEndpoint();
+        if (endpoint != null)
+        {
+            topicName = endpoint.getNetworkAddress();
+
+            Map<String, Object> configurationProperties = connectionBean.getConfigurationProperties();
+            if (configurationProperties != null)
+            {
+                this.initializeKafkaProperties(configurationProperties);
+
+                /*
+                 * The consumer group defines which list of events that this connector is processing.  A particular server
+                 * wants to keep reading from the same list.  Thus it needs to be passed the group.id it used
+                 * the last time it ran.
+                 * 'local.server.id' is used as the default and  is supplied in the connection object as the serverIdProperty.
+                 *
+                 * If group.id explicitly set using the standard kafka property, then use that.
+                 */
+
+                if (configurationProperties.get(KafkaOpenMetadataTopicProvider.serverIdPropertyName) != null)
+                {
+                    serverId = configurationProperties.get(KafkaOpenMetadataTopicProvider.serverIdPropertyName).toString();
+                }
+                else
+                {
+                    serverId = UUID.randomUUID().toString();
+                }
+
+                if (StringUtils.isEmpty((String)consumerProperties.get("group.id")))
+                {
+                    consumerProperties.put("group.id", serverId);
+                }
+
+                logRecord(actionDescription,
+                          KafkaOpenMetadataTopicConnectorAuditCode.SERVICE_INITIALIZING.getMessageDefinition(topicName, serverId, consumerProperties.getProperty("bootstrap.servers")));
+            }
+            else
+            {
+                logRecord(actionDescription,
+                          KafkaOpenMetadataTopicConnectorAuditCode.NULL_ADDITIONAL_PROPERTIES.getMessageDefinition(topicName));
+            }
+        }
+        else
+        {
+            logRecord(actionDescription,
+                      KafkaOpenMetadataTopicConnectorAuditCode.NO_TOPIC_NAME.getMessageDefinition());
+        }
+    }
+
+
+    /**
+     * Apache Kafka is configured with two groups of properties.  One for inbound events (the consumer) and
+     * one for the outbound events (producer).  The constructor sets up default values for these properties.
+     * This method overrides the initial values with properties configured on the event bus admin service.
+     * For most environments, the only properties needed are the bootstrap servers.
+     *
+     * @param configurationProperties additional properties from the connection.
+     */
+    private void  initializeKafkaProperties(Map<String, Object> configurationProperties)
+    {
+        final String                             actionDescription = "initializeKafkaProperties";
+
+        try
+        {
+            Object              propertiesObject;
+
+            propertiesObject = configurationProperties.get(KafkaOpenMetadataTopicProvider.producerPropertyName);
+            copyProperties(propertiesObject, producerProperties);
+
+            propertiesObject = configurationProperties.get(KafkaOpenMetadataTopicProvider.consumerPropertyName);
+            copyProperties(propertiesObject, consumerProperties);
+            
+            propertiesObject = configurationProperties.get(KafkaOpenMetadataTopicProvider.egeriaConsumerPropertyName);
+            copyProperties(propertiesObject, consumerEgeriaProperties);
+
+            propertiesObject = configurationProperties.get(OpenMetadataTopicProvider.EVENT_DIRECTION_PROPERTY_NAME);
+            if (propertiesObject != null)
+            {
+                if (propertiesObject.equals(OpenMetadataTopicProvider.EVENT_DIRECTION_OUT_ONLY))
+                {
+                    inboundEventsEnabled = false;
+                }
+                else if ((propertiesObject.equals(OpenMetadataTopicProvider.EVENT_DIRECTION_IN_ONLY)))
+                {
+                    outboundEventsEnabled = false;
+                }
+            }
+        }
+        catch (Exception   error)
+        {
+            logRecord(actionDescription,
+                      KafkaOpenMetadataTopicConnectorAuditCode.UNABLE_TO_PARSE_CONFIG_PROPERTIES.getMessageDefinition(topicName, error.getClass().getName(),
+                      error.getMessage()));
+        }
+    }
+
+
+    /**
+     * copies a Map<String, Object> to Map<String,String>
+     * @param propertiesObject a reference to an object that is a Map<String,Object>
+     * @param target a reference to a Map<String,String>
+     *
+     * @throws RuntimeException which is handled in the calling code.
+     */
+    @SuppressWarnings(value = "unchecked")
+    private void copyProperties(Object propertiesObject, Properties target)
+    {
+		Map<String, Object> propertiesMap;
+		if (propertiesObject != null)
+		{
+            if (propertiesObject instanceof String propertiesAsString)
+            {
+                String properties = propertiesAsString.substring(1, propertiesAsString.length()-1); //remove curly brackets
+                String[] keyValuePairs = properties.split(",");              //split the string to creat key-value pairs
+
+                for (String pair : keyValuePairs)                        //iterate over the pairs
+                {
+                    String[] entry = pair.split("=");                   //split the pairs to get key and value
+                    target.setProperty(entry[0].trim(), entry[1].trim());
+                }
+            }
+            else
+            {
+                propertiesMap = (Map<String, Object>) propertiesObject; //only casting the reference to the Map, not the actual Map
+                for (Map.Entry<String, Object> entry : propertiesMap.entrySet())
+                {
+                    target.setProperty(entry.getKey(), String.valueOf(entry.getValue()));
+                }
+            }
+		}
+	}
+
+
+    /**
+     * Indicates that the connector is completely configured and can begin processing.
+     * It creates two threads, one for sending (producer) and the other for receiving
+     * events (consumer)
+     *
+     * @throws ConnectorCheckedException the connector detected a problem.
+     * @throws UserNotAuthorizedException the connector was disconnected before/during start
+     */
+    @Override
+    public void start() throws ConnectorCheckedException, UserNotAuthorizedException
+    {
+        this.initializeTopic();
+
+        KafkaStatusChecker kafkaStatus = new KafkaStatusChecker();
+
+        /*
+        *  compare the two lists of bootstrap server to check we only want one cluster's status checked
+        *  reliant on list being specified in the same order
+         * This will need changing for single direction connector
+         */
+        boolean up;
+
+        if (outboundEventsEnabled && inboundEventsEnabled)
+        {
+            /*
+             * Need both the consumer and producer brokers
+             */
+            if (consumerProperties.getProperty("bootstrap.servers").equals(producerProperties.getProperty("bootstrap.servers")) )
+            {
+                up = kafkaStatus.waitForBrokers(producerProperties);
+            }
+            else
+            {
+                up = kafkaStatus.waitForBrokers(producerProperties) && kafkaStatus.waitForBrokers(consumerProperties);
+            }
+        }
+        else if (outboundEventsEnabled)
+        {
+            /*
+             * Only sending outbound events so only care about the producer.
+             */
+            up = kafkaStatus.waitForBrokers(producerProperties);
+        }
+        else
+        {
+            /*
+             * Only receiving events so only care about the consumer.
+             */
+            up = kafkaStatus.waitForBrokers(consumerProperties);
+        }
+
+        if (!up)
+        {
+            final String actionDescription = "waitForThisBroker";
+            logRecord(actionDescription, KafkaOpenMetadataTopicConnectorAuditCode.SERVICE_FAILED_INITIALIZING.getMessageDefinition(topicName));
+
+            throw new ConnectorCheckedException(KafkaOpenMetadataTopicConnectorErrorCode.ERROR_ATTEMPTING_KAFKA_INITIALIZATION.getMessageDefinition(kafkaStatus.getLastException().getClass().getName(),
+                    topicName,
+                    kafkaStatus.getLastException().getMessage()),
+                    this.getClass().getName(),
+                    "KafkaMonitor.waitForThisBroker",
+                    kafkaStatus.getLastException());
+        }
+
+        if (inboundEventsEnabled)
+        {
+            initializeConsumerAndConsumerThread();
+            consumerExecutor = new KafkaConsumerExecutor();
+            consumerExecutor.execute(consumerThread);
+        }
+
+        if (outboundEventsEnabled)
+        {
+            initializeProducerAndProducerThread();
+            producerExecutor = new KafkaProducerExecutor();
+            producerExecutor.execute(producerThread);
+        }
+
+        super.start();
+    }
+
+
+    private void initializeConsumerAndConsumerThread()
+    {
+        log.info("Initializing the consumer thread");
+        KafkaOpenMetadataEventConsumerConfiguration consumerConfig = new KafkaOpenMetadataEventConsumerConfiguration(consumerEgeriaProperties, auditLog);
+        consumer = new KafkaOpenMetadataEventConsumer(topicName, serverId, consumerConfig, consumerProperties, this, auditLog);
+        consumerThread = new Thread(consumer, threadHeader + "Consumer-" + topicName);
+    }
+
+
+    private void initializeProducerAndProducerThread()
+    {
+        log.info("Initializing the producer thread");
+        producer = new KafkaOpenMetadataEventProducer(topicName, serverId, producerProperties, auditLog);
+        producerThread = new Thread(producer, threadHeader + "Producer-" + topicName);
+    }
+
+
+    /**
+     * Sends the supplied event to the topic.
+     *
+     * @param event object containing the event properties.
+     * @throws ConnectorCheckedException the connector is not able to communicate with the event bus
+     */
+    @Override
+    public void sendEvent(String event) throws ConnectorCheckedException
+    {
+        if (producer != null)
+        {
+            log.debug("Sending event");
+            producer.sendEvent(event);
+        }
+    }
+
+
+    /**
+     * Look to see if there is one of more new events to process.
+     *
+     * @return a list of received events or null
+     */
+    @Override
+    protected List<IncomingEvent> checkForIncomingEvents()
+    {
+        List<IncomingEvent> newEvents = null;
+
+        // This method is called periodically from a independent thread managed by OpenMetadataTopic
+        // (superclass) so it should not block.
+
+        if ((incomingEventsList != null) && (!incomingEventsList.isEmpty()))
+        {
+            log.debug("Checking for events.  Number of found events: {}", incomingEventsList.size());
+            newEvents = new ArrayList<>(incomingEventsList);
+
+            // empty incomingEventsList otherwise same events will be sent again
+            incomingEventsList.removeAll(newEvents);
+        }
+
+        return newEvents;
+    }
+
+    /**
+     * Distribute events to other listeners.
+     *
+     * @param event object containing the event properties.
+     */
+    void distributeToListeners(IncomingEvent event)
+    {
+        log.debug("distribute event to listeners" + event);
+        incomingEventsList.add(event);
+    }
+
+
+    /**
+     * Free up any resources held since the connector is no longer needed.
+     *
+     * @throws ConnectorCheckedException the connector detected a problem.
+     */
+    @Override
+    public void disconnect() throws ConnectorCheckedException
+    {
+        final String actionDescription = "disconnect";
+
+        super.disconnect();
+
+        if (consumer != null)
+        {
+            consumer.safeCloseConsumer();
+        }
+
+        if (producer != null)
+        {
+            producer.safeCloseProducer();
+        }
+
+        /*
+         * Ensure Kafka client threads have stopped
+         * before returning.
+         */
+        if (consumerThread != null) {
+            try {
+                consumerThread.join();
+            } catch (InterruptedException e) {
+                //expected exception and don't care
+            } catch (Exception error) {
+                final String command = "consumerThread.join";
+                logExceptionRecord(actionDescription,
+                     KafkaOpenMetadataTopicConnectorAuditCode.UNEXPECTED_SHUTDOWN_EXCEPTION.getMessageDefinition(error.getClass().getName(),
+                             topicName,
+                             command,
+                             error.getMessage()),
+                     error);
+            }
+        }
+        if (producerThread != null) {
+            try {
+                producerThread.join();
+            } catch (InterruptedException e) {
+                //expected and don't care
+            } catch (Exception error) {
+                final String command = "producerThread.join";
+
+                logExceptionRecord(actionDescription,
+                     KafkaOpenMetadataTopicConnectorAuditCode.UNEXPECTED_SHUTDOWN_EXCEPTION.getMessageDefinition(error.getClass().getName(),
+                             topicName,
+                             command,
+                             error.getMessage()),
+                     error);
+            }
+        }
+
+        logRecord(actionDescription, KafkaOpenMetadataTopicConnectorAuditCode.SERVICE_SHUTDOWN.getMessageDefinition(topicName));
+    }
+    
+    /**
+     * Gets the number of events that have not been processed yet.
+     * 
+     * @return int
+     */
+    int getNumberOfUnprocessedEvents() {
+    	return incomingEventsList.size();
+    }
+
+    private class KafkaStatusChecker {
+
+        //instantiate empty objects to avoid if null checks
+        // the brokers list if for debug/testing purposes only,
+        private Exception lastException = new Exception();
+
+        /*
+         * connects and requests a list of running kafka brokers
+         * swallows all exceptions to allow caller to control error reporting,
+         *
+         * If this function populates brokers then:
+         * Zookeeper is running
+         * Kafka has a least one server which is running at least one broker
+         *
+         * @param connectionProps The properties to enable connection to kafka
+         */
+        boolean getRunningBrokers(Properties connectionProperties ) {
+
+            boolean found = false;
+            AdminClient adminClient = null;
+            try {
+                adminClient = KafkaAdminClient.create(connectionProperties);
+                DescribeClusterResult describeClusterResult = adminClient.describeCluster();
+                Collection<Node> brokers = describeClusterResult.nodes().get();
+                if (!brokers.isEmpty()) {
+                    found = true;
+                }
+            } catch (Exception e) {
+                //gulp down any exceptions, the waiting method will control any audit logging
+                //but keep a copy for reference
+                lastException = e;
+            } finally {
+            	if (adminClient != null) {
+            		adminClient.close(Duration.ZERO);
+            	}
+            }
+
+            return found;
+        }
+
+
+        /**
+         * Waits for a list of running kafka brokers
+         *
+         * @param connectionProperties The kafka connection properties
+         * Performs a sanity check that the services Egeria requires are available
+         *         */
+        public boolean waitForBrokers(Properties connectionProperties )
+        {
+            int count = 0;
+            boolean found = false;
+            try {
+                int napCount = Integer.parseInt( connectionProperties.getProperty("bring.up.retries") );
+                int minSleepTime = Integer.parseInt( connectionProperties.getProperty("bring.up.minSleepTime")) ;
+
+                while (count < napCount)
+                {
+                    if (auditLog != null)
+                    {
+                        auditLog.logMessage("waitForBrokers", KafkaOpenMetadataTopicConnectorAuditCode.KAFKA_CONNECTION_RETRY.getMessageDefinition(
+                                connectionProperties.getProperty("bootstrap.servers"),
+                                String.valueOf(count + 1),
+                                String.valueOf(napCount)));
+                    }
+                    else
+                    {
+                        /*
+                         * If kafka is being used for the audit log then auditLog==null so we output
+                         * to sys out.
+                         */
+                        System.out.println(new Date() + " Kafka connection retry " + String.valueOf(count + 1) + " of " + String.valueOf(napCount));
+                    }
+                    Instant start = Instant.now();
+                    if (getRunningBrokers(connectionProperties)) {
+                        //we were returned a list of running brokers
+                        //so end retry loop
+                        found = true;
+                        break;
+                    } else {
+                        count++;
+                        /* This provides a minimum sleeptime functionality
+                        *  to allow the ride through of short term availablity issues
+                         */
+                        Instant end = Instant.now();
+                        Duration timeTaken = Duration.between(start, end);
+                        long millis = timeTaken.toMillis();
+
+                        if (millis < minSleepTime)
+                        {
+                            Thread.sleep(minSleepTime - millis);
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                lastException = e;
+            }
+            return found;
+        }
+
+        public Exception getLastException() {
+
+            return lastException;
+        }
+    }
+}

@@ -1,0 +1,357 @@
+# Egeria-data-engineer-api
+
+@baseURL=https://localhost:7443
+@viewServer=view-server
+
+###
+# =====================================================================================================================
+# Manage the authentication token.  Run this request to create/refresh the token.
+
+# @name Token (RequestBody)
+POST {{baseURL}}/api/token
+Content-Type: application/json
+
+{
+  "userId" : "peterprofile",
+  "password" : "secret"
+}
+
+> {% client.global.set("token", response.body); %}
+
+
+###
+# @name find TabularDataSets
+# Retrieve the list of asset metadata elements that are of type tabular data set.
+# The graphQueryDepth is set to zero (0) so no relationships are returned.
+#
+# Request body provides string to find in the properties
+#
+# Returns list of matching metadata elements or
+#  InvalidParameterException  one of the parameters is invalid
+#  UserNotAuthorizedException the user is not authorized to issue this request
+#  PropertyServerException    a problem reported in the open metadata server(s)
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/data-engineer/assets/by-search-string
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "SearchStringRequestBody",
+  "metadataElementTypeName": "TabularDataSet",
+  "startsWith" : false,
+  "endsWith": false,
+  "pageSize" : 0,
+  "relationshipsPageSize": 0,
+  "graphQueryDepth": 0,
+  "skipClassifiedElements": ["Template"]
+}
+
+
+###
+# ========================================================================================
+# Work with Valid Metadata Value Set List
+#
+
+###
+# @name get Valid Metadata Value Set List
+# Retrieve the element, extract the guid and then request the data set report.  This report
+# requires the creation of the data set and can take about a minute to run on the in membory repository
+# (45 s 400 ms on last run) so do not be surprised.
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/assets/by-name
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "FilterRequestBody",
+  "metadataElementTypeName": "ReferenceCodeTable",
+  "filter" : "Open Metadata Property List for Valid Metadata Value Set List",
+  "startFrom" : 0,
+  "pageSize": 10
+}
+
+> {% client.global.set("validMetadataValueSetListGUID", response.body.elements[0].elementHeader.guid); %}
+
+###
+
+GET {{baseURL}}/servers/{{viewServer}}/api/open-metadata/data-engineer/tabular-data-sets/{{validMetadataValueSetListGUID}}/report?startFromRow=0&maxRowCount=5000
+Authorization: Bearer {{token}}
+
+
+###
+# @name get Valid Values for contentStatus
+# Retrieve the element, extract the guid and then request the data set report.
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/assets/by-name
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "FilterRequestBody",
+  "metadataElementTypeName": "ReferenceCodeTable",
+  "filter" : "Data set for contentStatus Valid Values",
+  "startFrom" : 0,
+  "pageSize": 10
+}
+
+> {% client.global.set("contentStatusesGUID", response.body.elements[0].elementHeader.guid); %}
+
+###
+
+GET {{baseURL}}/servers/{{viewServer}}/api/open-metadata/data-engineer/tabular-data-sets/{{contentStatusesGUID}}/report?startFromRow=0&maxRowCount=5000
+Authorization: Bearer {{token}}
+
+
+###
+# @name get Deployed Implementation Type (Technology Type) List
+# Retrieve the element, extract the guid and then request the data set report.
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/assets/by-name
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "FilterRequestBody",
+  "metadataElementTypeName": "ReferenceCodeTable",
+  "filter" : "Data set for deployedImplementationType Valid Values",
+  "startFrom" : 0,
+  "pageSize": 10
+}
+
+> {% client.global.set("deployedImplementationTypesGUID", response.body.elements[0].elementHeader.guid); %}
+
+###
+
+GET {{baseURL}}/servers/{{viewServer}}/api/open-metadata/data-engineer/tabular-data-sets/{{deployedImplementationTypesGUID}}/report?startFromRow=0&maxRowCount=5000
+Authorization: Bearer {{token}}
+
+###
+# ========================================================================================
+# Work with Reference Data Set List
+#
+
+###
+# @name get Reference Data Set List
+# Retrieve the element, extract the guid and then request the data set report.  This report
+# requires the creation of the data set and can take about a minute to run on the in membory repository
+# (45 s 400 ms on last run) so do not be surprised.
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/assets/by-name
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "FilterRequestBody",
+  "metadataElementTypeName": "ReferenceCodeTable",
+  "filter" : "Data set for Reference Data Set List",
+  "startFrom" : 0,
+  "pageSize": 10
+}
+
+> {% client.global.set("referenceDataSetListGUID", response.body.elements[0].elementHeader.guid); %}
+
+###
+
+GET {{baseURL}}/servers/{{viewServer}}/api/open-metadata/data-engineer/tabular-data-sets/{{referenceDataSetListGUID}}/report?startFromRow=0&maxRowCount=5000
+Authorization: Bearer {{token}}
+
+
+###
+# @name get Values for facilityType
+# Retrieve the element, extract the guid and then request the data set report.
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/assets/by-name
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "FilterRequestBody",
+  "metadataElementTypeName": "ReferenceCodeTable",
+  "filter" : "Data set for facilityType Reference Data Set",
+  "startFrom" : 0,
+  "pageSize": 10
+}
+
+> {% client.global.set("facilityTypeGUID", response.body.elements[0].elementHeader.guid); %}
+
+###
+
+GET {{baseURL}}/servers/{{viewServer}}/api/open-metadata/data-engineer/tabular-data-sets/{{facilityTypeGUID}}/report?startFromRow=0&maxRowCount=5000
+Authorization: Bearer {{token}}
+
+###
+# ========================================================================================
+# Work with Digital products about open metadata types
+#
+
+###
+# @name get Open Metadata Type List
+# Retrieve the element, extract the guid and then request the data set report.
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/assets/by-name
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "FilterRequestBody",
+  "metadataElementTypeName": "ReferenceCodeTable",
+  "filter" : "Data set for Open Metadata Types List",
+  "startFrom" : 0,
+  "pageSize": 10
+}
+
+> {% client.global.set("openMetadataTypesGUID", response.body.elements[0].elementHeader.guid); %}
+
+###
+
+GET {{baseURL}}/servers/{{viewServer}}/api/open-metadata/data-engineer/tabular-data-sets/{{openMetadataTypesGUID}}/report?startFromRow=0&maxRowCount=5000
+Authorization: Bearer {{token}}
+
+
+###
+# @name get Open Metadata Attributes List
+# Retrieve the element, extract the guid and then request the data set report.
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/assets/by-name
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "FilterRequestBody",
+  "metadataElementTypeName": "TabularDataSet",
+  "filter" : "Data set for Open Metadata Properties List",
+  "startFrom" : 0,
+  "pageSize": 10
+}
+
+> {% client.global.set("openMetadataPropertiesGUID", response.body.elements[0].elementHeader.guid); %}
+
+###
+
+GET {{baseURL}}/servers/{{viewServer}}/api/open-metadata/data-engineer/tabular-data-sets/{{openMetadataPropertiesGUID}}/report?startFromRow=0&maxRowCount=5000
+Authorization: Bearer {{token}}
+
+
+###
+# @name get Open Metadata Attributes For Types List
+# Retrieve the element, extract the guid and then request the data set report.
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/assets/by-name
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "FilterRequestBody",
+  "metadataElementTypeName": "TabularDataSet",
+  "filter" : "Data set for Open Metadata Attributes For Types List",
+  "startFrom" : 0,
+  "pageSize": 10
+}
+
+> {% client.global.set("openMetadataAttributesForTypesGUID", response.body.elements[0].elementHeader.guid); %}
+
+###
+
+GET {{baseURL}}/servers/{{viewServer}}/api/open-metadata/data-engineer/tabular-data-sets/{{openMetadataAttributesForTypesGUID}}/report?startFromRow=0&maxRowCount=5000
+Authorization: Bearer {{token}}
+
+
+###
+# ========================================================================================
+# Work with Digital products for Governance Observability
+#
+
+###
+# @name get Governance Controls
+# Retrieve the element, extract the guid and then request the data set report.
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/assets/by-name
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "FilterRequestBody",
+  "metadataElementTypeName": "TabularDataSet",
+  "filter" : "Data set for Governance Controls",
+  "startFrom" : 0,
+  "pageSize": 10
+}
+
+> {% client.global.set("governanceControlsDataSetGUID", response.body.elements[0].elementHeader.guid); %}
+
+###
+
+GET {{baseURL}}/servers/{{viewServer}}/api/open-metadata/data-engineer/tabular-data-sets/{{governanceControlsDataSetGUID}}/report?startFromRow=0&maxRowCount=50
+Authorization: Bearer {{token}}
+
+
+###
+# @name get Exceptions
+# Retrieve the element, extract the guid and then request the data set report.
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/assets/by-name
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "FilterRequestBody",
+  "metadataElementTypeName": "TabularDataSet",
+  "filter" : "Data set for Exceptions",
+  "startFrom" : 0,
+  "pageSize": 10
+}
+
+> {% client.global.set("exceptionsDataSetGUID", response.body.elements[0].elementHeader.guid); %}
+
+###
+
+GET {{baseURL}}/servers/{{viewServer}}/api/open-metadata/data-engineer/tabular-data-sets/{{exceptionsDataSetGUID}}/report?startFromRow=0&maxRowCount=10
+Authorization: Bearer {{token}}
+
+
+###
+# @name get Licenses
+# Retrieve the element, extract the guid and then request the data set report.
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/assets/by-name
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "FilterRequestBody",
+  "metadataElementTypeName": "TabularDataSet",
+  "filter" : "Data set for Licenses",
+  "startFrom" : 0,
+  "pageSize": 10
+}
+
+> {% client.global.set("licensesDataSetGUID", response.body.elements[0].elementHeader.guid); %}
+
+###
+
+GET {{baseURL}}/servers/{{viewServer}}/api/open-metadata/data-engineer/tabular-data-sets/{{licensesDataSetGUID}}/report?startFromRow=0&maxRowCount=5000
+Authorization: Bearer {{token}}
+
+
+###
+# @name get Certifications
+# Retrieve the element, extract the guid and then request the data set report.
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/asset-maker/assets/by-name
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "FilterRequestBody",
+  "metadataElementTypeName": "TabularDataSet",
+  "filter" : "Data set for Certifications",
+  "startFrom" : 0,
+  "pageSize": 10
+}
+
+> {% client.global.set("certificationsDataSetGUID", response.body.elements[0].elementHeader.guid); %}
+
+###
+
+GET {{baseURL}}/servers/{{viewServer}}/api/open-metadata/data-engineer/tabular-data-sets/{{certificationsDataSetGUID}}/report?startFromRow=0&maxRowCount=5000
+Authorization: Bearer {{token}}

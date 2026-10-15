@@ -1,0 +1,528 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Copyright Contributors to the ODPi Egeria project. */
+
+package org.odpi.openmetadata.frameworkservices.gaf.rest;
+
+import com.fasterxml.jackson.annotation.JsonAutoDetect;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.NewActionTarget;
+
+import java.util.Date;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+
+import static com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility.NONE;
+import static com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility.PUBLIC_ONLY;
+
+/**
+ * EngineActionRequestBody provides a structure for passing the properties for a new engine action.
+ */
+@JsonAutoDetect(getterVisibility = PUBLIC_ONLY, setterVisibility = PUBLIC_ONLY, fieldVisibility = NONE)
+@JsonInclude(JsonInclude.Include.NON_NULL)
+@JsonIgnoreProperties(ignoreUnknown = true)
+public class InitiateEngineActionRequestBody extends GAFAPIRequest
+{
+    private String                qualifiedName         = null;
+    private int                   domainIdentifier      = 0;
+    private String                displayName           = null;
+    private String                description           = null;
+    private List<String>          actionSourceGUIDs     = null;
+    private List<String>          actionCauseGUIDs      = null;
+    private List<NewActionTarget> actionTargets         = null;
+    private List<String>          receivedGuards        = null;
+    private Date                  startDate             = null;
+    private String                requestType           = null;
+    private Map<String, String>   requestParameters     = null;
+    private String                processName           = null;
+    private String                iscQualifiedName      = null;
+    private String                requestSourceName     = null;
+    private String                originatorServiceName = null;
+    private String                originatorEngineName  = null;
+
+    /**
+     * Default constructor
+     */
+    public InitiateEngineActionRequestBody()
+    {
+        super();
+    }
+
+
+    /**
+     * Copy/clone constructor
+     *
+     * @param template object to copy
+     */
+    public InitiateEngineActionRequestBody(InitiateEngineActionRequestBody template)
+    {
+        super(template);
+
+        if (template != null)
+        {
+            qualifiedName         = template.getQualifiedName();
+            domainIdentifier      = template.getDomainIdentifier();
+            displayName           = template.getDisplayName();
+            description           = template.getDescription();
+            actionSourceGUIDs     = template.getActionSourceGUIDs();
+            actionCauseGUIDs      = template.getActionCauseGUIDs();
+            actionTargets         = template.getActionTargets();
+            receivedGuards        = template.getReceivedGuards();
+            startDate             = template.getStartDate();
+            requestType           = template.getRequestType();
+            requestParameters     = template.getRequestParameters();
+            processName           = template.getProcessName();
+            requestSourceName     = template.getRequestSourceName();
+            originatorServiceName = template.getOriginatorServiceName();
+            originatorEngineName  = template.getOriginatorEngineName();
+            iscQualifiedName      = template.getISCQualifiedName();
+        }
+    }
+
+
+    /**
+     * Return the qualified name for this new governance action.
+     *
+     * @return string name
+     */
+    public String getQualifiedName()
+    {
+        return qualifiedName;
+    }
+
+
+    /**
+     * Set up the qualified name of this new governance action.
+     *
+     * @param qualifiedName string name
+     */
+    public void setQualifiedName(String qualifiedName)
+    {
+        this.qualifiedName = qualifiedName;
+    }
+
+
+    /**
+     * Return the identifier of the governance domain that this action belongs to (0=ALL/ANY).
+     *
+     * @return int
+     */
+    public int getDomainIdentifier()
+    {
+        return domainIdentifier;
+    }
+
+
+    /**
+     * Set up the identifier of the governance domain that this action belongs to (0=ALL/ANY).
+     *
+     * @param domainIdentifier int
+     */
+    public void setDomainIdentifier(int domainIdentifier)
+    {
+        this.domainIdentifier = domainIdentifier;
+    }
+
+
+    /**
+     * Return the display name for the governance action.
+     *
+     * @return string name
+     */
+    public String getDisplayName()
+    {
+        return displayName;
+    }
+
+
+    /**
+     * Set up the display name for the governance action.
+     *
+     * @param displayName string name
+     */
+    public void setDisplayName(String displayName)
+    {
+        this.displayName = displayName;
+    }
+
+
+    /**
+     * Return the description of the governance action.
+     *
+     * @return string text
+     */
+    public String getDescription()
+    {
+        return description;
+    }
+
+
+    /**
+     * Set up the description of the governance action.
+     *
+     * @param description string text
+     */
+    public void setDescription(String description)
+    {
+        this.description = description;
+    }
+
+
+    /**
+     * Return the list of elements that triggered this request.
+     *
+     * @return list of string guids
+     */
+    public List<String> getActionSourceGUIDs()
+    {
+        return actionSourceGUIDs;
+    }
+
+
+    /**
+     * Set up the list of elements that triggered this request.
+     *
+     * @param actionSourceGUIDs list of string guids
+     */
+    public void setActionSourceGUIDs(List<String> actionSourceGUIDs)
+    {
+        this.actionSourceGUIDs = actionSourceGUIDs;
+    }
+
+
+    /**
+     * Return the list of elements that caused this action.
+     *
+     * @return list of string guids
+     */
+    public List<String> getActionCauseGUIDs()
+    {
+        return actionCauseGUIDs;
+    }
+
+
+    /**
+     * Set up the list of elements that caused this action.
+     *
+     * @param actionCauseGUIDs list of string guids
+     */
+    public void setActionCauseGUIDs(List<String> actionCauseGUIDs)
+    {
+        this.actionCauseGUIDs = actionCauseGUIDs;
+    }
+
+
+    /**
+     * Return the list of elements that the governance action will work on.
+     *
+     * @return list of name to string guids
+     */
+    public List<NewActionTarget> getActionTargets()
+    {
+        if (actionTargets == null)
+        {
+            return null;
+        }
+
+        if (actionTargets.isEmpty())
+        {
+            return null;
+        }
+
+        return actionTargets;
+    }
+
+
+    /**
+     * Set up the list of elements that the governance action will work on.
+     *
+     * @param actionTargets list of names to string guids
+     */
+    public void setActionTargets(List<NewActionTarget> actionTargets)
+    {
+        this.actionTargets = actionTargets;
+    }
+
+
+    /**
+     * Return the list of guards that should be passed to the governance service that executes this request.
+     *
+     * @return list of strings
+     */
+    public List<String> getReceivedGuards()
+    {
+        return receivedGuards;
+    }
+
+
+    /**
+     * Set up the list of guards that should be passed to the governance service that executes this request.
+     *
+     * @param receivedGuards list of strings
+     */
+    public void setReceivedGuards(List<String> receivedGuards)
+    {
+        this.receivedGuards = receivedGuards;
+    }
+
+
+    /**
+     * Return the time that this governance action should start (null means as soon as possible).
+     *
+     * @return date object
+     */
+    public Date getStartDate()
+    {
+        return startDate;
+    }
+
+
+    /**
+     * Set up the time that this governance action should start (null means as soon as possible).
+     *
+     * @param startDate date object
+     */
+    public void setStartDate(Date startDate)
+    {
+        this.startDate = startDate;
+    }
+
+
+    /**
+     * Return the request type associated with this governance action.
+     *
+     * @return string name
+     */
+    public String getRequestType()
+    {
+        return requestType;
+    }
+
+
+    /**
+     * Set up the request type associated with this governance action, used to identify ths governance service to run.
+     *
+     * @param requestType string name
+     */
+    public void setRequestType(String requestType)
+    {
+        this.requestType = requestType;
+    }
+
+
+    /**
+     * Return the parameters to pass onto the governance service.
+     *
+     * @return map of properties
+     */
+    public Map<String, String> getRequestParameters()
+    {
+        if (requestParameters == null)
+        {
+            return null;
+        }
+
+        if (requestParameters.isEmpty())
+        {
+            return null;
+        }
+
+        return requestParameters;
+    }
+
+
+    /**
+     * Set up the parameters to pass onto the governance service.
+     *
+     * @param requestParameters map of properties
+     */
+    public void setRequestParameters(Map<String, String> requestParameters)
+    {
+        this.requestParameters = requestParameters;
+    }
+
+
+    /**
+     * Return the name of the process that this action belongs to.
+     *
+     * @return name
+     */
+    public String getProcessName()
+    {
+        return processName;
+    }
+
+
+    /**
+     * Set up the name of the process that this action belongs to.
+     *
+     * @param processName name
+     */
+    public void setProcessName(String processName)
+    {
+        this.processName = processName;
+    }
+
+
+    /**
+     * Return the name of the request source.
+     *
+     * @return string name
+     */
+    public String getRequestSourceName()
+    {
+        return requestSourceName;
+    }
+
+
+    /**
+     * Set up the name of the request source.
+     *
+     * @param requestSourceName string name
+     */
+    public void setRequestSourceName(String requestSourceName)
+    {
+        this.requestSourceName = requestSourceName;
+    }
+
+
+    /**
+     * Set up the unique name of the service that created this request.
+     *
+     * @return string name
+     */
+    public String getOriginatorServiceName()
+    {
+        return originatorServiceName;
+    }
+
+
+    /**
+     * Set up the unique name of the service that created this request.
+     *
+     * @param originatorServiceName string name
+     */
+    public void setOriginatorServiceName(String originatorServiceName)
+    {
+        this.originatorServiceName = originatorServiceName;
+    }
+
+
+    /**
+     * Return the qualified name of the governance engine that originated this request (if any).
+     *
+     * @return string name
+     */
+    public String getOriginatorEngineName()
+    {
+        return originatorEngineName;
+    }
+
+
+    /**
+     * Set up the qualified name of the governance engine that originated this request (if any).
+     *
+     * @param originatorEngineName string name
+     */
+    public void setOriginatorEngineName(String originatorEngineName)
+    {
+        this.originatorEngineName = originatorEngineName;
+    }
+
+
+    /**
+     * Return the qualified name of the information supply chain that this that originated this request (if any).
+     *
+     * @return string name
+     */
+    public String getISCQualifiedName()
+    {
+        return iscQualifiedName;
+    }
+
+
+    /**
+     * Set up the qualified name of the information supply chain that this that originated this request (if any).
+     *
+     * @param iscQualifiedName string name
+     */
+    public void setISCQualifiedName(String iscQualifiedName)
+    {
+        this.iscQualifiedName = iscQualifiedName;
+    }
+
+
+    /**
+     * JSON-style toString.
+     *
+     * @return list of properties and their values.
+     */
+    @Override
+    public String toString()
+    {
+        return "InitiateEngineActionRequestBody{" +
+                "qualifiedName='" + qualifiedName + '\'' +
+                ", domainIdentifier=" + domainIdentifier +
+                ", displayName='" + displayName + '\'' +
+                ", description='" + description + '\'' +
+                ", actionSourceGUIDs=" + actionSourceGUIDs +
+                ", actionCauseGUIDs=" + actionCauseGUIDs +
+                ", actionTargets=" + actionTargets +
+                ", receivedGuards=" + receivedGuards +
+                ", startDate=" + startDate +
+                ", requestType='" + requestType + '\'' +
+                ", requestParameters=" + requestParameters +
+                ", processName='" + processName + '\'' +
+                ", requestSourceName='" + requestSourceName + '\'' +
+                ", originatorServiceName='" + originatorServiceName + '\'' +
+                ", originatorEngineName='" + originatorEngineName + '\'' +
+                ", iscQualifiedName='" + iscQualifiedName + '\'' +
+                "} " + super.toString();
+    }
+
+
+    /**
+     * Equals method that returns true if containing properties are the same.
+     *
+     * @param objectToCompare object to compare
+     * @return boolean result of comparison
+     */
+    @Override
+    public boolean equals(Object objectToCompare)
+    {
+        if (objectToCompare == null || getClass() != objectToCompare.getClass()) return false;
+        if (!super.equals(objectToCompare)) return false;
+        InitiateEngineActionRequestBody that = (InitiateEngineActionRequestBody) objectToCompare;
+        return domainIdentifier == that.domainIdentifier &&
+                Objects.equals(qualifiedName, that.qualifiedName) &&
+                Objects.equals(displayName, that.displayName) &&
+                Objects.equals(description, that.description) &&
+                Objects.equals(actionSourceGUIDs, that.actionSourceGUIDs) &&
+                Objects.equals(actionCauseGUIDs, that.actionCauseGUIDs) &&
+                Objects.equals(actionTargets, that.actionTargets) &&
+                Objects.equals(receivedGuards, that.receivedGuards) &&
+                Objects.equals(startDate, that.startDate) &&
+                Objects.equals(requestType, that.requestType) &&
+                Objects.equals(requestParameters, that.requestParameters) &&
+                Objects.equals(processName, that.processName) &&
+                Objects.equals(requestSourceName, that.requestSourceName) &&
+                Objects.equals(originatorServiceName, that.originatorServiceName) &&
+                Objects.equals(originatorEngineName, that.originatorEngineName) &&
+                Objects.equals(iscQualifiedName, that.iscQualifiedName);
+    }
+
+    /**
+     * Return hash code for this object
+     *
+     * @return int hash code
+     */
+    @Override
+    public int hashCode()
+    {
+        return Objects.hash(super.hashCode(), qualifiedName, domainIdentifier, displayName, description,
+                            actionSourceGUIDs, actionCauseGUIDs, actionTargets, receivedGuards, startDate,
+                            requestType, requestParameters, processName, requestSourceName, originatorServiceName,
+                            originatorEngineName, iscQualifiedName);
+    }
+}

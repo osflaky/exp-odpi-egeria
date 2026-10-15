@@ -1,0 +1,574 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Copyright Contributors to the ODPi Egeria project. */
+
+package org.odpi.openmetadata.adapters.connectors.integration.basicfiles;
+
+import org.odpi.openmetadata.adapters.connectors.datastore.basicfile.BasicFileStoreProvider;
+import org.odpi.openmetadata.frameworks.opengovernance.connectorcontext.StewardshipAction;
+import org.odpi.openmetadata.frameworks.openmetadata.connectorcontext.*;
+import org.odpi.openmetadata.frameworks.openmetadata.enums.ContentStatus;
+import org.odpi.openmetadata.frameworks.openmetadata.ffdc.InvalidParameterException;
+import org.odpi.openmetadata.frameworks.openmetadata.ffdc.PropertyServerException;
+import org.odpi.openmetadata.frameworks.openmetadata.ffdc.UserNotAuthorizedException;
+import org.odpi.openmetadata.frameworks.openmetadata.metadataelements.OpenMetadataRootElement;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.ClassificationProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.assets.DataAssetEncodingProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.connections.ConnectionProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.connections.EndpointProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.softwarecapabilities.FileSystemProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.search.ElementProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.controls.PlaceholderProperty;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.NewActionTarget;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.assets.filesandfolders.DataFileProperties;
+import org.odpi.openmetadata.adapters.connectors.integration.basicfiles.ffdc.BasicFilesIntegrationConnectorsAuditCode;
+import org.odpi.openmetadata.frameworks.auditlog.AuditLog;
+import org.odpi.openmetadata.frameworks.connectors.ffdc.ConnectorCheckedException;
+import org.odpi.openmetadata.frameworks.openmetadata.fileclassifier.FileClassification;
+import org.odpi.openmetadata.frameworks.openmetadata.fileclassifier.FileClassifier;
+import org.odpi.openmetadata.frameworks.openmetadata.enums.DeleteMethod;
+import org.odpi.openmetadata.frameworks.openmetadata.search.NewElementOptions;
+import org.odpi.openmetadata.frameworks.openmetadata.types.OpenMetadataProperty;
+import org.odpi.openmetadata.frameworks.openmetadata.types.OpenMetadataType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.File;
+import java.util.*;
+
+/**
+ * Manages the cataloguing of data files for a specific catalog target.
+ */
+public class DataFilesMonitorForTarget extends DirectoryToMonitor
+{
+    private static final Logger log = LoggerFactory.getLogger(DataFilesMonitorIntegrationConnector.class);
+
+    /**
+     * Construct the monitor for a specific catalog target.
+     *
+     * @param connectorName name of associated connector
+     * @param sourceName source of the pathname
+     * @param pathName pathname to the directory
+     * @param catalogTargetGUID optional catalog target GUID
+     * @param dataFolderGUID optional data folder GUID
+     * @param deleteMethod should the connector use delete or archive?
+     * @param templates names and GUIDs of templates
+     * @param fileSystemProperties properties of the file system
+     * @param configurationProperties parameters to further modify the behaviour of the connector
+     * @param integrationConnector associated connector
+     * @param auditLog logging destination
+     */
+    public DataFilesMonitorForTarget  (String                                    connectorName,
+                                       String                                    sourceName,
+                                       String                                    pathName,
+                                       String                                    catalogTargetGUID,
+                                       String                                    dataFolderGUID,
+                                       DeleteMethod                              deleteMethod,
+                                       Map<String,String>                        templates,
+                                       FileSystemProperties                      fileSystemProperties,
+                                       Map<String, Object>                       configurationProperties,
+                                       BasicFilesMonitorIntegrationConnectorBase integrationConnector,
+                                       AuditLog                                  auditLog)
+    {
+        super(connectorName,
+              sourceName,
+              pathName,
+              catalogTargetGUID,
+              dataFolderGUID,
+              deleteMethod,
+              templates,
+              fileSystemProperties,
+              configurationProperties,
+              integrationConnector,
+              auditLog);
+    }
+
+
+
+    /**
+     * Requests that the connector does a comparison of the metadata in the third party technology and open metadata repositories.
+     * Refresh is called when the integration connector first starts and then at intervals defined in the connector's configuration
+     * as well as any external REST API calls to explicitly refresh the connector.
+     * <br>
+     * This method performs two sweeps.  It first retrieves the files in the directory and validates that are in the
+     * catalog - adding or updating them if necessary.  The second sweep is to ensure that all the assets catalogued
+     * in this directory actually exist on the file system.
+     */
+    @Override
+    public void refresh()
+    {
+        final String methodName = "refresh";
+
+        catalogDirectory(directoryFile, methodName);
+    }
+
+
+    /**
+     * File created Event.
+     *
+     * @param file The file that was created
+     */
+    @Override
+    public void onFileCreate(File file)
+    {
+        final String methodName = "onFileCreate";
+
+        log.debug("File created: " + file.getName());
+        this.catalogFile(file, methodName);
+    }
+
+
+    @Override
+    public void onFileDelete(File file)
+    {
+        final String methodName = "onFileDelete";
+
+        log.debug("File deleted: " + file.getName());
+        integrationConnector.deleteFileInCatalog(file,  methodName);
+    }
+
+
+    /**
+     * File changed Event.
+     *
+     * @param file The file that changed
+     */
+    @Override
+    public void onFileChange(File file)
+    {
+        final String methodName = "onFileChange";
+
+        log.debug("File changed: " + file.getName());
+        this.catalogFile(file, methodName);
+    }
+
+
+    /**
+     * Directory created Event.
+     *
+     * @param directory The directory that was created
+     */
+    @Override
+    public void onDirectoryCreate(File directory)
+    {
+    }
+
+
+    /**
+     * Directory changed Event.
+     *
+     * @param directory The directory that changed
+     */
+    @Override
+    public void onDirectoryChange(File directory)
+    {
+    }
+
+
+    /**
+     * Directory deleted Event.
+     *
+     * @param directory The directory that was deleted
+     */
+    @Override
+    public void onDirectoryDelete(File directory)
+    {
+    }
+
+
+
+    /**
+     * Recursively catalog the files in a directory - and its subdirectories.
+     *
+     * @param directory starting directory
+     * @param methodName calling method
+     */
+    private synchronized void catalogDirectory(File   directory,
+                                               String methodName)
+    {
+        final String localMethodName = "catalogDirectory";
+
+        File[] filesArray = directory.listFiles();
+
+        if (filesArray != null)
+        {
+            for (File file : filesArray)
+            {
+                if (integrationConnector.isActive())
+                {
+                    if (file != null)
+                    {
+                        if (file.isDirectory())
+                        {
+                            this.catalogDirectory(file, localMethodName);
+                        }
+                        else
+                        {
+                            this.catalogFile(file, methodName);
+                        }
+                    }
+                }
+                else
+                {
+                    break;
+                }
+            }
+        }
+    }
+
+
+    /**
+     * Create a catalog entry for a specific file.
+     *
+     * @param file Java File accessor
+     * @param methodName calling method
+     * @return unique identifier of the catalogued element
+     */
+    protected synchronized String catalogFile(File   file,
+                                              String methodName)
+    {
+        if (integrationConnector.isActive())
+        {
+            try
+            {
+                AssetClient fileClient = integrationConnector.integrationContext.getAssetClient(OpenMetadataType.DATA_FILE.typeName);
+
+                FileClassifier fileClassifier = integrationConnector.integrationContext.getFileClassifier(fileSystemName,
+                                                                                                          canonicalMountPoint,
+                                                                                                          localMountPoint);
+
+                FileClassification fileClassification = fileClassifier.classifyFile(file);
+
+                OpenMetadataRootElement cataloguedElement = fileClient.getAssetByUniqueName(fileClassification.getQualifiedName(),
+                                                                                            OpenMetadataProperty.QUALIFIED_NAME.name,
+                                                                                            fileClient.getGetOptions());
+
+                if (cataloguedElement == null)
+                {
+                    String fileTemplateGUID = templates.get(fileClassification.getDeployedImplementationType());
+                    if (fileTemplateGUID == null)
+                    {
+                        if ((! catalogClassifiedFiles) ||
+                                (fileClassification.getFileType() != null) ||
+                                (fileClassification.getAssetTypeName() != null) ||
+                                (fileClassification.getDeployedImplementationType() != null))
+                        {
+                            /*
+                             * Create the file ...
+                             */
+                            DataFileProperties properties = new DataFileProperties();
+
+                            properties.setQualifiedName(fileClassification.getQualifiedName());
+                            properties.setResourceName(fileClassification.getResourceName());
+                            properties.setTypeName(fileClassification.getAssetTypeName());
+                            properties.setContentStatus(ContentStatus.ACTIVE);
+                            properties.setDeployedImplementationType(fileClassification.getDeployedImplementationType());
+                            properties.setPathName(fileClassification.getCanonicalPathName());
+                            properties.setDisplayName(fileClassification.getFileName());
+                            properties.setFileName(fileClassification.getFileName());
+                            properties.setFileType(fileClassification.getFileType());
+                            properties.setFileExtension(fileClassification.getFileExtension());
+                            properties.setStoreUpdateTime(fileClassification.getLastModifiedTime());
+                            properties.setStoreCreateTime(fileClassification.getCreationTime());
+
+                            DataAssetEncodingProperties encodingProperties = new DataAssetEncodingProperties();
+
+                            encodingProperties.setEncodingType(fileClassification.getEncoding());
+
+                            Map<String, String> additionalProperties = new HashMap<>();
+
+                            additionalProperties.put("canRead", Boolean.toString(fileClassification.isCanRead()));
+                            additionalProperties.put("canWrite", Boolean.toString(fileClassification.isCanWrite()));
+                            additionalProperties.put("canExecute", Boolean.toString(fileClassification.isCanExecute()));
+                            additionalProperties.put("isSymLink", Boolean.toString(fileClassification.isSymLink()));
+                            additionalProperties.put("isHidden", Boolean.toString(fileClassification.isHidden()));
+
+                            properties.setAdditionalProperties(additionalProperties);
+
+                            String guid = this.addDataFileToCatalog(fileClassification.getAssetTypeName(),
+                                                                    fileClassification.getFileAddress(),
+                                                                    properties,
+                                                                    encodingProperties,
+                                                                    new BasicFileStoreProvider().getConnectorType().getGUID());
+
+                            if (guid != null)
+                            {
+                                auditLog.logMessage(methodName,
+                                                    BasicFilesIntegrationConnectorsAuditCode.DATA_FILE_CREATED.getMessageDefinition(connectorName,
+                                                                                                                                    properties.getPathName(),
+                                                                                                                                    guid));
+                            }
+
+                            return guid;
+                        }
+                    }
+                    else
+                    {
+                        Map<String, String> placeholderProperties = new HashMap<>();
+
+                        placeholderProperties.put(PlaceholderProperty.DEPLOYED_IMPLEMENTATION_TYPE.getName(), fileClassification.getDeployedImplementationType());
+                        placeholderProperties.put(PlaceholderProperty.FILE_SYSTEM_NAME.getName(), fileClassification.getFileSystemName());
+                        placeholderProperties.put(PlaceholderProperty.FILE_PATH_NAME.getName(), fileClassification.getCanonicalPathName());
+                        placeholderProperties.put(PlaceholderProperty.FILE_ADDRESS.getName(), fileClassification.getFileAddress());
+                        placeholderProperties.put(PlaceholderProperty.FILE_TYPE.getName(), fileClassification.getFileType());
+                        placeholderProperties.put(PlaceholderProperty.FILE_EXTENSION.getName(), fileClassification.getFileExtension());
+                        placeholderProperties.put(PlaceholderProperty.FILE_NAME.getName(), fileClassification.getFileName());
+                        placeholderProperties.put(PlaceholderProperty.FILE_ENCODING.getName(), fileClassification.getEncoding());
+                        if (fileClassification.getCreationTime() != null)
+                        {
+                            placeholderProperties.put(PlaceholderProperty.CREATION_DATE.getName(), fileClassification.getCreationTime().toString());
+                            placeholderProperties.put(PlaceholderProperty.RECEIVED_DATE.getName(), fileClassification.getCreationTime().toString());
+                        }
+                        else
+                        {
+                            placeholderProperties.put(PlaceholderProperty.CREATION_DATE.getName(), "");
+                            placeholderProperties.put(PlaceholderProperty.RECEIVED_DATE.getName(), "");
+                        }
+                        if (fileClassification.getLastModifiedTime() != null)
+                        {
+                            placeholderProperties.put(PlaceholderProperty.LAST_UPDATE_DATE.getName(), fileClassification.getLastModifiedTime().toString());
+                        }
+                        else
+                        {
+                            placeholderProperties.put(PlaceholderProperty.LAST_UPDATE_DATE.getName(), "");
+                        }
+                        if (fileClassification.getLastAccessedTime() != null)
+                        {
+                            placeholderProperties.put(PlaceholderProperty.LAST_ACCESSED_DATE.getName(), fileClassification.getLastAccessedTime().toString());
+                        }
+                        else
+                        {
+                            placeholderProperties.put(PlaceholderProperty.LAST_ACCESSED_DATE.getName(), "");
+                        }
+                        placeholderProperties.put(PlaceholderProperty.VERSION_IDENTIFIER.getName(), null);
+                        placeholderProperties.put(PlaceholderProperty.DESCRIPTION.getName(), null);
+
+                        String newFileGUID = this.addDataFileViaTemplate(fileClassification.getAssetTypeName(),
+                                                                         fileTemplateGUID,
+                                                                         null,
+                                                                         placeholderProperties);
+
+                        if (newFileGUID != null)
+                        {
+                            auditLog.logMessage(methodName,
+                                                BasicFilesIntegrationConnectorsAuditCode.DATA_FILE_CREATED_FROM_TEMPLATE.getMessageDefinition(
+                                                        sourceName,
+                                                        fileClassification.getCanonicalPathName(),
+                                                        newFileGUID,
+                                                        fileClassification.getDeployedImplementationType(),
+                                                        fileTemplateGUID));
+
+
+                            if (newFileProcessName != null)
+                            {
+                                StewardshipAction stewardshipAction = integrationConnector.integrationContext.getStewardshipAction();
+
+                                Map<String, String> requestParameters = new HashMap<>();
+
+                                if (configurationProperties != null)
+                                {
+                                    for (String configurationProperty : configurationProperties.keySet())
+                                    {
+                                        if (configurationProperties.get(configurationProperty) != null)
+                                        {
+                                            requestParameters.put(configurationProperty, configurationProperties.get(configurationProperty).toString());
+                                        }
+                                    }
+                                }
+
+                                List<NewActionTarget> actionTargets = new ArrayList<>();
+
+                                NewActionTarget actionTarget = new NewActionTarget();
+
+                                actionTarget.setActionTargetGUID(newFileGUID);
+                                actionTarget.setActionTargetName("sourceFile");
+                                actionTargets.add(actionTarget);
+
+                                stewardshipAction.initiateGovernanceActionProcess(newFileProcessName,
+                                                                                  null,
+                                                                                  null,
+                                                                                  actionTargets,
+                                                                                  null,
+                                                                                  requestParameters,
+                                                                                  connectorName,
+                                                                                  null,
+                                                                                  null);
+                            }
+                        }
+
+                        return newFileGUID;
+                    }
+                }
+                else if ((cataloguedElement.getProperties() instanceof DataFileProperties dataFileProperties) && (dataFileProperties.getPathName() != null))
+                {
+                    DataFileProperties properties = new DataFileProperties();
+
+                    Date fileLastModifiedDate = new Date(file.lastModified());
+
+                    if ((properties.getStoreUpdateTime() == null) || (fileLastModifiedDate.after(properties.getStoreUpdateTime())))
+                    {
+                        properties.setStoreUpdateTime(fileLastModifiedDate);
+
+                        if (fileClient.updateAsset(cataloguedElement.getElementHeader().getGUID(), fileClient.getUpdateOptions(true), properties))
+                        {
+                            auditLog.logMessage(methodName,
+                                                BasicFilesIntegrationConnectorsAuditCode.DATA_FILE_UPDATED.getMessageDefinition(connectorName,
+                                                                                                                                dataFileProperties.getPathName(),
+                                                                                                                                cataloguedElement.getElementHeader().getGUID()));
+                        }
+                    }
+
+                    return cataloguedElement.getElementHeader().getGUID();
+                }
+                else
+                {
+                    auditLog.logMessage(methodName,
+                                        BasicFilesIntegrationConnectorsAuditCode.BAD_FILE_ELEMENT.getMessageDefinition(connectorName,
+                                                                                                                       cataloguedElement.toString()));
+                }
+            }
+            catch (Exception error)
+            {
+                if (auditLog != null)
+                {
+                    auditLog.logException(methodName,
+                                          BasicFilesIntegrationConnectorsAuditCode.UNEXPECTED_EXC_DATA_FILE_UPDATE.getMessageDefinition(
+                                                  error.getClass().getName(),
+                                                  connectorName,
+                                                  file.getAbsolutePath(),
+                                                  error.getMessage()),
+                                          error);
+
+                }
+            }
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Return the unique identifier of a new metadata element describing the file.
+     *
+     * @param typeName subtype name for the file asset
+     * @param fileAddress local file path name
+     * @param properties basic properties to use
+     * @param encodingProperties properties for DataAssetEncoding classification
+     * @param connectorTypeGUID unique identifier for the connector type
+     * @return unique identifier (guid)
+     * @throws InvalidParameterException invalid parameter
+     * @throws PropertyServerException unable to communicate with the repository
+     * @throws UserNotAuthorizedException access problem for userId
+     */
+    protected String addDataFileToCatalog(String                      typeName,
+                                          String                      fileAddress,
+                                          DataFileProperties          properties,
+                                          DataAssetEncodingProperties encodingProperties,
+                                          String                      connectorTypeGUID) throws InvalidParameterException,
+                                                                                                 PropertyServerException,
+                                                                                                 UserNotAuthorizedException
+    {
+        AssetClient fileClient = integrationConnector.integrationContext.getAssetClient(OpenMetadataType.DATA_FILE.typeName);
+
+        Map<String, ClassificationProperties> initialClassifications = null;
+
+        if (encodingProperties != null)
+        {
+            initialClassifications = new HashMap<>();
+
+            initialClassifications.put(OpenMetadataType.DATA_ASSET_ENCODING_CLASSIFICATION.typeName,
+                                       encodingProperties);
+        }
+
+        NewElementOptions newElementOptions = new NewElementOptions(fileClient.getMetadataSourceOptions());
+
+        newElementOptions.setIsOwnAnchor(true);
+
+        properties.setTypeName(typeName);
+
+        String fileAssetGUID = fileClient.createAsset(newElementOptions,
+                                                      initialClassifications,
+                                                      properties,
+                                                      null);
+
+        if ((fileAssetGUID != null) && (connectorTypeGUID != null))
+        {
+            ConnectionClient connectionClient = integrationConnector.integrationContext.getConnectionClient();
+
+            ConnectionProperties connectionProperties = new ConnectionProperties();
+
+            NewElementOptions connectionOptions = new NewElementOptions(connectionClient.getMetadataSourceOptions());
+
+            connectionOptions.setIsOwnAnchor(false);
+            connectionOptions.setAnchorGUID(fileAssetGUID);
+            connectionOptions.setParentAtEnd1(true);
+            connectionOptions.setParentGUID(fileAssetGUID);
+            connectionOptions.setParentRelationshipTypeName(OpenMetadataType.RESOURCE_CONNECTION_RELATIONSHIP.typeName);
+
+            connectionProperties.setQualifiedName(properties.getQualifiedName() + "_connection");
+
+            String connectionGUID = connectionClient.createConnection(connectionOptions, null, connectionProperties, null);
+
+            connectionClient.linkConnectionConnectorType(connectionGUID, connectorTypeGUID, connectionClient.getMakeAnchorOptions(false), null);
+
+            EndpointClient endpointClient = integrationConnector.integrationContext.getEndpointClient();
+
+            EndpointProperties endpointProperties = new EndpointProperties();
+            endpointProperties.setQualifiedName(properties.getQualifiedName() + "_endpoint");
+            endpointProperties.setNetworkAddress(fileAddress);
+
+            NewElementOptions endpointOptions = new NewElementOptions(endpointClient.getMetadataSourceOptions());
+
+            endpointOptions.setIsOwnAnchor(false);
+            endpointOptions.setAnchorGUID(fileAssetGUID);
+            endpointOptions.setParentAtEnd1(true);
+            endpointOptions.setParentGUID(connectionGUID);
+            endpointOptions.setParentRelationshipTypeName(OpenMetadataType.CONNECT_TO_ENDPOINT_RELATIONSHIP.typeName);
+
+            endpointClient.createEndpoint(endpointOptions, null, endpointProperties, null);
+
+            return fileAssetGUID;
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Return the unique identifier of a new metadata element describing the file created using the supplied template.
+     *
+     * @param assetTypeName type of asset to create
+     * @param fileTemplateGUID template to use
+     * @param replacementProperties properties from the template to replace
+     * @param placeholderProperties values to use to replace placeholders in the template
+     * @return unique identifier (guid)
+     * @throws ConnectorCheckedException connector has been shutdown
+     * @throws InvalidParameterException invalid parameter
+     * @throws PropertyServerException unable to communicate with the repository
+     * @throws UserNotAuthorizedException access problem for userId
+     */
+    protected String addDataFileViaTemplate(String              assetTypeName,
+                                            String              fileTemplateGUID,
+                                            ElementProperties   replacementProperties,
+                                            Map<String, String> placeholderProperties) throws ConnectorCheckedException,
+                                                                                              InvalidParameterException,
+                                                                                              PropertyServerException,
+                                                                                              UserNotAuthorizedException
+    {
+        OpenMetadataStore openMetadataStore = integrationConnector.integrationContext.getOpenMetadataStore();
+
+        return openMetadataStore.getMetadataElementFromTemplate(assetTypeName,
+                                                                 null,
+                                                                 true,
+                                                                 null,
+                                                                 null,
+                                                                 null,
+                                                                 fileTemplateGUID,
+                                                                 replacementProperties,
+                                                                 null,
+                                                                 placeholderProperties,
+                                                                 null,
+                                                                 null,
+                                                                 null,
+                                                                 false);
+    }
+}

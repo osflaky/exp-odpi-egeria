@@ -1,0 +1,178 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Copyright Contributors to the ODPi Egeria project. */
+package org.odpi.openmetadata.frameworks.openmetadata.refdata;
+
+import org.odpi.openmetadata.frameworks.openmetadata.types.OpenMetadataProperty;
+
+import static org.odpi.openmetadata.frameworks.openmetadata.mapper.OpenMetadataValidValues.constructValidValueQualifiedName;
+
+/**
+ * SolutionComponentType describes suggested values to use in the solutionComponentType property found in the
+ * SolutionComponent entity.
+ */
+public enum SolutionComponentType
+{
+    /**
+     * An automated action that is implemented by some form of software.  It is designed to perform a single task.
+     */
+    AUTOMATED_ACTION("Automated Action",
+                      "An automated action that is implemented by some form of software.  It is designed to perform a single task."),
+
+    /**
+     * A software component that runs as a background task monitoring and taking actions.  It will perform many tasks while it is running - but in a narrow scope.
+     */
+    LONG_RUNNING_DAEMON("Long Running Daemon",
+                     "A software component that runs as a background task monitoring and taking actions.  It will perform many tasks while it is running - but in a narrow scope."),
+
+    /**
+     * A software component that runs multiple choreographed steps.
+     */
+    MULTI_STEP_PROCESS("Multi-Step Process",
+                        "A software component that runs multiple choreographed steps."),
+
+    /**
+     * A process that is implemented by a third party and is opaque to the solution.
+     */
+    THIRD_PARTY_PROCESS("Third Party Process",
+                      "A process that is implemented by a third party and is opaque to the solution."),
+
+
+    /**
+     * A set of tasks that need to be preformed by individuals or teams of people.
+     */
+    MANUAL_PROCESS("Manual Process",
+                   "A set of tasks that need to be preformed by individuals or teams of people."),
+
+
+    /**
+     * The storage of data for later retrieval by automated processes.
+     */
+    DATA_STORAGE("Data Storage",
+                 "The storage of data for later retrieval by automated processes."),
+
+
+    /**
+     * The storage of data for later retrieval by automated processes.
+     */
+    SOFTWARE_SERVICE("Software Service",
+                     "Provides remote access to digital resources."),
+
+
+    /**
+     * Provides a set of locally callable functions.
+     */
+    SOFTWARE_LIBRARY("Software Library",
+                     "Provides a set of locally callable functions."),
+
+
+    /**
+     * Provides a guided interface for a user to locate function, issue commands and retrieve information.
+     */
+    USER_INTERFACE("User Interface",
+                     "Provides a guided interface for a user to locate function, issue commands and retrieve information."),
+
+
+    /**
+     * Provides a callable function that can be issued from a console/command line.
+     */
+    CONSOLE_COMMAND("Console Command",
+                   "Provides a callable function that can be issued from a console/command line."),
+
+
+    /**
+     * A distribution of data to a variety of automated processes.
+     */
+    DATA_DISTRIBUTION("Data Distribution",
+                      "A distribution of data to a variety of automated processes."),
+
+
+    /**
+     * The publishing of information (typically documents) to third parties.
+     */
+    DOCUMENT_PUBLISHING("Publishing",
+                        "The publishing of information (typically documents) to third parties."),
+
+
+    /**
+     * A trained model using analytical or AI techniques to generate insight from data.
+     */
+    INSIGHT_MODEL("Insight Model",
+                  "A trained model using analytical or AI techniques to generate insight from data."),
+
+
+    ;
+
+    /**
+     * Property value.
+     */
+    private final String solutionComponentType;
+
+
+    /**
+     * Property value description.
+     */
+    private final String description;
+
+
+    /**
+     * Constructor for individual enum value.
+     *
+     * @param solutionComponentType the property value to use in solutionComponentType
+     * @param description description of the property value
+     */
+    SolutionComponentType(String      solutionComponentType,
+                          String      description)
+    {
+        this.solutionComponentType = solutionComponentType;
+        this.description           = description;
+    }
+
+
+    /**
+     * Return the value of this property.
+     *
+     * @return string
+     */
+    public String getSolutionComponentType()
+    {
+        return solutionComponentType;
+    }
+
+
+    /**
+     * Return the description for this value.
+     *
+     * @return string
+     */
+    public String getDescription()
+    {
+        return description;
+    }
+
+
+
+    /**
+     * Return the qualified name for this resourceUse value.
+     *
+     * @return string
+     */
+    public String getQualifiedName()
+    {
+        return constructValidValueQualifiedName(null,
+                                                OpenMetadataProperty.SOLUTION_COMPONENT_TYPE.name,
+                                                null,
+                                                solutionComponentType);
+    }
+
+
+    /**
+     * Output of this enum class and main value.
+     *
+     * @return string showing enum value
+     */
+    @Override
+    public String toString()
+    {
+        return "SolutionComponentType{" + solutionComponentType + '}';
+    }
+}

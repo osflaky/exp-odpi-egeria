@@ -1,0 +1,107 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright Contributors to the ODPi Egeria project.
+
+# Code ownership for Egeria - see https://help.github.com/articles/about-codeowners/
+# Note that the LAST matching pattern will be effective so please more generic paths towards the top
+
+# Top level
+
+developer-resources/ @mandy-chessell
+
+open-metadata-conformance-suite/ @mandy-chessell @cmgrote
+
+open-metadata-distribution/ @mandy-chessell
+
+# Implementation
+
+open-metadata-implementation/ @mandy-chessell
+
+open-metadata-implementation/access-services/ @mandy-chessell
+open-metadata-implementation/access-services/asset-consumer/ @mandy-chessell
+open-metadata-implementation/access-services/asset-manager/ @mandy-chessell
+open-metadata-implementation/access-services/asset-owner/ @mandy-chessell
+open-metadata-implementation/access-services/community-profile/ @mandy-chessell
+open-metadata-implementation/access-services/data-manager/ @mandy-chessell
+open-metadata-implementation/access-services/design-model/ @mandy-chessell
+open-metadata-implementation/access-services/digital-architecture/ @mandy-chessell
+open-metadata-implementation/access-services/digital-service/ @mandy-chessell
+open-metadata-implementation/access-services/governance-engine/ @mandy-chessell
+open-metadata-implementation/access-services/governance-program/ @mandy-chessell
+open-metadata-implementation/access-services/it-infrastructure/ @mandy-chessell
+open-metadata-implementation/access-services/project-management/ @mandy-chessell
+open-metadata-implementation/access-services/security-manager/ @mandy-chessell
+open-metadata-implementation/access-services/software-developer/ @mandy-chessell
+open-metadata-implementation/access-services/stewardship-action/ @mandy-chessell
+open-metadata-implementation/adapters/ @mandy-chessell
+open-metadata-implementation/adapters/authentication-plugins/ @mandy-chessell
+open-metadata-implementation/adapters/open-connectors/ @mandy-chessell
+open-metadata-implementation/adapters/open-connectors/rest-client-connectors/spring-rest-client-connector/ @mandy-chessell
+open-metadata-implementation/adapters/open-connectors/repository-services-connectors/open-metadata-collection-store-connectors/graph-repository-connector/ @mandy-chessell
+open-metadata-implementation/admin-services/ @mandy-chessell
+open-metadata-implementation/common-services/ @mandy-chessell
+open-metadata-implementation/frameworks/ @mandy-chessell
+open-metadata-implementation/governance-servers/ @mandy-chessell
+open-metadata-implementation/governance-servers/data-engine-proxy-services/ @cmgrote @popa-raluca
+open-metadata-implementation/platform-services/ @mandy-chessell
+open-metadata-implementation/platform-chassis/ @mandy-chessell
+open-metadata-implementation/platform-chassis/platform-chassis-spring/ @bogdan-sava @lpalashevski
+open-metadata-implementation/user-interface/ui-chassis/ @bogdan-sava @marius-patrascu
+open-metadata-implementation/view-services/ @mandy-chessell
+
+# Resources
+
+open-metadata-resources/ @mandy-chessell
+open-metadata-resources/open-metadata-deployment/ @mandy-chessell
+open-metadata-resources/open-metadata-deployment/sample-data/ @cmgrote
+
+open-metadata-resources/open-metadata-samples/ @mandy-chessell
+open-metadata-resources/open-metadata-samples/postman-rest-samples/ @mandy-chessell
+open-metadata-resources/open-metadata-samples/access-services-samples/subject-area-client-samples/  @davidradl
+
+# Test
+
+open-metadata-test/ @mandy-chessell
+open-metadata-test/open-metadata-fvt/ @mandy-chessell
+open-metadata-test/open-metadata-fvt/access-services-fvt/ @mandy-chessell
+open-metadata-test/open-metadata-fvt/access-services-fvt/asset-consumer-fvt/ @mandy-chessell
+open-metadata-test/open-metadata-fvt/access-services-fvt/asset-manager-fvt/ @mandy-chessell
+open-metadata-test/open-metadata-fvt/access-services-fvt/data-engine-fvt/ @alexandra-bucur @lcpopa
+open-metadata-test/open-metadata-fvt/access-services-fvt/data-manager-fvt/ @mandy-chessell
+open-metadata-test/open-metadata-fvt/access-services-fvt/digital-architecture-fvt/ @mandy-chessell
+open-metadata-test/open-metadata-fvt/access-services-fvt/discovery-engine-fvt/ @mandy-chessell
+open-metadata-test/open-metadata-fvt/access-services-fvt/governance-server-fvt/ @mandy-chessell
+open-metadata-test/open-metadata-fvt/access-services-fvt/governance-program-fvt/ @mandy-chessell
+open-metadata-test/open-metadata-fvt/access-services-fvt/stewardship-action-fvt/ @mandy-chessell
+open-metadata-test/open-metadata-fvt/access-services-fvt/subject-area-fvt/ @davidradl
+open-metadata-test/open-metadata-fvt/view-services-fvt/ @davidradl
+open-metadata-test/open-metadata-fvt/view-services-fvt/subject-area-fvt/ @davidradl
+
+open-metadata-test/open-metadata-fvt/open-types-fvt/ @mandy-chessell
+
+# release notes
+release-notes/ @mandy-chessell
+
+
+# Gradle build
+*.gradle @mandy-chessell
+gradle* @mandy-chessell
+gradle/ @mandy-chessell
+
+# Security
+*.p12 @mandy-chessell
+
+# Tools / CICD etc
+.azure-pipelines/ @planetf1
+.dependabot/ @planetf1
+.github/ @planetf1
+.m2/ @planetf1
+.gitignore @mandy-chessell
+INFO.yaml @planetf1
+spotbugs* @planetf1
+CODEOWNERS @mandy-chessell
+SECURITY @mandy-chessell
+MAINTAINERS* @mandy-chessell
+CONTRIBUTOR* @mandy-chessell
+Egeria-Operations* @mandy-chessell
+THIRD_PARTY.md @mandy-chessell @planetf1
+CodeQualitySecurity* @lpalashevski @planetf1

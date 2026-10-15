@@ -1,0 +1,204 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Copyright Contributors to the ODPi Egeria project. */
+package org.odpi.openmetadata.viewservices.devopspipeline.server;
+
+
+import org.odpi.openmetadata.adminservices.configuration.registration.ViewServiceDescription;
+import org.odpi.openmetadata.commonservices.multitenant.OMVSServiceInstanceHandler;
+import org.odpi.openmetadata.frameworks.openmetadata.ffdc.InvalidParameterException;
+import org.odpi.openmetadata.frameworks.openmetadata.ffdc.PropertyServerException;
+import org.odpi.openmetadata.frameworks.openmetadata.ffdc.UserNotAuthorizedException;
+import org.odpi.openmetadata.frameworks.openmetadata.handlers.AssetHandler;
+import org.odpi.openmetadata.frameworks.openmetadata.handlers.NetworkHandler;
+import org.odpi.openmetadata.frameworks.openmetadata.handlers.OperatingPlatformHandler;
+import org.odpi.openmetadata.frameworks.openmetadata.handlers.SoftwareCapabilityHandler;
+import org.odpi.openmetadata.frameworks.openmetadata.handlers.SoftwareDevelopmentHandler;
+import org.odpi.openmetadata.frameworks.openmetadata.handlers.StorageVolumeHandler;
+
+
+
+/**
+ * DevopsPipelineInstanceHandler retrieves information from the instance map for the
+ * view service instances.  The instance map is thread-safe.  Instances are added
+ * and removed by the DevopsPipelineAdmin class.
+ */
+public class DevopsPipelineInstanceHandler extends OMVSServiceInstanceHandler
+{
+    /**
+     * Default constructor registers the view service
+     */
+    public DevopsPipelineInstanceHandler()
+    {
+        super(ViewServiceDescription.DEVOPS_PIPELINE.getViewServiceFullName());
+
+        DevopsPipelineRegistration.registerViewService();
+    }
+
+
+    /**
+     * This method returns an open metadata handler.
+     *
+     * @param serverName           name of the server that the request is for
+     * @param userId               local server userid
+     * @param serviceOperationName service operation - usually the top level rest call
+     * @return client
+     * @throws InvalidParameterException unknown server/service
+     * @throws UserNotAuthorizedException User not authorized to call this service
+     * @throws PropertyServerException internal error
+     */
+    public StorageVolumeHandler getStorageVolumeHandler(String userId,
+                                                        String serverName,
+                                                        String serviceOperationName) throws InvalidParameterException,
+                                                                                            PropertyServerException,
+                                                                                            UserNotAuthorizedException
+    {
+        DevopsPipelineInstance instance = (DevopsPipelineInstance) getServerServiceInstance(userId, serverName, serviceOperationName);
+
+        if (instance != null)
+        {
+            return instance.getStorageVolumeHandler();
+        }
+
+        return null;
+    }
+
+
+    /**
+     * This method returns an open metadata handler.
+     *
+     * @param serverName           name of the server that the request is for
+     * @param userId               local server userid
+     * @param serviceOperationName service operation - usually the top level rest call
+     * @return client
+     * @throws InvalidParameterException unknown server/service
+     * @throws UserNotAuthorizedException User not authorized to call this service
+     * @throws PropertyServerException internal error
+     */
+    public NetworkHandler getNetworkHandler(String userId,
+                                            String serverName,
+                                            String serviceOperationName) throws InvalidParameterException,
+                                                                                PropertyServerException,
+                                                                                UserNotAuthorizedException
+    {
+        DevopsPipelineInstance instance = (DevopsPipelineInstance) getServerServiceInstance(userId, serverName, serviceOperationName);
+
+        if (instance != null)
+        {
+            return instance.getNetworkHandler();
+        }
+
+        return null;
+    }
+
+
+    /**
+     * This method returns an open metadata handler.
+     *
+     * @param serverName           name of the server that the request is for
+     * @param userId               local server userid
+     * @param serviceOperationName service operation - usually the top level rest call
+     * @return client
+     * @throws InvalidParameterException unknown server/service
+     * @throws UserNotAuthorizedException User not authorized to call this service
+     * @throws PropertyServerException internal error
+     */
+    public AssetHandler getAssetHandler(String userId,
+                                        String serverName,
+                                        String serviceOperationName) throws InvalidParameterException,
+                                                                            PropertyServerException,
+                                                                            UserNotAuthorizedException
+    {
+        DevopsPipelineInstance instance = (DevopsPipelineInstance) getServerServiceInstance(userId, serverName, serviceOperationName);
+
+        if (instance != null)
+        {
+            return instance.getAssetHandler();
+        }
+
+        return null;
+    }
+
+
+    /**
+     * This method returns an open metadata handler.
+     *
+     * @param serverName           name of the server that the request is for
+     * @param userId               local server userid
+     * @param serviceOperationName service operation - usually the top level rest call
+     * @return client
+     * @throws InvalidParameterException unknown server/service
+     * @throws UserNotAuthorizedException User not authorized to call this service
+     * @throws PropertyServerException internal error
+     */
+    public OperatingPlatformHandler getOperatingPlatformHandler(String userId,
+                                                                String serverName,
+                                                                String serviceOperationName) throws InvalidParameterException,
+                                                                                                    PropertyServerException,
+                                                                                                    UserNotAuthorizedException
+    {
+        DevopsPipelineInstance instance = (DevopsPipelineInstance) getServerServiceInstance(userId, serverName, serviceOperationName);
+
+        if (instance != null)
+        {
+            return instance.getOperatingPlatformHandler();
+        }
+
+        return null;
+    }
+
+
+    /**
+     * This method returns an open metadata handler.
+     *
+     * @param serverName           name of the server that the request is for
+     * @param userId               local server userid
+     * @param serviceOperationName service operation - usually the top level rest call
+     * @return client
+     * @throws InvalidParameterException unknown server/service
+     * @throws UserNotAuthorizedException User not authorized to call this service
+     * @throws PropertyServerException internal error
+     */
+    public SoftwareCapabilityHandler getSoftwareCapabilityHandler(String userId,
+                                                                  String serverName,
+                                                                  String serviceOperationName) throws InvalidParameterException,
+                                                                                                      PropertyServerException,
+                                                                                                      UserNotAuthorizedException
+    {
+        DevopsPipelineInstance instance = (DevopsPipelineInstance) getServerServiceInstance(userId, serverName, serviceOperationName);
+
+        if (instance != null)
+        {
+            return instance.getSoftwareCapabilityHandler();
+        }
+
+        return null;
+    }
+
+    /**
+     * This method returns an open metadata handler.
+     *
+     * @param serverName           name of the server that the request is for
+     * @param userId               local server userid
+     * @param serviceOperationName service operation - usually the top level rest call
+     * @return client
+     * @throws InvalidParameterException unknown server/service
+     * @throws UserNotAuthorizedException User not authorized to call this service
+     * @throws PropertyServerException internal error
+     */
+    public SoftwareDevelopmentHandler getSoftwareDevelopmentHandler(String userId,
+                                                                    String serverName,
+                                                                    String serviceOperationName) throws InvalidParameterException,
+                                                                                                        PropertyServerException,
+                                                                                                        UserNotAuthorizedException
+    {
+        DevopsPipelineInstance instance = (DevopsPipelineInstance) getServerServiceInstance(userId, serverName, serviceOperationName);
+
+        if (instance != null)
+        {
+            return instance.getSoftwareDevelopmentHandler();
+        }
+
+        return null;
+    }
+
+}

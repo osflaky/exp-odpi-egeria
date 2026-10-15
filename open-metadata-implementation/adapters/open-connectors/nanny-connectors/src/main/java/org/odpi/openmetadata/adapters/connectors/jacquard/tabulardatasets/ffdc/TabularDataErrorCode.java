@@ -1,0 +1,221 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Copyright Contributors to the ODPi Egeria project. */
+package org.odpi.openmetadata.adapters.connectors.jacquard.tabulardatasets.ffdc;
+
+import org.odpi.openmetadata.frameworks.auditlog.messagesets.ExceptionMessageDefinition;
+import org.odpi.openmetadata.frameworks.auditlog.messagesets.ExceptionMessageSet;
+
+/**
+ * The TabularDataErrorCode is used to define first failure data capture (FFDC) for errors that occur when working with
+ * the Reference Data Connectors.  It is used in conjunction with both Checked and Runtime (unchecked) exceptions.
+ * The 5 fields in the enum are:
+ * <ul>
+ *     <li>HTTP Error Code - for translating between REST and JAVA - Typically the numbers used are:</li>
+ *     <li><ul>
+ *         <li>500 - internal error</li>
+ *         <li>400 - invalid parameters</li>
+ *         <li>404 - not found</li>
+ *         <li>409 - data conflict errors - eg item already defined</li>
+ *     </ul></li>
+ *     <li>Error Message Identifier - to uniquely identify the message</li>
+ *     <li>Error Message Text - includes placeholder to allow additional values to be captured</li>
+ *     <li>SystemAction - describes the result of the error</li>
+ *     <li>UserAction - describes how a consumer should correct the error</li>
+ * </ul>
+ */
+public enum TabularDataErrorCode implements ExceptionMessageSet
+{
+    /**
+     * REFERENCE-DATA-CONNECTORS-400-001 - Reference Data Connector {0} has been configured without the URL to the OMAG Server Platform
+     */
+    NULL_URL(400, "REFERENCE-DATA-CONNECTORS-400-001",
+                     "Reference Data Connector {0} has been configured without the URL to the OMAG Server Platform",
+                     "The connector cannot contact the OMAG Infrastructure.",
+                     "The Platform URL Root is configured in the connector's connection endpoint in the address property.  Typically it is the host name and port where the OMAG Server Platform is running.",
+                     "https://egeria-project.org/concepts/tabular-data-set-connector/"),
+
+    /**
+     * REFERENCE-DATA-CONNECTORS-400-002 - Reference Data Connector {0} has been configured without the name of the OMAG Server to call
+     */
+    NULL_SERVER_NAME(400, "REFERENCE-DATA-CONNECTORS-400-002",
+             "Reference Data Connector {0} has been configured without the name of the OMAG Server to call",
+             "The connector cannot contact the OMAG Server.",
+             "The server's name is configured in the connector's connection additionalProperties in the serverName property.",
+             "https://egeria-project.org/concepts/tabular-data-set-connector/"),
+
+    /**
+     * REFERENCE-DATA-CONNECTORS-400-004 - Reference Data Connector {0} has no data at record {1}.  The data set size is {2}
+     */
+    NULL_RECORD(400, "REFERENCE-DATA-CONNECTORS-400-004",
+                        "Reference Data Connector {0} has no data at record {1}.  The data set size is {2}",
+                        "The connector is not able to return data at the requested record number.",
+                        "Request data from the connector with record numbers from '0' to the 'data set size minus 1'.",
+                        "https://egeria-project.org/concepts/tabular-data-set-connector/"),
+
+    /**
+     * REFERENCE-DATA-CONNECTORS-500-001 - The {0} Reference Data Connector received an unexpected exception {1} during method {2}; the error message was: {3}
+     */
+    UNEXPECTED_EXCEPTION(500, "REFERENCE-DATA-CONNECTORS-500-001",
+                         "The {0} Reference Data Connector received an unexpected exception {1} during method {2}; the error message was: {3}",
+                         "The connector cannot continue with the request.",
+                         "Use the details from the error message to determine the cause of the error and retry the request once it is resolved.",
+                         "https://egeria-project.org/concepts/tabular-data-set-connector/"),
+
+    /**
+     * REFERENCE-DATA-CONNECTORS-500-003 - The {0} Reference Data Connector received an unexpected exception {1} during method {2}; the error message was: {3}
+     */
+    UNMAPPED_COLUMN(500, "REFERENCE-DATA-CONNECTORS-500-003",
+                    "The {0} Reference Data Connector cannot map column {1}",
+                    "The connector cannot continue to work with this element.",
+                    "Use the details from the element and any other related error messages to determine the cause of the error and retry the request once this is resolved.",
+                    "https://egeria-project.org/concepts/tabular-data-set-connector/"),
+
+    /**
+     * REFERENCE-DATA-CONNECTORS-500-004 - Product definition is null for connector {0} in method {1}
+     */
+    NULL_PRODUCT_DEFINITION(500, "REFERENCE-DATA-CONNECTORS-500-004",
+                    "Product definition is null for connector {0} in method {1}",
+                    "The connector cannot continue to work without the product definition.",
+                    "This is a timing issue.  The connector should set up a valid product definition either in its constructor or start() method.  The calls to retrieve the table name/description should occur after start().",
+                    "https://egeria-project.org/concepts/tabular-data-set-connector/"),
+
+    /**
+     * REFERENCE-DATA-CONNECTORS-400-005 - Connector {0} has been configured without the unique identifier of the digital product family it reads; it is supplied in the {1} configuration property
+     */
+    NULL_STARTING_ELEMENT(400, "REFERENCE-DATA-CONNECTORS-400-005",
+                          "Connector {0} has been configured without the unique identifier of the digital product family it reads; it is supplied in the {1} configuration property",
+                          "The connector cannot find the family whose products it is to present, so it cannot start.",
+                          "Add the unique identifier of the digital product family to the connection's configuration properties.  Jacquard sets this property when it builds the family's asset.",
+                          "https://egeria-project.org/concepts/tabular-data-set-connector/"),
+
+    /**
+     * REFERENCE-DATA-CONNECTORS-400-006 - Connector {0} has been configured to read element {1}, which is a {2} rather than a digital product family
+     */
+    NOT_A_PRODUCT_FAMILY(400, "REFERENCE-DATA-CONNECTORS-400-006",
+                         "Connector {0} has been configured to read element {1}, which is a {2} rather than a digital product family",
+                         "The connector only knows how to walk the members of a digital product family, so it cannot start.",
+                         "Correct the unique identifier in the connection's configuration properties so that it names a digital product family.",
+                         "https://egeria-project.org/concepts/tabular-data-set-connector/"),
+
+    /**
+     * REFERENCE-DATA-CONNECTORS-400-007 - Connector {0} has no tabular data set called {1} in digital product family {2}; the data sets it has are: {3}
+     */
+    UNKNOWN_TABLE_NAME(400, "REFERENCE-DATA-CONNECTORS-400-007",
+                       "Connector {0} has no tabular data set called {1} in digital product family {2}; the data sets it has are: {3}",
+                       "The connector cannot bring the requested data set into focus.",
+                       "Ask the connector for its table names and use one of those.  If the product was added to the family after the connector started, refresh the connector's cache.",
+                       "https://egeria-project.org/concepts/tabular-data-set-connector/"),
+
+    /**
+     * REFERENCE-DATA-CONNECTORS-400-008 - Connector {0} has been asked to read digital product family {1} without being told which of its tabular data sets to read
+     */
+    NO_TABLE_IN_FOCUS(400, "REFERENCE-DATA-CONNECTORS-400-008",
+                      "Connector {0} has been asked to read digital product family {1} without being told which of its tabular data sets to read",
+                      "A collection of data sets is read one data set at a time, and none has been chosen, so there is nothing to read.",
+                      "Call setTableName() with one of the names returned by getTableNames() before describing or reading records.",
+                      "https://egeria-project.org/concepts/tabular-data-set-connector/"),
+
+    ;
+
+    private final int    httpErrorCode;
+    private final String errorMessageId;
+    private final String errorMessage;
+    private final String systemAction;
+    private final String userAction;
+    private final String url;
+
+
+    /**
+     * Constructor for the message definitions that have no page to link to.
+     *
+     * @param httpErrorCode   error code to use over REST calls
+     * @param errorMessageId   unique id for the message
+     * @param errorMessage   text for the message
+     * @param systemAction   description of the action taken by the system when the error condition happened
+     * @param userAction   instructions for resolving the error
+     */
+    TabularDataErrorCode(int httpErrorCode, String errorMessageId, String errorMessage, String systemAction, String userAction)
+    {
+        this(httpErrorCode, errorMessageId, errorMessage, systemAction, userAction, null);
+    }
+
+
+    /**
+     * The constructor expects to be passed one of the enumeration rows defined above.
+     *
+     * @param httpErrorCode   error code to use over REST calls
+     * @param errorMessageId   unique id for the message
+     * @param errorMessage   text for the message
+     * @param systemAction   description of the action taken by the system when the error condition happened
+     * @param userAction   instructions for resolving the error
+     * @param url link to a page that describes the component or concept behind
+     *            this message - null if there is no suitable page
+     */
+    TabularDataErrorCode(int httpErrorCode, String errorMessageId, String errorMessage, String systemAction, String userAction, String url)
+    {
+        this.httpErrorCode = httpErrorCode;
+        this.errorMessageId = errorMessageId;
+        this.errorMessage = errorMessage;
+        this.systemAction = systemAction;
+        this.userAction = userAction;
+        this.url        = url;
+    }
+
+
+    /**
+     * Retrieve a message definition object for an exception.  This method is used when there are no message inserts.
+     *
+     * @return message definition object.
+     */
+    @Override
+    public ExceptionMessageDefinition getMessageDefinition()
+    {
+        return new ExceptionMessageDefinition(httpErrorCode,
+                                              errorMessageId,
+                                              errorMessage,
+                                              systemAction,
+                                              userAction,
+                                              url);
+    }
+
+
+    /**
+     * Retrieve a message definition object for an exception.  This method is used when there are values to be inserted into the message.
+     *
+     * @param params array of parameters (all strings).  They are inserted into the message according to the numbering in the message text.
+     * @return message definition object.
+     */
+    @Override
+    public ExceptionMessageDefinition getMessageDefinition(String... params)
+    {
+        ExceptionMessageDefinition messageDefinition = new ExceptionMessageDefinition(httpErrorCode,
+                                                                                      errorMessageId,
+                                                                                      errorMessage,
+                                                                                      systemAction,
+                                                                                      userAction,
+                                                                                      url);
+
+        messageDefinition.setMessageParameters(params);
+
+        return messageDefinition;
+    }
+
+
+    /**
+     * JSON-style toString
+     *
+     * @return string of property names and values for this enum
+     */
+    @Override
+    public String toString()
+    {
+        return "TabularDataErrorCode{" +
+                       "httpErrorCode=" + httpErrorCode +
+                       ", errorMessageId='" + errorMessageId + '\'' +
+                       ", errorMessage='" + errorMessage + '\'' +
+                       ", systemAction='" + systemAction + '\'' +
+                       ", userAction='" + userAction + '\'' +
+                       ", url='" + url + '\'' +
+                       '}';
+    }
+}

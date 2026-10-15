@@ -1,0 +1,263 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Copyright Contributors to the ODPi Egeria project. */
+package org.odpi.openmetadata.viewservices.actormanager.server;
+
+import org.odpi.openmetadata.adminservices.configuration.properties.ViewServiceConfig;
+import org.odpi.openmetadata.adminservices.configuration.registration.ViewServiceDescription;
+import org.odpi.openmetadata.commonservices.multitenant.OMVSServiceInstance;
+import org.odpi.openmetadata.commonservices.multitenant.ViewServiceClientMap;
+import org.odpi.openmetadata.frameworks.auditlog.AuditLog;
+import org.odpi.openmetadata.frameworks.openmetadata.ffdc.InvalidParameterException;
+import org.odpi.openmetadata.frameworks.openmetadata.ffdc.PropertyServerException;
+import org.odpi.openmetadata.frameworks.openmetadata.handlers.*;
+
+import java.util.List;
+
+/**
+ * ActorManagerInstance caches references to the objects it needs for a specific server.
+ * It is also responsible for registering itself in the instance map.
+ */
+
+public class ActorManagerInstance extends OMVSServiceInstance
+{
+    private static final ViewServiceDescription myDescription = ViewServiceDescription.ACTOR_MANAGER;
+
+    private final ViewServiceClientMap<ActorProfileHandler>         actorProfileHandlerMap;
+    private final ViewServiceClientMap<ContributionRecordHandler>   contributionRecordHandlerMap;
+    private final ViewServiceClientMap<ActorRoleHandler>            actorRoleHandlerMap;
+    private final ViewServiceClientMap<UserIdentityHandler>         userIdentityHandlerMap;
+    private final ViewServiceClientMap<ContactDetailsHandler>       contactDetailsHandlerMap;
+    private final ViewServiceClientMap<PerspectiveHandler>          perspectiveHandlerMap;
+    private final ViewServiceClientMap<SkillHandler>                skillHandlerMap;
+    private final ViewServiceClientMap<GovernanceDefinitionHandler> governanceDefinitionClientMap;
+
+
+    /**
+     * Set up the Actor Manager OMVS instance
+     *
+     * @param serverName name of this server
+     * @param auditLog logging destination
+     * @param localServerUserId userId used for server initiated actions
+     * @param maxPageSize maximum page size
+     * @param remoteServerName  remote server name
+     * @param remoteServerURL remote server URL
+     * @param activeViewServices list of view services active in this server
+     */
+    public ActorManagerInstance(String                  serverName,
+                                AuditLog                auditLog,
+                                String                  localServerUserId,
+                                int                     maxPageSize,
+                                String                  remoteServerName,
+                                String                  remoteServerURL,
+                                List<ViewServiceConfig> activeViewServices)
+    {
+        super(serverName,
+              myDescription.getViewServiceFullName(),
+              auditLog,
+              localServerUserId,
+              maxPageSize,
+              remoteServerName,
+              remoteServerURL);
+
+        this.actorProfileHandlerMap = new ViewServiceClientMap<>(ActorProfileHandler.class,
+                                                            serverName,
+                                                            auditLog,
+                                                            activeViewServices,
+                                                            myDescription.getViewServiceFullName(),
+                                                            myDescription.getViewServiceURLMarker(),
+                                                            maxPageSize);
+        this.contributionRecordHandlerMap = new ViewServiceClientMap<>(ContributionRecordHandler.class,
+                                                                       serverName,
+                                                                       auditLog,
+                                                                       activeViewServices,
+                                                                       myDescription.getViewServiceFullName(),
+                                                                       myDescription.getViewServiceURLMarker(),
+                                                                       maxPageSize);
+        this.actorRoleHandlerMap = new ViewServiceClientMap<>(ActorRoleHandler.class,
+                                                              serverName,
+                                                              auditLog,
+                                                              activeViewServices,
+                                                              myDescription.getViewServiceFullName(),
+                                                              myDescription.getViewServiceURLMarker(),
+                                                              maxPageSize);
+        this.userIdentityHandlerMap = new ViewServiceClientMap<>(UserIdentityHandler.class,
+                                                            serverName,
+                                                            auditLog,
+                                                            activeViewServices,
+                                                            myDescription.getViewServiceFullName(),
+                                                            myDescription.getViewServiceURLMarker(),
+                                                            maxPageSize);
+        this.contactDetailsHandlerMap = new ViewServiceClientMap<>(ContactDetailsHandler.class,
+                                                                 serverName,
+                                                                 auditLog,
+                                                                 activeViewServices,
+                                                                 myDescription.getViewServiceFullName(),
+                                                                 myDescription.getViewServiceURLMarker(),
+                                                                 maxPageSize);
+        this.perspectiveHandlerMap = new ViewServiceClientMap<>(PerspectiveHandler.class,
+                                                                serverName,
+                                                                auditLog,
+                                                                activeViewServices,
+                                                                myDescription.getViewServiceFullName(),
+                                                                myDescription.getViewServiceURLMarker(),
+                                                                maxPageSize);
+        this.skillHandlerMap = new ViewServiceClientMap<>(SkillHandler.class,
+                                                          serverName,
+                                                          auditLog,
+                                                          activeViewServices,
+                                                          myDescription.getViewServiceFullName(),
+                                                          myDescription.getViewServiceURLMarker(),
+                                                          maxPageSize);
+        this.governanceDefinitionClientMap = new ViewServiceClientMap<>(GovernanceDefinitionHandler.class,
+                                                                        serverName,
+                                                                        auditLog,
+                                                                        activeViewServices,
+                                                                        myDescription.getViewServiceFullName(),
+                                                                        myDescription.getViewServiceURLMarker(),
+                                                                        maxPageSize);
+    }
+
+
+    /**
+     * Return the client.  This client is from the Open Metadata Store services and is for maintaining
+     * actor profile artifacts.
+     *
+     * @param urlMarker calling view service
+     * @param methodName calling operation
+     * @return client
+     * @throws InvalidParameterException bad client initialization
+     * @throws PropertyServerException bad client handler class
+     */
+    public ActorProfileHandler getActorProfileHandler(String urlMarker,
+                                                      String methodName) throws InvalidParameterException,
+                                                                                PropertyServerException
+    {
+        return actorProfileHandlerMap.getClient(urlMarker, methodName);
+    }
+
+
+    /**
+     * Return the client.  This client is from the Open Metadata Store services and is for maintaining
+     * contribution record artifacts.
+     *
+     * @param urlMarker calling view service
+     * @param methodName calling operation
+     * @return client
+     * @throws InvalidParameterException bad client initialization
+     * @throws PropertyServerException bad client handler class
+     */
+    public ContributionRecordHandler getContributionRecordHandler(String urlMarker,
+                                                                  String methodName) throws InvalidParameterException,
+                                                                                            PropertyServerException
+    {
+        return contributionRecordHandlerMap.getClient(urlMarker, methodName);
+    }
+
+
+    /**
+     * Return the client.  This client is from the Open Metadata Store services and is for maintaining
+     * actor role artifacts.
+     *
+     * @param urlMarker calling view service
+     * @param methodName calling operation
+     * @return client
+     * @throws InvalidParameterException bad client initialization
+     * @throws PropertyServerException bad client handler class
+     */
+    public ActorRoleHandler getActorRoleHandler(String urlMarker,
+                                                String methodName) throws InvalidParameterException,
+                                                                          PropertyServerException
+    {
+        return actorRoleHandlerMap.getClient(urlMarker, methodName);
+    }
+
+
+    /**
+     * Return the client.  This client is from the Open Metadata Store services and is for maintaining
+     * actor role artifacts.
+     *
+     * @param urlMarker calling view service
+     * @param methodName calling operation
+     * @return client
+     * @throws InvalidParameterException bad client initialization
+     * @throws PropertyServerException bad client handler class
+     */
+    public ContactDetailsHandler getContactDetailsHandler(String urlMarker,
+                                                          String methodName) throws InvalidParameterException,
+                                                                                    PropertyServerException
+    {
+        return contactDetailsHandlerMap.getClient(urlMarker, methodName);
+    }
+
+
+    /**
+     * Return the client.  This client is from the Open Metadata Store services and is for maintaining
+     * perspective artifacts.
+     *
+     * @param urlMarker calling view service
+     * @param methodName calling operation
+     * @return client
+     * @throws InvalidParameterException bad client initialization
+     * @throws PropertyServerException bad client handler class
+     */
+    public PerspectiveHandler getPerspectiveHandler(String urlMarker,
+                                                      String methodName) throws InvalidParameterException,
+                                                                                PropertyServerException
+    {
+        return perspectiveHandlerMap.getClient(urlMarker, methodName);
+    }
+
+
+    /**
+     * Return the client.  This client is from the Open Metadata Store services and is for maintaining
+     * skill artifacts.
+     *
+     * @param urlMarker calling view service
+     * @param methodName calling operation
+     * @return client
+     * @throws InvalidParameterException bad client initialization
+     * @throws PropertyServerException bad client handler class
+     */
+    public SkillHandler getSkillHandler(String urlMarker,
+                                        String methodName) throws InvalidParameterException,
+                                                                  PropertyServerException
+    {
+        return skillHandlerMap.getClient(urlMarker, methodName);
+    }
+
+
+    /**
+     * Return the client.  This client is from the Open Metadata Store services and is for maintaining
+     * governance definition artifacts.
+     *
+     * @param urlMarker calling view service
+     * @param methodName calling operation
+     * @return client
+     * @throws InvalidParameterException bad client initialization
+     * @throws PropertyServerException bad client handler class
+     */
+    public UserIdentityHandler getUserIdentityHandler(String urlMarker,
+                                                      String methodName) throws InvalidParameterException,
+                                                                                PropertyServerException
+    {
+        return userIdentityHandlerMap.getClient(urlMarker, methodName);
+    }
+
+
+    /**
+     * Return the client.  This client is from the Open Metadata Store services and is for maintaining
+     * governance definition artifacts.
+     *
+     * @param urlMarker calling view service
+     * @param methodName calling operation
+     * @return client
+     * @throws InvalidParameterException bad client initialization
+     * @throws PropertyServerException bad client handler class
+     */
+    public GovernanceDefinitionHandler getGovernanceDefinitionHandler(String urlMarker,
+                                                                      String methodName) throws InvalidParameterException,
+                                                                                                PropertyServerException
+    {
+        return governanceDefinitionClientMap.getClient(urlMarker, methodName);
+    }
+}

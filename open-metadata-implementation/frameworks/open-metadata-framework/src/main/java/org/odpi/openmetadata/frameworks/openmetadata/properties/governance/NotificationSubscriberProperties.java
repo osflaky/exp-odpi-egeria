@@ -1,0 +1,212 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Copyright Contributors to the ODPi Egeria project. */
+package org.odpi.openmetadata.frameworks.openmetadata.properties.governance;
+
+import com.fasterxml.jackson.annotation.JsonAutoDetect;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import org.odpi.openmetadata.frameworks.openmetadata.enums.ActivityStatus;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.LabeledRelationshipProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.types.OpenMetadataType;
+
+import java.util.Date;
+import java.util.List;
+import java.util.Objects;
+
+import static com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility.NONE;
+import static com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility.PUBLIC_ONLY;
+
+/**
+ * NotificationSubscriberProperties describes the properties for the NotificationSubscriber relationship.
+ */
+@JsonAutoDetect(getterVisibility=PUBLIC_ONLY, setterVisibility=PUBLIC_ONLY, fieldVisibility=NONE)
+@JsonInclude(JsonInclude.Include.NON_NULL)
+@JsonIgnoreProperties(ignoreUnknown=true)
+public class NotificationSubscriberProperties extends LabeledRelationshipProperties
+{
+    private ActivityStatus activityStatus   = null;
+    private List<String>   zoneMembership   = null;
+    private String         iscQualifiedName = null;
+    private Date           lastNotification = null;
+
+
+    /**
+     * Default constructor
+     */
+    public NotificationSubscriberProperties()
+    {
+        super();
+        super.typeName = OpenMetadataType.NOTIFICATION_SUBSCRIBER_RELATIONSHIP.typeName;
+    }
+
+
+    /**
+     * Copy/clone constructor
+     *
+     * @param template object to copy
+     */
+    public NotificationSubscriberProperties(NotificationSubscriberProperties template)
+    {
+        super(template);
+
+        if (template != null)
+        {
+            this.activityStatus = template.getActivityStatus();
+            this.zoneMembership = template.getZoneMembership();
+            this.iscQualifiedName = template.getISCQualifiedName();
+            this.lastNotification = template.getLastNotification();
+        }
+    }
+
+
+
+    /**
+     * Return the current status of the subscriber.  Notifications will be passed to the
+     * subscriber while this relationship is in IN_PROGRESS status.
+     *
+     * @return status enum
+     */
+    public ActivityStatus getActivityStatus()
+    {
+        return activityStatus;
+    }
+
+
+    /**
+     * Set up the current status of the subscriber.  Notifications will be passed to the
+     * subscriber while this relationship is in IN_PROGRESS status.
+     *
+     * @param activityStatus enum
+     */
+    public void setActivityStatus(ActivityStatus activityStatus)
+    {
+        this.activityStatus = activityStatus;
+    }
+
+
+    /**
+     * Return the list of zone names
+     *
+     * @return string name
+     */
+    public List<String> getZoneMembership()
+    {
+        return zoneMembership;
+    }
+
+
+    /**
+     * Set up the list of zone names
+     *
+     * @param zoneMembership string name
+     */
+    public void setZoneMembership(List<String> zoneMembership)
+    {
+        this.zoneMembership = zoneMembership;
+    }
+
+
+    /**
+     * Return the qualified name of the information supply chain that this that originated this request (if any).
+     *
+     * @return string name
+     */
+    @JsonProperty("iscQualifiedName")
+    public String getISCQualifiedName()
+    {
+        return iscQualifiedName;
+    }
+
+
+    /**
+     * Set up the qualified name of the information supply chain that this that originated this request (if any).
+     *
+     * @param iscQualifiedName string name
+     */
+    @JsonProperty("iscQualifiedName")
+    public void setISCQualifiedName(String iscQualifiedName)
+    {
+        this.iscQualifiedName = iscQualifiedName;
+    }
+
+
+    /**
+     * Return the last notification time
+     *
+     * @return date
+     */
+    public Date getLastNotification()
+    {
+        return lastNotification;
+    }
+
+
+    /**
+     * Set up the last notification time
+     *
+     * @param lastNotification date
+     */
+    public void setLastNotification(Date lastNotification)
+    {
+        this.lastNotification = lastNotification;
+    }
+
+
+    /**
+     * JSON-style toString.
+     *
+     * @return list of properties and their values.
+     */
+    @Override
+    public String toString()
+    {
+        return "NotificationSubscriberProperties{" +
+                "activityStatus=" + activityStatus +
+                ", zoneMembership=" + zoneMembership +
+                ", iscQualifiedName='" + iscQualifiedName + '\'' +
+                ", lastNotification=" + lastNotification +
+                "} " + super.toString();
+    }
+
+
+    /**
+     * Compare the values of the supplied object with those stored in the current object.
+     *
+     * @param objectToCompare supplied object
+     * @return boolean result of comparison
+     */
+    @Override
+    public boolean equals(Object objectToCompare)
+    {
+        if (this == objectToCompare)
+        {
+            return true;
+        }
+        if (objectToCompare == null || getClass() != objectToCompare.getClass())
+        {
+            return false;
+        }
+        if (! super.equals(objectToCompare))
+        {
+            return false;
+        }
+        NotificationSubscriberProperties that = (NotificationSubscriberProperties) objectToCompare;
+        return  activityStatus == that.activityStatus &&
+                Objects.equals(zoneMembership, that.zoneMembership) &&
+                Objects.equals(iscQualifiedName, that.iscQualifiedName) &&
+                Objects.equals(lastNotification, that.lastNotification);
+    }
+
+
+    /**
+     * Return hash code based on properties.
+     *
+     * @return int
+     */
+    @Override
+    public int hashCode()
+    {
+        return Objects.hash(super.hashCode(), activityStatus, zoneMembership, iscQualifiedName, lastNotification);
+    }
+}

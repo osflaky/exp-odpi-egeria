@@ -1,0 +1,274 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Copyright Contributors to the ODPi Egeria project. */
+package org.odpi.openmetadata.repositoryservices.archiveutilities;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectReader;
+import com.fasterxml.jackson.databind.ObjectWriter;
+import org.apache.commons.io.FileUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.File;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
+
+/**
+ * OMRSArchiveGUIDMap is a utility to create a persisted list of GUIDs used by an archive builder.
+ * This helps the archive builder use the same GUIDs each time the archive is built.  GUIDs for
+ * new elements are created automatically.
+ */
+public class OMRSArchiveGUIDMap
+{
+    private static final Logger log = LoggerFactory.getLogger(OMRSArchiveGUIDMap.class);
+
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final ObjectWriter OBJECT_WRITER = OBJECT_MAPPER.writer();
+    private static final ObjectReader OBJECT_READER = OBJECT_MAPPER.reader();
+
+    private final String              guidMapFileName;
+    private       Map<String, String> idToGUIDMap;
+    private final Map<String, String> originalIdToGUIDMap;
+    private final Map<String, String> usedIdToGUIDMap = new HashMap<>();
+
+
+    /**
+     * Constructor for the GUIDMap.
+     *
+     * @param guidMapFileName name of the file name where the GUIDs are stashed.
+     */
+    public OMRSArchiveGUIDMap(String guidMapFileName)
+    {
+        this.guidMapFileName = guidMapFileName;
+
+        this.loadGUIDs();
+
+        this.originalIdToGUIDMap = new HashMap<>(idToGUIDMap);
+    }
+
+
+    /**
+     * Load up the saved GUIds into a new HashMap.
+     */
+    @SuppressWarnings("unchecked")
+    private void loadGUIDs()
+    {
+        File         idFile = new File(guidMapFileName);
+
+        try
+        {
+            log.debug("Retrieving Id to GUID Map");
+
+            String idFileContents = FileUtils.readFileToString(idFile, "UTF-8");
+
+            idToGUIDMap = OBJECT_READER.readValue(idFileContents, Map.class);
+        }
+        catch (Exception   error)
+        {
+            idToGUIDMap = new HashMap<>();
+        }
+
+        log.debug("Id to GUID Map contains: " + idToGUIDMap);
+    }
+
+
+    /**
+     * Fix the guid for a particular name.
+     *
+     * @param id identifier associated with the GUID
+     * @param guid fixed guid value
+     */
+    public  void setGUID(String  id, String  guid)
+    {
+        idToGUIDMap.put(id, guid);
+        usedIdToGUIDMap.put(id, guid);
+    }
+
+
+    /**
+     * Retrieve the guid for an element based on its id.
+     * If no GUID exists, a new one is created and returned
+     *
+     * @param id id of element
+     * @return guid mapped to id
+     */
+    public String  getGUID(String id)
+    {
+        String guid = idToGUIDMap.get(id);
+
+        if (guid == null)
+        {
+            guid = UUID.randomUUID().toString();
+        }
+
+        setGUID(id, guid);
+
+        return guid;
+    }
+
+
+    /**
+     * Retrieve the guid for an element based on its id.
+     *
+     * @param id id of element
+     * @return guid mapped to id
+     */
+    public String  queryGUID(String id)
+    {
+        String guid = idToGUIDMap.get(id);
+
+        if (guid != null)
+        {
+            usedIdToGUIDMap.put(id, guid);
+        }
+
+        return guid;
+    }
+
+    /**
+     * Record that a GUID has changed.
+     *
+     * @param originalGUID
+     * @param newGUID
+     */
+    record ChangedGUID(String originalGUID, String newGUID)
+    {
+    }
+
+    /**
+     * Save the map to a file
+     */
+    public void  saveGUIDs()
+    {
+        Map<String, ChangedGUID> changedGUIDMap = new HashMap<>();
+
+        if (! idToGUIDMap.equals(originalIdToGUIDMap))
+        {
+            System.out.println("New GUIDs in: " + guidMapFileName);
+
+            for (String id : idToGUIDMap.keySet())
+            {
+                if (! originalIdToGUIDMap.containsKey(id))
+                {
+                    System.out.println("New GUID: " + id + " = " + idToGUIDMap.get(id));
+                }
+                else if (! idToGUIDMap.get(id).equals(originalIdToGUIDMap.get(id)))
+                {
+                    changedGUIDMap.put(id, new ChangedGUID(originalIdToGUIDMap.get(id), idToGUIDMap.get(id)));
+                }
+            }
+
+            System.out.println("Deleted GUIDs from: " + guidMapFileName);
+
+            for (String id : originalIdToGUIDMap.keySet())
+            {
+                if (! idToGUIDMap.containsKey(id))
+                {
+                    System.out.println("Deleted GUID: " + id);
+                }
+            }
+        }
+        else
+        {
+            System.out.println("No changed GUIDs in: " + guidMapFileName);
+        }
+
+        if (! changedGUIDMap.isEmpty())
+        {
+            System.out.println("Changed GUIDs from: " + guidMapFileName);
+            for (ChangedGUID changedGUID : changedGUIDMap.values())
+            {
+                System.out.println("Changed GUID: " + changedGUID.originalGUID + " = " + changedGUID.newGUID);
+            }
+
+            System.exit(-1);
+        }
+
+        System.out.println("Writing to Id File: " + guidMapFileName);
+
+        File idFile = new File(guidMapFileName);
+
+        try
+        {
+            if (idToGUIDMap.isEmpty())
+            {
+                log.debug("Deleting id file because map is empty: " + guidMapFileName);
+
+                idFile.delete();
+            }
+            else
+            {
+                log.debug("Writing id file " + guidMapFileName);
+
+                String mapContents = OBJECT_WRITER.writeValueAsString(idToGUIDMap);
+
+                FileUtils.writeStringToFile(idFile, mapContents, (String)null,false);
+            }
+        }
+        catch (Exception  exc)
+        {
+            log.error("Unusable Map Store :(", exc);
+        }
+    }
+
+
+
+    /**
+     * Save the map to a file
+     */
+    public void  saveUsedGUIDs()
+    {
+        System.out.println("Writing to Id File: " + "Used" + guidMapFileName);
+
+        File         idFile = new File("Used" + guidMapFileName);
+
+        try
+        {
+            if (usedIdToGUIDMap.isEmpty())
+            {
+                log.debug("Deleting id file because map is empty: " + "Used" +  guidMapFileName);
+
+                idFile.delete();
+            }
+            else
+            {
+                log.debug("Writing id file " + "Used" + guidMapFileName);
+
+                String mapContents = OBJECT_WRITER.writeValueAsString(usedIdToGUIDMap);
+
+                FileUtils.writeStringToFile(idFile, mapContents, (String)null,false);
+            }
+        }
+        catch (Exception  exc)
+        {
+            log.error("Unusable Map Store :(", exc);
+        }
+    }
+
+    /**
+     * Return the size of the map.
+     *
+     * @return int (zero if the map is null)
+     */
+    public int getSize()
+    {
+        if (idToGUIDMap == null)
+        {
+            return 0;
+        }
+
+        return idToGUIDMap.size();
+    }
+
+
+    /**
+     * Return the size of the map.
+     *
+     * @return int (zero if the map is null)
+     */
+    public int getUsedSize()
+    {
+        return usedIdToGUIDMap.size();
+    }
+}

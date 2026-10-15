@@ -1,0 +1,2102 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Copyright Contributors to the ODPi Egeria project. */
+package org.odpi.openmetadata.frameworks.openmetadata.client;
+
+import org.odpi.openmetadata.frameworks.openmetadata.api.*;
+import org.odpi.openmetadata.frameworks.openmetadata.ffdc.*;
+import org.odpi.openmetadata.frameworks.openmetadata.search.ElementStatus;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.*;
+import org.odpi.openmetadata.frameworks.openmetadata.search.SequencingOrder;
+import org.odpi.openmetadata.frameworks.openmetadata.search.*;
+import org.odpi.openmetadata.frameworks.openmetadata.specificationproperties.SpecificationProperty;
+import org.odpi.openmetadata.frameworks.openmetadata.types.OpenMetadataProperty;
+import org.odpi.openmetadata.frameworks.openmetadata.types.OpenMetadataType;
+
+import java.util.*;
+
+/**
+ * OpenMetadataClient provides access to metadata elements stored in the metadata repositories.  It is implemented by a
+ * metadata repository provider. In Egeria, this class is implemented in the GAF Metadata Management running in the
+ * Metadata Access Server OMAG Server.
+ */
+public abstract class OpenMetadataClient implements OpenMetadataTypesInterface,
+                                                    MetadataElementInterface,
+                                                    MultiLanguageInterface,
+                                                    SpecificationPropertiesInterface
+{
+    protected final String serverName;               /* Initialized in constructor */
+    protected final String serverPlatformURLRoot;    /* Initialized in constructor */
+
+    protected PropertyHelper propertyHelper = new PropertyHelper();
+
+
+    /**
+     * Create a new client with no authentication embedded in the HTTP request.
+     *
+     * @param serverName            name of the server to connect to
+     * @param serverPlatformURLRoot the network address of the server running the OMAS REST services
+     */
+    public OpenMetadataClient(String serverName,
+                              String serverPlatformURLRoot)
+    {
+        this.serverName = serverName;
+        this.serverPlatformURLRoot = serverPlatformURLRoot;
+    }
+
+
+    /**
+     * Return the name of the server that this client is connected to.
+     *
+     * @return string name
+     */
+    public String getServerName()
+    {
+        return serverName;
+    }
+
+
+    /**
+     * Return the url root for the metadata access server's platform.
+     *
+     * @return string url root
+     */
+    public String getServerPlatformURLRoot() { return serverPlatformURLRoot; }
+
+
+    /**
+     * Get the maximum paging size.
+     *
+     * @return maxPagingSize new value
+     */
+    public abstract int getMaxPagingSize();
+
+
+    /**
+     * Returns the list of different types of metadata organized into two groups.  The first are the
+     * attribute type definitions (AttributeTypeDefs).  These provide types for properties in full
+     * type definitions.  Full type definitions (TypeDefs) describe types for entities, relationships,
+     * and classifications.
+     *
+     * @param userId unique identifier for requesting user.
+     * @param getInheritedAttributes whether to include inherited attributes in the returned TypeDefs
+     * @param getRelationshipAttributes whether to include relationship attributes in the returned TypeDefs
+     *
+     * @return TypeDefGallery  List of different categories of type definitions.
+     *
+     * @throws InvalidParameterException  the userId is null
+     * @throws PropertyServerException    a problem communicating with the metadata repository.
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation.
+     */
+    @Override
+    public abstract OpenMetadataTypeDefGallery getAllTypes(String  userId,
+                                                           boolean getInheritedAttributes,
+                                                           boolean getRelationshipAttributes) throws InvalidParameterException,
+                                                                                                     PropertyServerException,
+                                                                                                     UserNotAuthorizedException;
+
+    /**
+     * Returns all the TypeDefs for a specific category.
+     *
+     * @param userId   unique identifier for requesting user.
+     * @param getInheritedAttributes whether to include inherited attributes in the returned TypeDefs
+     * @param getRelationshipAttributes whether to include relationship attributes in the returned TypeDefs
+     * @param category enum value for the category of TypeDef to return.
+     *
+     * @return TypeDefs list.
+     *
+     * @throws InvalidParameterException  the TypeDefCategory is null.
+     * @throws PropertyServerException    a problem communicating with the metadata repository.
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation.
+     */
+    @Override
+    public abstract TypeDefList findTypeDefsByCategory(String                      userId,
+                                                       boolean                     getInheritedAttributes,
+                                                       boolean                     getRelationshipAttributes,
+                                                       OpenMetadataTypeDefCategory category) throws InvalidParameterException,
+                                                                                                                     PropertyServerException,
+                                                                                                                     UserNotAuthorizedException;
+
+
+    /**
+     * Returns all the AttributeTypeDefs for an optional specific category.  If the category is null then
+     * all attribute type defs are returned.
+     *
+     * @param userId   unique identifier for requesting user.
+     * @param category enum value for the category of an AttributeTypeDef to return.
+     *
+     * @return AttributeTypeDefs list.
+     *
+     * @throws InvalidParameterException  the TypeDefCategory is null.
+     * @throws PropertyServerException    a problem communicating with the metadata repository.
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation.
+     */
+    @Override
+    public abstract List<OpenMetadataAttributeTypeDef> getAttributeTypeDefs(String                               userId,
+                                                                            OpenMetadataAttributeTypeDefCategory category) throws InvalidParameterException,
+                                                                                                                                  PropertyServerException,
+                                                                                                                                  UserNotAuthorizedException;
+
+
+    /**
+     * Return the types that are linked to the elements from the specified standard.
+     *
+     * @param userId       unique identifier for requesting user.
+     * @param getInheritedAttributes whether to include inherited attributes in the returned TypeDefs
+     * @param getRelationshipAttributes whether to include relationship attributes in the returned TypeDefs
+     * @param standard     name of the standard null means any.
+     * @param organization name of the organization null means any.
+     * @param identifier   identifier of the element in the standard null means any.
+     *
+     * @return TypeDefs list  each entry in the list contains a TypeDef.  This is a structure
+     * describing the TypeDef's category and properties.
+     *
+     * @throws InvalidParameterException  all attributes of the external id are null.
+     * @throws PropertyServerException    a problem communicating with the metadata repository.
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation.
+     */
+    @Override
+    public abstract TypeDefList findTypesByExternalId(String  userId,
+                                                      boolean getInheritedAttributes,
+                                                      boolean getRelationshipAttributes,
+                                                      String  standard,
+                                                      String  organization,
+                                                      String  identifier) throws InvalidParameterException,
+                                                                                 PropertyServerException,
+                                                                                 UserNotAuthorizedException;
+
+
+    /**
+     * Returns all the TypeDefs for a specific subtype.  If a null result is returned it means the
+     * type has no subtypes.     *
+     * @param userId       unique identifier for requesting user.
+     * @param getInheritedAttributes whether to include inherited attributes in the returned TypeDefs
+     * @param getRelationshipAttributes whether to include relationship attributes in the returned TypeDefs
+     * @param typeName     name of the standard null means any.
+     *
+     * @return TypeDefs list  each entry in the list contains a TypeDef.  This is a structure
+     * describing the TypeDef's category and properties.  If null is returned as the TypeDef list it means the type
+     * has no known subtypes
+     *
+     * @throws InvalidParameterException  all attributes of the external id are null.
+     * @throws PropertyServerException    a problem communicating with the metadata repository.
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation.
+     */
+    @Override
+    public abstract TypeDefList getSubTypes(String  userId,
+                                            boolean getInheritedAttributes,
+                                            boolean getRelationshipAttributes,
+                                            String  typeName) throws InvalidParameterException,
+                                                                    PropertyServerException,
+                                                                    UserNotAuthorizedException;
+
+
+    /**
+     * Return the list of entity type names starting from the requested entity, walking its suerType hierarchy.
+     *
+     * @param userId calling user
+     * @param getInheritedAttributes whether to include inherited attributes in the returned TypeDefs
+     * @param getRelationshipAttributes whether to include relationship attributes in the returned TypeDefs
+     * @param entityDef retrieved entity
+     * @return list of type names
+     * @throws InvalidParameterException bad parameter
+     * @throws PropertyServerException repository error
+     * @throws UserNotAuthorizedException security error
+     */
+    public List<String> getEntityTypeNames(String              userId,
+                                           boolean             getInheritedAttributes,
+                                           boolean             getRelationshipAttributes,
+                                           OpenMetadataTypeDef entityDef) throws InvalidParameterException,
+                                                                                 PropertyServerException,
+                                                                                 UserNotAuthorizedException
+    {
+        List<String> entityTypeNames = new ArrayList<>();
+
+        OpenMetadataTypeDef currentEntityDef = entityDef;
+        entityTypeNames.add(currentEntityDef.getName());
+
+        while (currentEntityDef.getSuperType() != null)
+        {
+            currentEntityDef = this.getTypeDefByName(userId,
+                                                     getInheritedAttributes,
+                                                     getRelationshipAttributes,
+                                                     currentEntityDef.getSuperType().getName());
+            entityTypeNames.add(currentEntityDef.getName());
+        }
+
+        return entityTypeNames;
+    }
+
+
+    /**
+     * Return the TypeDef identified by the GUID.
+     *
+     * @param userId unique identifier for requesting user.
+     * @param getInheritedAttributes whether to include inherited attributes in the returned TypeDefs
+     * @param getRelationshipAttributes whether to include relationship attributes in the returned TypeDefs
+     * @param guid   String unique id of the TypeDef
+     *
+     * @return TypeDef structure describing its category and properties.
+     *
+     * @throws InvalidParameterException  the guid is null.
+     * @throws PropertyServerException    a problem communicating with the metadata repository where
+     *                                    the metadata collection is stored.
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation.
+     */
+    @Override
+    public abstract OpenMetadataTypeDef getTypeDefByGUID(String  userId,
+                                                         boolean getInheritedAttributes,
+                                                         boolean getRelationshipAttributes,
+                                                         String  guid) throws InvalidParameterException,
+                                                                              PropertyServerException,
+                                                                              UserNotAuthorizedException;
+
+
+    /**
+     * Return the AttributeTypeDef identified by the GUID.
+     *
+     * @param userId unique identifier for requesting user.
+     * @param guid   String unique id of the TypeDef
+     *
+     * @return TypeDef structure describing its category and properties.
+     *
+     * @throws InvalidParameterException  the guid is null.
+     * @throws PropertyServerException    a problem communicating with the metadata repository where
+     *                                    the metadata collection is stored.
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation.
+     */
+    @Override
+    public abstract OpenMetadataAttributeTypeDef getAttributeTypeDefByGUID(String userId,
+                                                                           String guid) throws InvalidParameterException,
+                                                                                               PropertyServerException,
+                                                                                               UserNotAuthorizedException;
+
+
+    /**
+     * Return the TypeDef identified by the unique name.
+     *
+     * @param userId unique identifier for requesting user.
+     * @param getInheritedAttributes whether to include inherited attributes in the returned TypeDefs
+     * @param getRelationshipAttributes whether to include relationship attributes in the returned TypeDefs
+     * @param name   String name of the TypeDef.
+     *
+     * @return TypeDef structure describing its category and properties.
+     *
+     * @throws InvalidParameterException  the name is null.
+     * @throws PropertyServerException    a problem communicating with the metadata repository where
+     *                                    the metadata collection is stored.
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation.
+     */
+    @Override
+    public abstract OpenMetadataTypeDef getTypeDefByName(String  userId,
+                                                         boolean getInheritedAttributes,
+                                                         boolean getRelationshipAttributes,
+                                                         String  name) throws InvalidParameterException,
+                                                                              PropertyServerException,
+                                                                              UserNotAuthorizedException;
+
+
+    /**
+     * Return the AttributeTypeDef identified by the unique name.
+     *
+     * @param userId unique identifier for requesting user.
+     * @param name   String name of the TypeDef.
+     *
+     * @return TypeDef structure describing its category and properties.
+     *
+     * @throws InvalidParameterException  the name is null.
+     * @throws PropertyServerException    a problem communicating with the metadata repository where
+     *                                    the metadata collection is stored.
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation.
+     */
+    @Override
+    public abstract OpenMetadataAttributeTypeDef getAttributeTypeDefByName(String userId,
+                                                                           String name) throws InvalidParameterException,
+                                                                                               PropertyServerException,
+                                                                                               UserNotAuthorizedException;
+
+
+    /**
+     * Retrieve the metadata element using its unique identifier.
+     *
+     * @param userId caller's userId
+     * @param elementGUID unique identifier for the metadata element
+     * @param getOptions multiple options to control the query
+     *
+     * @return metadata element properties
+     * @throws InvalidParameterException the unique identifier is null or not known.
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation.
+     * @throws PropertyServerException a problem accessing the metadata store
+     */
+    @Override
+    public abstract OpenMetadataElement getMetadataElementByGUID(String     userId,
+                                                                 String     elementGUID,
+                                                                 GetOptions getOptions) throws InvalidParameterException,
+                                                                                               UserNotAuthorizedException,
+                                                                                               PropertyServerException;
+
+
+    /**
+     * Retrieve the metadata element using its unique name (typically the qualified name).
+     *
+     * @param userId caller's userId
+     * @param uniqueName unique name for the metadata element
+     * @param uniquePropertyName name of property name to test in the open metadata element - if null "qualifiedName" is used
+     * @param getOptions multiple options to control the query
+     *
+     * @return metadata element properties or null if not found
+     * @throws InvalidParameterException the unique identifier is null.
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation.
+     * @throws PropertyServerException a problem accessing the metadata store
+     */
+    @Override
+    public OpenMetadataElement getMetadataElementByUniqueName(String     userId,
+                                                              String     uniqueName,
+                                                              String     uniquePropertyName,
+                                                              GetOptions getOptions) throws InvalidParameterException,
+                                                                                            UserNotAuthorizedException,
+                                                                                            PropertyServerException
+    {
+        final String methodName          = "getMetadataElementByUniqueName";
+        final String defaultPropertyName = OpenMetadataProperty.QUALIFIED_NAME.name;
+        final String nameParameterName   = "uniqueName";
+
+        propertyHelper.validateUserId(userId, methodName);
+        propertyHelper.validateMandatoryName(uniqueName, nameParameterName, methodName);
+
+        List<String> propertyNames = new ArrayList<>();
+
+        if (uniquePropertyName != null)
+        {
+            propertyNames.add(uniquePropertyName);
+        }
+        else
+        {
+            propertyNames.add(defaultPropertyName);
+        }
+
+        SearchOptions searchOptions = propertyHelper.getExactMatchSearchOptions(new QueryOptions(getOptions));
+
+        searchOptions.setLimitResultsByStatus(Collections.singletonList(ElementStatus.ACTIVE));
+
+        List<OpenMetadataElement> receivedElements = this.findMetadataElements(userId,
+                                                                               propertyHelper.getSearchPropertiesByName(propertyNames,
+                                                                                                                        uniqueName,
+                                                                                                                       searchOptions),
+                                                                               null,
+                                                                               searchOptions);
+
+        if (receivedElements != null)
+        {
+            String resultTypeName = OpenMetadataType.OPEN_METADATA_ROOT.typeName;
+
+            if ((getOptions != null) && (getOptions.getMetadataElementTypeName() != null))
+            {
+                resultTypeName = getOptions.getMetadataElementTypeName();
+            }
+
+            List<String> duplicateEntities = new ArrayList<>();
+            OpenMetadataElement matchingElement = null;
+
+            for (OpenMetadataElement receivedElement : receivedElements)
+            {
+                if (receivedElement != null)
+                {
+                    if (matchingElement == null)
+                    {
+                        matchingElement = receivedElement;
+                    }
+                    else
+                    {
+                        duplicateEntities.add(receivedElement.getElementGUID());
+                    }
+                }
+            }
+
+            if (! duplicateEntities.isEmpty())
+            {
+                duplicateEntities.add(matchingElement.getElementGUID());
+
+                throw new PropertyServerException(OMFErrorCode.MULTIPLE_ENTITIES_FOUND.getMessageDefinition(resultTypeName,
+                                                                                                            uniqueName,
+                                                                                                            duplicateEntities.toString(),
+                                                                                                            methodName,
+                                                                                                            uniquePropertyName,
+                                                                                                            serverName),
+                                                  this.getClass().getName(),
+                                                  methodName);
+            }
+
+            return matchingElement;
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Retrieve the metadata element using its unique name (typically the qualified name) and the DELETED status.
+     * This method assumes all effective dates, and forLineage and forDuplicateProcessing is set false,
+     * to cast the widest net.
+     *
+     * @param userId                 caller's userId
+     * @param uniqueName unique name for the metadata element
+     * @param uniquePropertyName name of property name to test in the open metadata element - if null "qualifiedName" is used
+     *
+     * @return metadata element properties or null if not found
+     * @throws InvalidParameterException the unique identifier is null.
+     * @throws UserNotAuthorizedException the governance action service is not able to access the element
+     * @throws PropertyServerException a problem accessing the metadata store
+     */
+    public OpenMetadataElement getDeletedElementByUniqueName(String  userId,
+                                                             String  uniqueName,
+                                                             String  uniquePropertyName) throws InvalidParameterException,
+                                                                                                UserNotAuthorizedException,
+                                                                                                PropertyServerException
+    {
+        final String methodName          = "getDeletedElementByUniqueName";
+        final String defaultPropertyName = OpenMetadataProperty.QUALIFIED_NAME.name;
+        final String nameParameterName   = "uniqueName";
+
+        propertyHelper.validateUserId(userId, methodName);
+        propertyHelper.validateMandatoryName(uniqueName, nameParameterName, methodName);
+
+        List<String> propertyNames = new ArrayList<>();
+
+        if (uniquePropertyName != null)
+        {
+            propertyNames.add(uniquePropertyName);
+        }
+        else
+        {
+            propertyNames.add(defaultPropertyName);
+        }
+
+        SearchOptions searchOptions = propertyHelper.getExactMatchSearchOptions(new QueryOptions());
+        searchOptions.setLimitResultsByStatus(Collections.singletonList(ElementStatus.DELETED));
+        searchOptions.setSequencingOrder(SequencingOrder.LAST_UPDATE_RECENT);
+
+        List<OpenMetadataElement> matchingElements = this.findMetadataElements(userId,
+                                                                               propertyHelper.getSearchPropertiesByName(propertyNames, uniqueName, searchOptions),
+                                                                               null,
+                                                                               searchOptions);
+
+        /*
+         * Notice that duplicate elements are handled in case the element has been deleted multiple times.
+         */
+        if (matchingElements != null)
+        {
+            for (OpenMetadataElement matchingElement : matchingElements)
+            {
+                if (matchingElement != null)
+                {
+                    return matchingElement;
+                }
+            }
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Retrieve the unique identifier of a metadata element using its unique name (typically the qualified name).
+     *
+     * @param userId caller's userId
+     * @param uniqueName unique name for the metadata element
+     * @param uniquePropertyName name of property name to test in the open metadata element - if null "qualifiedName" is used
+     * @param getOptions multiple options to control the query
+     *
+     * @return metadata element unique identifier (guid)
+     * @throws InvalidParameterException the unique name is null or not known.
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation.
+     * @throws PropertyServerException a problem accessing the metadata store
+     */
+    @Override
+    public String getMetadataElementGUIDByUniqueName(String     userId,
+                                                     String     uniqueName,
+                                                     String     uniquePropertyName,
+                                                     GetOptions getOptions) throws InvalidParameterException,
+                                                                                   UserNotAuthorizedException,
+                                                                                   PropertyServerException
+    {
+        OpenMetadataElement matchingElement = this.getMetadataElementByUniqueName(userId, uniqueName, uniquePropertyName, getOptions);
+
+        if (matchingElement != null)
+        {
+            return matchingElement.getElementGUID();
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Retrieve metadata elements with any of the supplied list of property names similar to the supplied value.
+     *
+     * @param userId                     caller's userId
+     * @param propertyName               property name to match against
+     * @param propertyValue              value to match against
+     * @param queryOptions multiple options to control the query
+     *
+     * @return a list of elements matching the supplied criteria; null means no matching elements in the metadata store.
+     *
+     * @throws InvalidParameterException  one of the search parameters are is invalid
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation
+     * @throws PropertyServerException    a problem accessing the metadata store
+     */
+    public List<OpenMetadataElement> getMetadataElementsByPropertyValue(String                userId,
+                                                                        String                propertyName,
+                                                                        String                propertyValue,
+                                                                        QueryOptions          queryOptions) throws InvalidParameterException,
+                                                                                                                   UserNotAuthorizedException,
+                                                                                                                   PropertyServerException
+    {
+        List<String> propertyNames = List.of(propertyName);
+
+        return this.findMetadataElements(userId,
+                                         propertyHelper.getSearchPropertiesByName(propertyNames,
+                                                                                  propertyValue,
+                                                                                  propertyHelper.getExactMatchSearchOptions(queryOptions)),
+                                         null,
+                                         queryOptions);
+    }
+
+
+    /**
+     * Retrieve metadata elements with any of the supplied list of property names similar to the supplied value.
+     *
+     * @param userId                     caller's userId
+     * @param propertyName               property name to match against
+     * @param propertyValue              value to match against
+     * @param searchOptions               multiple options to control the query
+     *
+     * @return a list of elements matching the supplied criteria; null means no matching elements in the metadata store.
+     *
+     * @throws InvalidParameterException  one of the search parameters are is invalid
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation
+     * @throws PropertyServerException    a problem accessing the metadata store
+     */
+    public List<OpenMetadataElement> findMetadataElementsByPropertyValue(String        userId,
+                                                                         String        propertyName,
+                                                                         String        propertyValue,
+                                                                         SearchOptions searchOptions) throws InvalidParameterException,
+                                                                                                            UserNotAuthorizedException,
+                                                                                                            PropertyServerException
+    {
+        List<String> propertyNames = List.of(propertyName);
+
+        return this.findMetadataElements(userId,
+                                         propertyHelper.getSearchPropertiesByName(propertyNames, propertyValue, searchOptions),
+                                         null,
+                                         searchOptions);
+    }
+
+
+
+    /**
+     * Retrieve metadata elements with any of the supplied list of property names similar to the supplied value.
+     *
+     * @param userId                     caller's userId
+     * @param propertyNames              list of property names to match against
+     * @param propertyValue              value to match against
+     * @param queryOptions multiple options to control the query
+     *
+     * @return a list of elements matching the supplied criteria; null means no matching elements in the metadata store.
+     *
+     * @throws InvalidParameterException  one of the search parameters are is invalid
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation
+     * @throws PropertyServerException    a problem accessing the metadata store
+     */
+    public List<OpenMetadataElement> getMetadataElementsByPropertyValue(String                userId,
+                                                                        List<String>          propertyNames,
+                                                                        String                propertyValue,
+                                                                        QueryOptions          queryOptions) throws InvalidParameterException,
+                                                                                                                   UserNotAuthorizedException,
+                                                                                                                   PropertyServerException
+    {
+        return this.findMetadataElements(userId,
+                                         propertyHelper.getSearchPropertiesByName(propertyNames,
+                                                                                  propertyValue,
+                                                                                  propertyHelper.getExactMatchSearchOptions(queryOptions)),
+                                         null,
+                                         queryOptions);
+    }
+
+
+    /**
+     * Retrieve metadata elements with any of the supplied list of property names set (exactly) to the supplied value.
+     *
+     * @param userId                     caller's userId
+     * @param propertyNames              list of property names to match against
+     * @param propertyValue              value to match against
+     * @param searchOptions multiple options to control the query
+
+     *
+     * @return a list of elements matching the supplied criteria; null means no matching elements in the metadata store.
+     *
+     * @throws InvalidParameterException  one of the search parameters are is invalid
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation
+     * @throws PropertyServerException    a problem accessing the metadata store
+     */
+    public List<OpenMetadataElement> findMetadataElementsByPropertyValue(String        userId,
+                                                                         List<String>  propertyNames,
+                                                                         String        propertyValue,
+                                                                         SearchOptions searchOptions) throws InvalidParameterException,
+                                                                                                             UserNotAuthorizedException,
+                                                                                                             PropertyServerException
+    {
+        return this.findMetadataElements(userId,
+                                         propertyHelper.getSearchPropertiesByName(propertyNames,
+                                                                                  propertyValue,
+                                                                                  searchOptions),
+                                         null,
+                                         searchOptions);
+    }
+
+
+    /**
+     * Retrieve metadata elements with any of the supplied list of property names similar to the supplied value.
+     *
+     * @param userId                     caller's userId
+     * @param classificationName         name of the classification
+     * @param classificationPropertyName  property name to match against
+     * @param classificationPropertyValue value to match against
+     * @param queryOptions                multiple options to control the query
+     *
+     * @return a list of elements matching the supplied criteria; null means no matching elements in the metadata store.
+     *
+     * @throws InvalidParameterException  one of the search parameters are is invalid
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation
+     * @throws PropertyServerException    a problem accessing the metadata store
+     */
+    public List<OpenMetadataElement> getMetadataElementsByClassificationPropertyValue(String                userId,
+                                                                                      String                classificationName,
+                                                                                      String                classificationPropertyName,
+                                                                                      String                classificationPropertyValue,
+                                                                                      QueryOptions          queryOptions) throws InvalidParameterException,
+                                                                                                                                 UserNotAuthorizedException,
+                                                                                                                                 PropertyServerException
+    {
+        PrimitiveTypePropertyValue requestedPropertyValue = new PrimitiveTypePropertyValue();
+
+        requestedPropertyValue.setPrimitiveTypeCategory(PrimitiveTypeCategory.OM_PRIMITIVE_TYPE_STRING);
+        requestedPropertyValue.setPrimitiveValue(classificationPropertyValue);
+        requestedPropertyValue.setTypeName(PrimitiveTypeCategory.OM_PRIMITIVE_TYPE_STRING.getDisplayName());
+
+        List<PropertyCondition> conditions = new ArrayList<>();
+
+        PropertyCondition nameCondition = new PropertyCondition();
+
+        nameCondition.setProperty(classificationPropertyName);
+        nameCondition.setOperator(PropertyComparisonOperator.EQ);
+        nameCondition.setValue(requestedPropertyValue);
+
+        conditions.add(nameCondition);
+
+        SearchProperties searchClassificationProperties = new SearchProperties();
+
+        searchClassificationProperties.setConditions(conditions);
+        searchClassificationProperties.setMatchCriteria(MatchCriteria.ANY);
+
+        SearchClassifications searchClassifications = new SearchClassifications();
+
+        List<ClassificationCondition> classificationConditions = new ArrayList<>();
+        ClassificationCondition       classificationCondition  = new ClassificationCondition();
+
+        classificationCondition.setName(classificationName);
+
+        classificationCondition.setSearchProperties(searchClassificationProperties);
+        classificationConditions.add(classificationCondition);
+
+        searchClassifications.setConditions(classificationConditions);
+        searchClassifications.setMatchCriteria(MatchCriteria.ALL);
+
+        return this.findMetadataElements(userId,
+                                         null,
+                                         searchClassifications,
+                                         queryOptions);
+    }
+
+
+    /**
+     * Retrieve metadata elements with any of the supplied list of property names similar to the supplied value.
+     *
+     * @param userId                     caller's userId
+     * @param classificationName         name of the classification
+     * @param queryOptions multiple options to control the query
+     *
+     * @return a list of elements matching the supplied criteria; null means no matching elements in the metadata store.
+     *
+     * @throws InvalidParameterException  one of the search parameters are is invalid
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation
+     * @throws PropertyServerException    a problem accessing the metadata store
+     */
+    public List<OpenMetadataElement> getMetadataElementsByClassification(String                userId,
+                                                                         String                classificationName,
+                                                                         QueryOptions          queryOptions) throws InvalidParameterException,
+                                                                                                                    UserNotAuthorizedException,
+                                                                                                                    PropertyServerException
+    {
+        SearchClassifications searchClassifications = new SearchClassifications();
+
+        List<ClassificationCondition> classificationConditions = new ArrayList<>();
+        ClassificationCondition       classificationCondition  = new ClassificationCondition();
+
+        classificationCondition.setName(classificationName);
+
+        classificationConditions.add(classificationCondition);
+
+        searchClassifications.setConditions(classificationConditions);
+        searchClassifications.setMatchCriteria(MatchCriteria.ALL);
+
+        return this.findMetadataElements(userId,
+                                         null,
+                                         searchClassifications,
+                                         queryOptions);
+    }
+
+
+    /**
+     * Retrieve metadata elements with any of the supplied list of property names similar to the supplied value.
+     *
+     * @param userId                     caller's userId
+     * @param classificationName         name of the classification
+     * @param classificationPropertyName  property name to match against
+     * @param classificationPropertyValue value to match against
+     * @param queryOptions multiple options to control the query
+     *
+     * @return a list of elements matching the supplied criteria; null means no matching elements in the metadata store.
+     *
+     * @throws InvalidParameterException  one of the search parameters are is invalid
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation
+     * @throws PropertyServerException    a problem accessing the metadata store
+     */
+    public List<OpenMetadataElement> getMetadataElementsByClassificationPropertyValue(String                userId,
+                                                                                      String                classificationName,
+                                                                                      String                classificationPropertyName,
+                                                                                      int                   classificationPropertyValue,
+                                                                                      QueryOptions          queryOptions) throws InvalidParameterException,
+                                                                                                                                 UserNotAuthorizedException,
+                                                                                                                                 PropertyServerException
+    {
+        PrimitiveTypePropertyValue requestedPropertyValue = new PrimitiveTypePropertyValue();
+
+        requestedPropertyValue.setPrimitiveTypeCategory(PrimitiveTypeCategory.OM_PRIMITIVE_TYPE_INT);
+        requestedPropertyValue.setPrimitiveValue(classificationPropertyValue);
+        requestedPropertyValue.setTypeName(PrimitiveTypeCategory.OM_PRIMITIVE_TYPE_INT.getDisplayName());
+
+        List<PropertyCondition> conditions = new ArrayList<>();
+
+        PropertyCondition nameCondition = new PropertyCondition();
+
+        nameCondition.setProperty(classificationPropertyName);
+        nameCondition.setOperator(PropertyComparisonOperator.EQ);
+        nameCondition.setValue(requestedPropertyValue);
+
+        conditions.add(nameCondition);
+
+        SearchProperties searchClassificationProperties = new SearchProperties();
+
+        searchClassificationProperties.setConditions(conditions);
+        searchClassificationProperties.setMatchCriteria(MatchCriteria.ANY);
+
+        SearchClassifications searchClassifications = new SearchClassifications();
+
+        List<ClassificationCondition> classificationConditions = new ArrayList<>();
+        ClassificationCondition       classificationCondition  = new ClassificationCondition();
+
+        classificationCondition.setName(classificationName);
+
+        classificationCondition.setSearchProperties(searchClassificationProperties);
+        classificationConditions.add(classificationCondition);
+
+        searchClassifications.setConditions(classificationConditions);
+        searchClassifications.setMatchCriteria(MatchCriteria.ALL);
+
+        return this.findMetadataElements(userId,
+                                         null,
+                                         searchClassifications,
+                                         queryOptions);
+    }
+
+
+    /**
+     * Retrieve metadata elements with any of the supplied list of property names similar to the supplied value.
+     *
+     * @param userId                     caller's userId
+     * @param classificationName         name of the classification
+     * @param classificationPropertyName  property name to match against
+     * @param classificationPropertyValue value to match against
+     * @param queryOptions multiple options to control the query
+     *
+     * @return a list of elements matching the supplied criteria; null means no matching elements in the metadata store.
+     *
+     * @throws InvalidParameterException  one of the search parameters are is invalid
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation
+     * @throws PropertyServerException    a problem accessing the metadata store
+     */
+    public List<OpenMetadataElement> findMetadataElementsByClassificationPropertyValue(String                userId,
+                                                                                       String                classificationName,
+                                                                                       String                classificationPropertyName,
+                                                                                       String                classificationPropertyValue,
+                                                                                       QueryOptions          queryOptions) throws InvalidParameterException,
+                                                                                                                                  UserNotAuthorizedException,
+                                                                                                                                  PropertyServerException
+    {
+        PrimitiveTypePropertyValue requestedPropertyValue = new PrimitiveTypePropertyValue();
+
+        requestedPropertyValue.setPrimitiveTypeCategory(PrimitiveTypeCategory.OM_PRIMITIVE_TYPE_STRING);
+        requestedPropertyValue.setPrimitiveValue(classificationPropertyValue);
+        requestedPropertyValue.setTypeName(PrimitiveTypeCategory.OM_PRIMITIVE_TYPE_STRING.getDisplayName());
+
+        List<PropertyCondition> conditions = new ArrayList<>();
+
+        PropertyCondition nameCondition = new PropertyCondition();
+
+        nameCondition.setProperty(classificationPropertyName);
+        nameCondition.setOperator(PropertyComparisonOperator.LIKE);
+        nameCondition.setValue(requestedPropertyValue);
+
+        conditions.add(nameCondition);
+
+        SearchProperties searchClassificationProperties = new SearchProperties();
+
+        searchClassificationProperties.setConditions(conditions);
+        searchClassificationProperties.setMatchCriteria(MatchCriteria.ANY);
+
+        SearchClassifications searchClassifications = new SearchClassifications();
+
+        List<ClassificationCondition> classificationConditions = new ArrayList<>();
+        ClassificationCondition       classificationCondition  = new ClassificationCondition();
+
+        classificationCondition.setName(classificationName);
+
+        classificationCondition.setSearchProperties(searchClassificationProperties);
+        classificationConditions.add(classificationCondition);
+
+        searchClassifications.setConditions(classificationConditions);
+        searchClassifications.setMatchCriteria(MatchCriteria.ALL);
+
+        return this.findMetadataElements(userId,
+                                         null,
+                                         searchClassifications,
+                                         queryOptions);
+    }
+
+
+    /**
+     * Retrieve metadata elements with the requested classification containing any of the supplied list of property
+     * names exactly matching the supplied value.
+     *
+     * @param userId                     caller's userId
+     * @param classificationName         name of the classification
+     * @param classificationPropertyNames property name to match against
+     * @param classificationPropertyValue value to match against
+     * @param queryOptions multiple options to control the query
+     *
+     * @return a list of elements matching the supplied criteria; null means no matching elements in the metadata store.
+     *
+     * @throws InvalidParameterException  one of the search parameters are is invalid
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation
+     * @throws PropertyServerException    a problem accessing the metadata store
+     */
+    public List<OpenMetadataElement> getMetadataElementsByClassificationPropertyValue(String       userId,
+                                                                                      String       classificationName,
+                                                                                      List<String> classificationPropertyNames,
+                                                                                      String       classificationPropertyValue,
+                                                                                      QueryOptions queryOptions) throws InvalidParameterException,
+                                                                                                                        UserNotAuthorizedException,
+                                                                                                                        PropertyServerException
+    {
+        PrimitiveTypePropertyValue requestedPropertyValue = new PrimitiveTypePropertyValue();
+
+        requestedPropertyValue.setPrimitiveTypeCategory(PrimitiveTypeCategory.OM_PRIMITIVE_TYPE_STRING);
+        requestedPropertyValue.setPrimitiveValue(classificationPropertyValue);
+        requestedPropertyValue.setTypeName(PrimitiveTypeCategory.OM_PRIMITIVE_TYPE_STRING.getDisplayName());
+
+        List<PropertyCondition> conditions = new ArrayList<>();
+
+        if (classificationPropertyNames != null)
+        {
+            for (String propertyName : classificationPropertyNames)
+            {
+                PropertyCondition nameCondition = new PropertyCondition();
+
+                nameCondition.setProperty(propertyName);
+                nameCondition.setOperator(PropertyComparisonOperator.EQ);
+                nameCondition.setValue(requestedPropertyValue);
+
+                conditions.add(nameCondition);
+            }
+        }
+
+        SearchProperties searchClassificationProperties = propertyHelper.getSearchPropertiesByName(classificationPropertyNames,
+                                                                                                   classificationPropertyValue,
+                                                                                                   propertyHelper.getExactMatchSearchOptions(queryOptions));
+
+        searchClassificationProperties.setConditions(conditions);
+        searchClassificationProperties.setMatchCriteria(MatchCriteria.ANY);
+
+        SearchClassifications searchClassifications = new SearchClassifications();
+
+        List<ClassificationCondition> classificationConditions = new ArrayList<>();
+        ClassificationCondition       classificationCondition  = new ClassificationCondition();
+
+        classificationCondition.setName(classificationName);
+
+        classificationCondition.setSearchProperties(searchClassificationProperties);
+        classificationConditions.add(classificationCondition);
+
+        searchClassifications.setConditions(classificationConditions);
+        searchClassifications.setMatchCriteria(MatchCriteria.ALL);
+
+        return this.findMetadataElements(userId,
+                                         null,
+                                         searchClassifications,
+                                         queryOptions);
+    }
+
+
+    /**
+     * Retrieve metadata elements with the requested classification containing any of the supplied list of property
+     * names exactly matching the supplied value.
+     *
+     * @param userId                     caller's userId
+     * @param classificationName         name of the classification
+     * @param classificationPropertyNames property name to match against
+     * @param classificationPropertyValue value to match against
+     * @param searchOptions multiple options to control the query
+     *
+     * @return a list of elements matching the supplied criteria; null means no matching elements in the metadata store.
+     *
+     * @throws InvalidParameterException  one of the search parameters are is invalid
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation
+     * @throws PropertyServerException    a problem accessing the metadata store
+     */
+    public List<OpenMetadataElement> findMetadataElementsByClassificationPropertyValue(String                userId,
+                                                                                       String                classificationName,
+                                                                                       List<String>          classificationPropertyNames,
+                                                                                       String                classificationPropertyValue,
+                                                                                       SearchOptions         searchOptions) throws InvalidParameterException,
+                                                                                                                                  UserNotAuthorizedException,
+                                                                                                                                  PropertyServerException
+    {
+        SearchProperties searchClassificationProperties = propertyHelper.getSearchPropertiesByName(classificationPropertyNames, classificationPropertyValue, searchOptions);
+
+        SearchClassifications searchClassifications = new SearchClassifications();
+
+        List<ClassificationCondition> classificationConditions = new ArrayList<>();
+        ClassificationCondition       classificationCondition  = new ClassificationCondition();
+
+        classificationCondition.setName(classificationName);
+
+        classificationCondition.setSearchProperties(searchClassificationProperties);
+        classificationConditions.add(classificationCondition);
+
+        searchClassifications.setConditions(classificationConditions);
+        searchClassifications.setMatchCriteria(MatchCriteria.ALL);
+
+        return this.findMetadataElements(userId,
+                                         null,
+                                         searchClassifications,
+                                         searchOptions);
+    }
+
+
+    /**
+     * Retrieve the metadata elements of the requested type that contain the requested string.
+     *
+     * @param userId caller's userId
+     * @param searchString name to retrieve
+     * @param searchOptions multiple options to control the query
+     *
+     * @return list of matching metadata elements (or null if no elements match the name)
+     * @throws InvalidParameterException the qualified name is null
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation.
+     * @throws PropertyServerException a problem accessing the metadata store
+     */
+    @Override
+    public abstract List<OpenMetadataElement> findMetadataElementsWithString(String        userId,
+                                                                             String        searchString,
+                                                                             SearchOptions searchOptions) throws InvalidParameterException,
+                                                                                                                 UserNotAuthorizedException,
+                                                                                                                 PropertyServerException;
+
+
+    /**
+     * Return a list of elements with the requested search string in their (display, resource)name, qualified name,
+     * title, text, summary, identifier or description.
+     * The breadth of the search is determined by the supplied anchorGUID.
+     *
+     * @param userId caller's userId
+     * @param searchString name to retrieve
+     * @param anchorGUID unique identifier of anchor
+     * @param searchOptions multiple options to control the query
+     *
+     * @return list of matching metadata elements (or null if no elements match the name)
+     * @throws InvalidParameterException the qualified name is null
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation
+     * @throws PropertyServerException a problem accessing the metadata store
+     */
+    @Override
+    public abstract AnchorSearchMatches findElementsForAnchor(String        userId,
+                                                              String        searchString,
+                                                              String        anchorGUID,
+                                                              SearchOptions searchOptions) throws InvalidParameterException,
+                                                                                                  UserNotAuthorizedException,
+                                                                                                  PropertyServerException;
+
+
+    /**
+     * Return a list of elements with the requested search string in their (display, resource)name, qualified name,
+     * title, text, summary, identifier or description.
+     * The breadth of the search is determined by the supplied domain name. The results are organized by anchor element.
+     *
+     * @param userId caller's userId
+     * @param searchString name to retrieve
+     * @param anchorDomainName name of open metadata type for the domain
+     * @param searchOptions multiple options to control the query
+     *
+     * @return list of matching metadata elements (or null if no elements match the name)
+     * @throws InvalidParameterException the qualified name is null
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation
+     * @throws PropertyServerException a problem accessing the metadata store
+     */
+    @Override
+    public abstract List<AnchorSearchMatches> findElementsInAnchorDomain(String        userId,
+                                                                         String        searchString,
+                                                                         String        anchorDomainName,
+                                                                         SearchOptions searchOptions) throws InvalidParameterException,
+                                                                                                             UserNotAuthorizedException,
+                                                                                                             PropertyServerException;
+
+
+    /**
+     * Return a list of elements with the requested search string in their (display, resource)name, qualified name,
+     * title, text, summary, identifier or description.
+     * The breadth of the search is determined by the supplied scope guid. The results are organized by anchor element.
+     *
+     * @param userId caller's userId
+     * @param searchString name to retrieve
+     * @param anchorScopeGUID unique identifier of the scope to use
+     * @param searchOptions multiple options to control the query
+     *
+     * @return list of matching metadata elements (or null if no elements match the name)
+     * @throws InvalidParameterException the qualified name is null
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation
+     * @throws PropertyServerException a problem accessing the metadata store
+     */
+    @Override
+    public abstract List<AnchorSearchMatches> findElementsInAnchorScope(String              userId,
+                                                                        String              searchString,
+                                                                        String              anchorScopeGUID,
+                                                                        SearchOptions        searchOptions) throws InvalidParameterException,
+                                                                                                                 UserNotAuthorizedException,
+                                                                                                                 PropertyServerException;
+
+
+    /**
+     * Retrieve the metadata elements connected to the supplied element.
+     *
+     * @param userId caller's userId
+     * @param elementGUID unique identifier for the starting metadata element
+     * @param startingAtEnd indicates which end to retrieve from (0 is "either end"; 1 is end1; 2 is end 2)
+     * @param relationshipTypeName type name of relationships to follow (or null for all)
+     * @param queryOptions multiple options to control the query
+     *
+     * @return list of related elements
+     * @throws InvalidParameterException the unique identifier is null or not known; the relationship type is invalid
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation.
+     * @throws PropertyServerException a problem accessing the metadata store
+     */
+    @Override
+    public abstract RelatedMetadataElementList getRelatedMetadataElements(String       userId,
+                                                                          String       elementGUID,
+                                                                          int          startingAtEnd,
+                                                                          String       relationshipTypeName,
+                                                                          QueryOptions queryOptions) throws InvalidParameterException,
+                                                                                                            UserNotAuthorizedException,
+                                                                                                            PropertyServerException;
+
+
+    /**
+     * Return all the elements that are anchored to an asset plus relationships between these elements and to other elements.
+     *
+     * @param userId name of the server instances for this request
+     * @param elementGUID  unique identifier for the element
+     * @param queryOptions multiple options to control the query
+     *
+     * @return graph of elements
+     *
+     * @throws InvalidParameterException  the unique identifier is null or not known; the relationship type is invalid
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation
+     * @throws PropertyServerException    a problem accessing the metadata store
+     */
+    @Override
+    public abstract OpenMetadataElementGraph getAnchoredElementsGraph(String       userId,
+                                                                      String       elementGUID,
+                                                                      QueryOptions queryOptions) throws InvalidParameterException,
+                                                                                                        UserNotAuthorizedException,
+                                                                                                        PropertyServerException;
+
+
+    /**
+     * Retrieve the metadata element connected to the supplied element for a relationship type that only allows one
+     * relationship to be attached.
+     *
+     * @param userId                 caller's userId
+     * @param elementGUID            unique identifier for the starting metadata element
+     * @param startingAtEnd          indicates which end to retrieve from (0 is "either end"; 1 is end1; 2 is end 2)
+     * @param relationshipTypeName   type name of relationships to follow (or null for all)
+     * @param getOptions multiple options to control the query
+     * @return related element
+     *
+     * @throws InvalidParameterException  the unique identifier is null or not known; the relationship type is invalid
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation
+     * @throws PropertyServerException    a problem accessing the metadata store or multiple relationships have been returned
+     */
+    @Override
+    public abstract  RelatedMetadataElement getRelatedMetadataElement(String     userId,
+                                                                      String     elementGUID,
+                                                                      int        startingAtEnd,
+                                                                      String     relationshipTypeName,
+                                                                      GetOptions getOptions) throws InvalidParameterException,
+                                                                                                    UserNotAuthorizedException,
+                                                                                                    PropertyServerException;
+
+    /**
+     * Return each of the versions of a metadata element.
+     *
+     * @param userId caller's userId
+     * @param elementGUID            unique identifier for the metadata element
+     * @param queryOptions multiple options to control the query
+     *
+     * @return a list of elements matching the supplied criteria; null means no matching elements in the metadata store.
+     * @throws InvalidParameterException one of the search parameters are is invalid
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation.
+     * @throws PropertyServerException a problem accessing the metadata store
+     */
+    @Override
+    public  abstract List<OpenMetadataElement> getMetadataElementHistory(String                 userId,
+                                                                         String                 elementGUID,
+                                                                         HistoricalQueryOptions queryOptions) throws InvalidParameterException,
+                                                                                                                     UserNotAuthorizedException,
+                                                                                                                     PropertyServerException;
+
+
+    /**
+     * Return each of the versions of a metadata element's classification.
+     *
+     * @param userId caller's userId
+     * @param elementGUID            unique identifier for the metadata element
+     * @param classificationName name of the classification to retrieve
+     * @param queryOptions multiple options to control the query
+     *
+     * @return a list of classifications matching the supplied criteria; null means no matching elements in the metadata store.
+     * @throws InvalidParameterException one of the search parameters are is invalid
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation.
+     * @throws PropertyServerException a problem accessing the metadata store
+     */
+    @Override
+    public abstract List<AttachedClassification> getClassificationHistory(String                 userId,
+                                                                          String                 elementGUID,
+                                                                          String                 classificationName,
+                                                                          HistoricalQueryOptions queryOptions) throws InvalidParameterException,
+                                                                                                                      UserNotAuthorizedException,
+                                                                                                                      PropertyServerException;
+
+    /**
+     * Retrieve the relationships linking to the supplied elements.
+     *
+     * @param userId caller's userId
+     * @param metadataElementAtEnd1GUID unique identifier of the metadata element at end 1 of the relationship
+     * @param metadataElementAtEnd2GUID unique identifier of the metadata element at end 2 of the relationship
+     * @param relationshipTypeName type name of relationships to follow (or null for all)
+     * @param queryOptions multiple options to control the query
+     *
+     * @return list of related elements
+     * @throws InvalidParameterException the unique identifier is null or not known; the relationship type is invalid
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation.
+     * @throws PropertyServerException a problem accessing the metadata store
+     */
+    @Override
+    public abstract OpenMetadataRelationshipList getMetadataElementRelationships(String              userId,
+                                                                                 String              metadataElementAtEnd1GUID,
+                                                                                 String              metadataElementAtEnd2GUID,
+                                                                                 String              relationshipTypeName,
+                                                                                 QueryOptions        queryOptions) throws InvalidParameterException,
+                                                                                                                          UserNotAuthorizedException,
+                                                                                                                          PropertyServerException;
+
+    /**
+     * Return a list of metadata elements that match the supplied criteria.  The results can be returned over many pages.
+     *
+     * @param userId caller's userId
+     * @param searchProperties Optional list of entity property conditions to match.
+     * @param matchClassifications Optional list of classifications to match.
+     * @param queryOptions multiple options to control the query
+     *
+     * @return a list of elements matching the supplied criteria; null means no matching elements in the metadata store.
+     * @throws InvalidParameterException one of the search parameters are is invalid
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation.
+     * @throws PropertyServerException a problem accessing the metadata store
+     */
+    @Override
+    public  abstract List<OpenMetadataElement> findMetadataElements(String                userId,
+                                                                    SearchProperties      searchProperties,
+                                                                    SearchClassifications matchClassifications,
+                                                                    QueryOptions          queryOptions) throws InvalidParameterException,
+                                                                                                               UserNotAuthorizedException,
+                                                                                                               PropertyServerException;
+
+
+    /**
+     * Return a count of the metadata elements that match the supplied criteria.  This has the same search
+     * semantics as findMetadataElements(), but returns the number of matching elements rather than the elements
+     * themselves.
+     *
+     * @param userId caller's userId
+     * @param searchProperties Optional list of entity property conditions to match.
+     * @param matchClassifications Optional list of classifications to match.
+     * @param queryOptions multiple options to control the query
+     *
+     * @return the number of elements matching the supplied criteria.
+     * @throws InvalidParameterException one of the search parameters are is invalid
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation.
+     * @throws PropertyServerException a problem accessing the metadata store
+     */
+    @Override
+    public long countMetadataElements(String                userId,
+                                      SearchProperties      searchProperties,
+                                      SearchClassifications matchClassifications,
+                                      QueryOptions          queryOptions) throws InvalidParameterException,
+                                                                                 UserNotAuthorizedException,
+                                                                                 PropertyServerException
+    {
+        return this.countMetadataElements(userId, searchProperties, matchClassifications, queryOptions, true);
+    }
+
+
+    /**
+     * Return a count of the metadata elements that match the supplied criteria, choosing how the count is
+     * arrived at.
+     *
+     * @param userId caller's userId
+     * @param searchProperties Optional list of entity property conditions to match.
+     * @param matchClassifications Optional list of classifications to match.
+     * @param queryOptions multiple options to control the query
+     * @param pushDown when true (the default) the repository counts the matching rows itself, which is fast but
+     *                 counts what matches the search rather than what a caller would be given - the retrieval
+     *                 applies a visibility check and silently drops what the caller cannot read.  When false the
+     *                 elements are retrieved and counted, so the answer agrees with the list at the cost of
+     *                 reading every one of them.
+     *
+     * @return the number of elements matching the supplied criteria.
+     * @throws InvalidParameterException one of the search parameters is invalid
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation.
+     * @throws PropertyServerException a problem accessing the metadata store
+     */
+    @Override
+    public  abstract long countMetadataElements(String                userId,
+                                               SearchProperties      searchProperties,
+                                               SearchClassifications matchClassifications,
+                                               QueryOptions          queryOptions,
+                                               boolean               pushDown) throws InvalidParameterException,
+                                                                                      UserNotAuthorizedException,
+                                                                                      PropertyServerException;
+
+
+    /**
+     * Return a list of relationships that match the requested conditions.  The results can be received as a series of pages.
+     *
+     * @param userId caller's userId
+     * @param relationshipTypeName relationship's type.  Null means all types
+     * @param relationshipSubtypeNames optional list of the names for subtypes of the requested type to include in
+     *                                 (or, if the queryOptions' skipSubtypes flag is true, exclude from) the search results.
+     * @param end1EntityGUIDs optional list of entity guids used to match end 1 of the relationships.
+     * @param end2EntityGUIDs optional list of entity guids used to match end 2 of the relationships.
+     * @param endMatchCriteria criteria for matching the ends of the relationships.
+     * @param searchProperties Optional list of relationship property conditions to match.
+     * @param queryOptions multiple options to control the query
+     *
+     * @return a list of relationships.  Null means no matching relationships.
+     * @throws InvalidParameterException one of the search parameters are is invalid
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation.
+     * @throws PropertyServerException a problem accessing the metadata store
+     */
+    @Override
+    public OpenMetadataRelationshipList findRelationshipsBetweenMetadataElements(String           userId,
+                                                                                String           relationshipTypeName,
+                                                                                List<String>     relationshipSubtypeNames,
+                                                                                List<String>     end1EntityGUIDs,
+                                                                                List<String>     end2EntityGUIDs,
+                                                                                EndMatchCriteria endMatchCriteria,
+                                                                                SearchProperties searchProperties,
+                                                                                QueryOptions     queryOptions) throws InvalidParameterException,
+                                                                                                                      UserNotAuthorizedException,
+                                                                                                                      PropertyServerException
+    {
+        return this.findRelationshipsBetweenMetadataElements(userId,
+                                                             relationshipTypeName,
+                                                             relationshipSubtypeNames,
+                                                             end1EntityGUIDs,
+                                                             null,
+                                                             end2EntityGUIDs,
+                                                             null,
+                                                             endMatchCriteria,
+                                                             searchProperties,
+                                                             queryOptions);
+    }
+
+
+    /**
+     * Return a list of relationships that match the requested conditions, including the types of the entities
+     * that must be at each end.  The results can be received as a series of pages.
+     *
+     * @param userId caller's userId
+     * @param relationshipTypeName relationship's type.  Null means all types
+     * @param relationshipSubtypeNames optional list of the names for subtypes of the requested type to include in
+     *                                 (or, if the queryOptions' skipSubtypes flag is true, exclude from) the search results.
+     * @param end1EntityGUIDs optional list of entity guids used to match end 1 of the relationships.
+     * @param end1EntityTypeName optional name of the type that the entity at end 1 must belong to.  Subtypes of
+     *                           the named type match too.  It is independent of the end 1 guids: naming the type
+     *                           on its own asks for the relationships that start at any entity of that type.
+     * @param end2EntityGUIDs optional list of entity guids used to match end 2 of the relationships.
+     * @param end2EntityTypeName optional name of the type that the entity at end 2 must belong to.  Subtypes of
+     *                           the named type match too.  It is independent of the end 2 guids.
+     * @param endMatchCriteria criteria for matching the ends of the relationships.
+     * @param searchProperties Optional list of relationship property conditions to match.
+     * @param queryOptions multiple options to control the query
+     *
+     * @return a list of relationships.  Null means no matching relationships.
+     * @throws InvalidParameterException one of the search parameters are is invalid
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation.
+     * @throws PropertyServerException a problem accessing the metadata store
+     */
+    @Override
+    public  abstract OpenMetadataRelationshipList findRelationshipsBetweenMetadataElements(String           userId,
+                                                                                           String           relationshipTypeName,
+                                                                                           List<String>     relationshipSubtypeNames,
+                                                                                           List<String>     end1EntityGUIDs,
+                                                                                           String           end1EntityTypeName,
+                                                                                           List<String>     end2EntityGUIDs,
+                                                                                           String           end2EntityTypeName,
+                                                                                           EndMatchCriteria endMatchCriteria,
+                                                                                           SearchProperties searchProperties,
+                                                                                           QueryOptions     queryOptions) throws InvalidParameterException,
+                                                                                                                                 UserNotAuthorizedException,
+                                                                                                                                 PropertyServerException;
+
+
+    /**
+     * Return a count of the relationships that match the requested conditions.  This has the same search
+     * semantics as findRelationshipsBetweenMetadataElements(), but returns the number of matching relationships
+     * rather than the relationships themselves.
+     *
+     * @param userId caller's userId
+     * @param relationshipTypeName relationship's type.  Null means all types
+     * @param relationshipSubtypeNames optional list of the names for subtypes of the requested type to include in
+     *                                 (or, if the queryOptions' skipSubtypes flag is true, exclude from) the search results.
+     * @param end1EntityGUIDs optional list of entity guids used to match end 1 of the relationships.
+     * @param end2EntityGUIDs optional list of entity guids used to match end 2 of the relationships.
+     * @param endMatchCriteria criteria for matching the ends of the relationships.
+     * @param searchProperties Optional list of relationship property conditions to match.
+     * @param queryOptions multiple options to control the query
+     *
+     * @return the number of relationships matching the supplied criteria.
+     * @throws InvalidParameterException one of the search parameters are is invalid
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation.
+     * @throws PropertyServerException a problem accessing the metadata store
+     */
+    @Override
+    public long countRelationshipsBetweenMetadataElements(String           userId,
+                                                          String           relationshipTypeName,
+                                                          List<String>     relationshipSubtypeNames,
+                                                          List<String>     end1EntityGUIDs,
+                                                          List<String>     end2EntityGUIDs,
+                                                          EndMatchCriteria endMatchCriteria,
+                                                          SearchProperties searchProperties,
+                                                          QueryOptions     queryOptions) throws InvalidParameterException,
+                                                                                                UserNotAuthorizedException,
+                                                                                                PropertyServerException
+    {
+        return this.countRelationshipsBetweenMetadataElements(userId,
+                                                              relationshipTypeName,
+                                                              relationshipSubtypeNames,
+                                                              end1EntityGUIDs,
+                                                              null,
+                                                              end2EntityGUIDs,
+                                                              null,
+                                                              endMatchCriteria,
+                                                              searchProperties,
+                                                              queryOptions);
+    }
+
+
+    /**
+     * Return a count of the relationships that match the requested conditions, including the types of the
+     * entities that must be at each end.  This has the same search semantics as
+     * findRelationshipsBetweenMetadataElements(), but returns the number of matching relationships rather
+     * than the relationships themselves.
+     *
+     * @param userId caller's userId
+     * @param relationshipTypeName relationship's type.  Null means all types
+     * @param relationshipSubtypeNames optional list of the names for subtypes of the requested type to include in
+     *                                 (or, if the queryOptions' skipSubtypes flag is true, exclude from) the search results.
+     * @param end1EntityGUIDs optional list of entity guids used to match end 1 of the relationships.
+     * @param end1EntityTypeName optional name of the type that the entity at end 1 must belong to.  Subtypes of
+     *                           the named type match too.
+     * @param end2EntityGUIDs optional list of entity guids used to match end 2 of the relationships.
+     * @param end2EntityTypeName optional name of the type that the entity at end 2 must belong to.  Subtypes of
+     *                           the named type match too.
+     * @param endMatchCriteria criteria for matching the ends of the relationships.
+     * @param searchProperties Optional list of relationship property conditions to match.
+     * @param queryOptions multiple options to control the query
+     *
+     * @return the number of relationships matching the supplied criteria.
+     * @throws InvalidParameterException one of the search parameters are is invalid
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation.
+     * @throws PropertyServerException a problem accessing the metadata store
+     */
+    @Override
+    public long countRelationshipsBetweenMetadataElements(String           userId,
+                                                          String           relationshipTypeName,
+                                                          List<String>     relationshipSubtypeNames,
+                                                          List<String>     end1EntityGUIDs,
+                                                          String           end1EntityTypeName,
+                                                          List<String>     end2EntityGUIDs,
+                                                          String           end2EntityTypeName,
+                                                          EndMatchCriteria endMatchCriteria,
+                                                          SearchProperties searchProperties,
+                                                          QueryOptions     queryOptions) throws InvalidParameterException,
+                                                                                                UserNotAuthorizedException,
+                                                                                                PropertyServerException
+    {
+        return this.countRelationshipsBetweenMetadataElements(userId,
+                                                              relationshipTypeName,
+                                                              relationshipSubtypeNames,
+                                                              end1EntityGUIDs,
+                                                              end1EntityTypeName,
+                                                              end2EntityGUIDs,
+                                                              end2EntityTypeName,
+                                                              endMatchCriteria,
+                                                              searchProperties,
+                                                              queryOptions,
+                                                              true);
+    }
+
+
+    /**
+     * Return a count of the relationships that match the requested conditions, choosing how the count is
+     * arrived at.
+     *
+     * @param userId caller's userId
+     * @param relationshipTypeName relationship's type.  Null means all types
+     * @param relationshipSubtypeNames optional list of the names for subtypes of the requested type to include
+     * @param end1EntityGUIDs optional list of entity guids used to match end 1 of the relationships.
+     * @param end1EntityTypeName optional name of the type that the entity at end 1 must belong to.
+     * @param end2EntityGUIDs optional list of entity guids used to match end 2 of the relationships.
+     * @param end2EntityTypeName optional name of the type that the entity at end 2 must belong to.
+     * @param endMatchCriteria criteria for matching the ends of the relationships.
+     * @param searchProperties Optional list of relationship property conditions to match.
+     * @param queryOptions multiple options to control the query
+     * @param pushDown when true (the default) the repository counts the matching rows itself, which is fast but
+     *                 counts what matches the search rather than what a caller would be given - the retrieval
+     *                 applies a visibility check and silently drops what the caller cannot read.  When false the
+     *                 elements are retrieved and counted, so the answer agrees with the list at the cost of
+     *                 reading every one of them.
+     *
+     * @return the number of relationships matching the supplied criteria.
+     * @throws InvalidParameterException one of the search parameters is invalid
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation.
+     * @throws PropertyServerException a problem accessing the metadata store
+     */
+    @Override
+    public  abstract long countRelationshipsBetweenMetadataElements(String           userId,
+                                                                    String           relationshipTypeName,
+                                                                    List<String>     relationshipSubtypeNames,
+                                                                    List<String>     end1EntityGUIDs,
+                                                                    String           end1EntityTypeName,
+                                                                    List<String>     end2EntityGUIDs,
+                                                                    String           end2EntityTypeName,
+                                                                    EndMatchCriteria endMatchCriteria,
+                                                                    SearchProperties searchProperties,
+                                                                    QueryOptions     queryOptions,
+                                                                    boolean          pushDown) throws InvalidParameterException,
+                                                                                                      UserNotAuthorizedException,
+                                                                                                      PropertyServerException;
+
+
+    /**
+     * Retrieve the relationship using its unique identifier.
+     *
+     * @param userId caller's userId
+     * @param relationshipGUID unique identifier for the relationship
+     * @param getOptions multiple options to control the query
+     *
+     * @return relationship properties
+     * @throws InvalidParameterException the unique identifier is null or not known.
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation
+     * @throws PropertyServerException a problem accessing the metadata store
+     */
+    @Override
+    public  abstract OpenMetadataRelationship getRelationshipByGUID(String     userId,
+                                                                    String     relationshipGUID,
+                                                                    GetOptions getOptions) throws InvalidParameterException,
+                                                                                                  UserNotAuthorizedException,
+                                                                                                  PropertyServerException;
+
+
+    /**
+     * Return each of the versions of a relationship.
+     *
+     * @param userId caller's userId
+     * @param relationshipGUID            unique identifier for the relationship
+     * @param queryOptions multiple options to control the query
+     *
+     * @return a list of elements matching the supplied criteria; null means no matching elements in the metadata store.
+     * @throws InvalidParameterException one of the search parameters are is invalid
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation.
+     * @throws PropertyServerException a problem accessing the metadata store
+     */
+    @Override
+    public  abstract OpenMetadataRelationshipList getRelationshipHistory(String                 userId,
+                                                                         String                 relationshipGUID,
+                                                                         HistoricalQueryOptions queryOptions) throws InvalidParameterException,
+                                                                                                                 UserNotAuthorizedException,
+                                                                                                                 PropertyServerException;
+
+
+    /**
+     * Create a new metadata element in the metadata store.  The type name comes from the open metadata types.
+     * The selected type also controls the names and types of the properties that are allowed.
+     * This version of the method allows access to advanced features such as multiple states and
+     * effectivity dates.
+     *
+     * @param userId caller's userId
+     * @param metadataElementTypeName type name of the new metadata element
+     * @param properties properties of the new metadata element
+     *
+     * @return unique identifier of the new metadata element
+     *
+     * @throws InvalidParameterException the type name, status or one of the properties is invalid
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation
+     * @throws PropertyServerException a problem with the metadata store
+     */
+    @Override
+    public String createMetadataElementInStore(String               userId,
+                                               String               metadataElementTypeName,
+                                               NewElementProperties properties) throws InvalidParameterException,
+                                                                                       UserNotAuthorizedException,
+                                                                                       PropertyServerException
+    {
+        return this.createMetadataElementInStore(userId,
+                                                 metadataElementTypeName,
+                                                 null,
+                                                 null,
+                                                 properties,
+                                                 null);
+    }
+
+
+    /**
+     * Create a new metadata element in the metadata store.  The type name comes from the open metadata types.
+     * The selected type also controls the names and types of the properties that are allowed.
+     * This version of the method allows access to advanced features such as multiple states and
+     * effectivity dates.
+     *
+     * @param userId caller's userId
+     * @param externalSourceGUID      unique identifier of the software capability that owns this collection
+     * @param externalSourceName      unique name of the software capability that owns this collection
+     * @param metadataElementTypeName type name of the new metadata element
+     * @param properties properties of the new metadata element
+     *
+     * @return unique identifier of the new metadata element
+     *
+     * @throws InvalidParameterException the type name, status or one of the properties is invalid
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation
+     * @throws PropertyServerException a problem with the metadata store
+     */
+    @Override
+    public String createMetadataElementInStore(String               userId,
+                                               String               externalSourceGUID,
+                                               String               externalSourceName,
+                                               String               metadataElementTypeName,
+                                               NewElementProperties properties) throws InvalidParameterException,
+                                                                                       UserNotAuthorizedException,
+                                                                                       PropertyServerException
+    {
+        NewElementOptions newElementOptions = new NewElementOptions();
+
+        newElementOptions.setExternalSourceGUID(externalSourceGUID);
+        newElementOptions.setExternalSourceName(externalSourceName);
+
+        return this.createMetadataElementInStore(userId,
+                                                 metadataElementTypeName,
+                                                 newElementOptions,
+                                                 null,
+                                                 properties,
+                                                 null);
+    }
+
+
+    /**
+     * Create a new metadata element in the metadata store.  The type name comes from the open metadata types.
+     * The selected type also controls the names and types of the properties that are allowed.
+     * This version of the method allows access to advanced features such as multiple states and
+     * effectivity dates.
+     *
+     * @param userId caller's userId
+     * @param metadataElementTypeName metadataElementTypeName
+     * @param newElementOptions details of the element to create
+     * @param initialClassifications map of classification names to classification properties to include in the entity creation request
+     * @param properties properties of the new metadata element
+     * @param parentRelationshipProperties properties to include in parent relationship
+     *
+     * @return unique identifier of the new metadata element
+     *
+     * @throws InvalidParameterException the type name, status or one of the properties is invalid
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation
+     * @throws PropertyServerException a problem with the metadata store
+     */
+    @Override
+    public abstract String createMetadataElementInStore(String                            userId,
+                                                        String                            metadataElementTypeName,
+                                                        NewElementOptions                 newElementOptions,
+                                                        Map<String, NewElementProperties> initialClassifications,
+                                                        NewElementProperties              properties,
+                                                        NewElementProperties              parentRelationshipProperties) throws InvalidParameterException,
+                                                                                                                               UserNotAuthorizedException,
+                                                                                                                               PropertyServerException;
+
+    /**
+     * Create a new metadata element in the metadata store using the template identified by the templateGUID.
+     * The type name comes from the open metadata types.
+     * The selected type also controls the names and types of the properties that are allowed.
+     * The template and any similar anchored objects are
+     * copied in this process.
+     *
+     * @param userId caller's userId
+     * @param metadataElementTypeName expected type name for the new element
+     * @param templateOptions details of the element to create
+     * @param templateGUID the unique identifier of the existing element to copy
+     * @param replacementProperties properties of the new metadata element.  These override the template values
+     * @param replacementClassifications map of classification names to classification properties to include in the entity creation request. These override the template values.
+     * @param placeholderProperties property name-to-property value map to replace any placeholder values in the
+     *                              template element - and their anchored elements, which are also copied as part of this operation.
+     * @param parentRelationshipProperties properties to include in parent relationship
+     *
+     * @return unique identifier of the new metadata element
+     *
+     * @throws InvalidParameterException the type name, status, or one of the properties is invalid
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation.
+     * @throws PropertyServerException a problem with the metadata store
+     */
+    @Override
+    public abstract String createMetadataElementFromTemplate(String                            userId,
+                                                             String                            metadataElementTypeName,
+                                                             TemplateOptions                   templateOptions,
+                                                             String                            templateGUID,
+                                                             ElementProperties                 replacementProperties,
+                                                             Map<String, NewElementProperties> replacementClassifications,
+                                                             Map<String, String>               placeholderProperties,
+                                                             NewElementProperties              parentRelationshipProperties) throws InvalidParameterException,
+                                                                                                                                    UserNotAuthorizedException,
+                                                                                                                                    PropertyServerException;
+
+
+    /**
+     * Update the properties of a specific metadata element.  The properties must match the type definition associated with the
+     * metadata element when it was created.  However, it is possible to update a few properties, or replace all them by
+     * the value used in the replaceProperties flag.
+     *
+     * @param userId caller's userId
+     * @param metadataElementGUID unique identifier of the metadata element to update
+     * @param updateOptions provides a structure for the additional options when updating an element.
+     * @param properties new properties for the metadata element
+     *
+     * @return boolean - true if an update occurred
+     * @throws InvalidParameterException either the unique identifier or the properties are invalid in some way
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation
+     * @throws PropertyServerException a problem with the metadata store
+     */
+    @Override
+    public abstract boolean updateMetadataElementInStore(String            userId,
+                                                         String            metadataElementGUID,
+                                                         UpdateOptions     updateOptions,
+                                                         ElementProperties properties) throws InvalidParameterException,
+                                                                                              UserNotAuthorizedException,
+                                                                                              PropertyServerException;
+
+
+    /**
+     * Update the zone membership to increase its visibility.  The publishZones are defined in the user directory.
+     *
+     * @param userId                 caller's userId
+     * @param metadataElementGUID    unique identifier of the metadata element to update
+     * @param metadataSourceOptions  options to control access to open metadata
+     *
+     * @throws InvalidParameterException  either the unique identifier or the status are invalid in some way
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation
+     * @throws PropertyServerException    a problem with the metadata store
+     */
+    @Override
+    public abstract void publishMetadataElement(String                userId,
+                                                String                metadataElementGUID,
+                                                MetadataSourceOptions metadataSourceOptions) throws InvalidParameterException,
+                                                                                                    UserNotAuthorizedException,
+                                                                                                    PropertyServerException;
+
+
+    /**
+     * Update the zone membership to reduce its visibility.  The defaultZones are defined in the user directory.
+     *
+     * @param userId                 caller's userId
+     * @param metadataElementGUID    unique identifier of the metadata element to update
+     * @param metadataSourceOptions  options to control access to open metadata
+     *
+     * @throws InvalidParameterException  either the unique identifier or the status are invalid in some way
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation
+     * @throws PropertyServerException    a problem with the metadata store
+     */
+    @Override
+    public abstract void withdrawMetadataElement(String                userId,
+                                                 String                metadataElementGUID,
+                                                 MetadataSourceOptions metadataSourceOptions) throws InvalidParameterException,
+                                                                                                     UserNotAuthorizedException,
+                                                                                                     PropertyServerException;
+
+
+    /**
+     * Update the effectivity dates control the visibility of the element through specific APIs.
+     *
+     * @param userId caller's userId
+     * @param metadataElementGUID unique identifier of the metadata element to update
+     * @param metadataSourceOptions  options to control access to open metadata
+     * @param effectiveFrom the date when this element is active - null for active now
+     * @param effectiveTo the date when this element becomes inactive - null for active until deleted
+     *
+     * @throws InvalidParameterException either the unique identifier or the status are invalid in some way
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation
+     * @throws PropertyServerException a problem with the metadata store
+     */
+    @Override
+    public abstract void updateMetadataElementEffectivityInStore(String                userId,
+                                                                 String                metadataElementGUID,
+                                                                 MetadataSourceOptions metadataSourceOptions,
+                                                                 Date                  effectiveFrom,
+                                                                 Date                  effectiveTo) throws InvalidParameterException,
+                                                                                                           UserNotAuthorizedException,
+                                                                                                           PropertyServerException;
+
+
+    /**
+     * Delete a specific metadata element.
+     *
+     * @param userId caller's userId
+     * @param metadataElementGUID unique identifier of the metadata element to update
+     * @param deleteOptions options for a delete request
+     *
+     * @throws InvalidParameterException the unique identifier is null or invalid in some way
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation
+     * @throws PropertyServerException a problem with the metadata store
+     */
+    @Override
+    public abstract void deleteMetadataElementInStore(String        userId,
+                                                      String        metadataElementGUID,
+                                                      DeleteOptions deleteOptions) throws InvalidParameterException,
+                                                                                          UserNotAuthorizedException,
+                                                                                          PropertyServerException;
+
+
+    /**
+     * Archive a specific metadata element.
+     *
+     * @param userId caller's userId
+     * @param metadataElementGUID unique identifier of the metadata element to update
+     * @param deleteOptions description of the archiving process
+     *
+     * @throws InvalidParameterException the unique identifier is null or invalid in some way
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation
+     * @throws PropertyServerException a problem with the metadata store
+     */
+    @Override
+    public abstract void archiveMetadataElementInStore(String        userId,
+                                                       String        metadataElementGUID,
+                                                       DeleteOptions deleteOptions) throws InvalidParameterException,
+                                                                                           UserNotAuthorizedException,
+                                                                                           PropertyServerException;
+
+
+    /**
+     * Add a new classification to the metadata element.  Note that only one classification with the same name can be attached to
+     * a metadata element.
+     *
+     * @param userId caller's userId
+     * @param metadataElementGUID unique identifier of the metadata element to update
+     * @param classificationName name of the classification to add (if the classification is already present then use reclassify)
+     * @param metadataSourceOptions  options to control access to open metadata
+     * @param properties properties to store in the new classification.  These must conform to the valid properties associated with the
+     *                   classification name
+     *
+     * @throws InvalidParameterException the unique identifier or classification name is null or invalid in some way; properties do not match the
+     *                                   valid properties associated with the classification's type definition
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation
+     * @throws PropertyServerException a problem with the metadata store
+     */
+    @Override
+    public abstract void classifyMetadataElementInStore(String                userId,
+                                                        String                metadataElementGUID,
+                                                        String                classificationName,
+                                                        MetadataSourceOptions metadataSourceOptions,
+                                                        NewElementProperties  properties) throws InvalidParameterException,
+                                                                                                 UserNotAuthorizedException,
+                                                                                                 PropertyServerException;
+
+
+    /**
+     * Update the properties of a classification that is currently attached to a specific metadata element.
+     *
+     * @param userId caller's userId
+     * @param metadataElementGUID unique identifier of the metadata element to update
+     * @param classificationName unique name of the classification to update
+     * @param updateOptions provides a structure for the additional options when updating a classification.
+     * @param properties new properties for the classification
+     *
+     * @throws InvalidParameterException the unique identifier or classification name is null or invalid in some way; properties do not match the
+     *                                   valid properties associated with the classification's type definition
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation
+     * @throws PropertyServerException a problem with the metadata store
+     */
+    @Override
+    public abstract void reclassifyMetadataElementInStore(String            userId,
+                                                          String            metadataElementGUID,
+                                                          String            classificationName,
+                                                          UpdateOptions     updateOptions,
+                                                          ElementProperties properties) throws InvalidParameterException,
+                                                                                               UserNotAuthorizedException,
+                                                                                               PropertyServerException;
+
+
+    /**
+     * Update the effectivity dates of a specific classification attached to a metadata element.
+     * The effectivity dates control the visibility of the classification through specific APIs.
+     *
+     * @param userId caller's userId
+     * @param metadataElementGUID unique identifier of the metadata element to update
+     * @param classificationName unique name of the classification to update
+     * @param metadataSourceOptions  options to control access to open metadata
+     * @param effectiveFrom the date when this element is active - null for active now
+     * @param effectiveTo the date when this element becomes inactive - null for active until deleted
+     *
+     * @throws InvalidParameterException either the unique identifier or the status are invalid in some way
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation
+     * @throws PropertyServerException a problem with the metadata store
+     */
+    @Override
+    public abstract void updateClassificationEffectivityInStore(String                userId,
+                                                                String                metadataElementGUID,
+                                                                String                classificationName,
+                                                                MetadataSourceOptions metadataSourceOptions,
+                                                                Date                  effectiveFrom,
+                                                                Date                  effectiveTo) throws InvalidParameterException,
+                                                                                                          UserNotAuthorizedException,
+                                                                                                          PropertyServerException;
+
+
+    /**
+     * Remove the named classification from a specific metadata element.
+     *
+     * @param userId caller's userId
+     * @param metadataElementGUID unique identifier of the metadata element to update
+     * @param classificationName unique name of the classification to remove
+     * @param metadataSourceOptions  options to control access to open metadata
+     *
+     * @throws InvalidParameterException the unique identifier or classification name is null or invalid in some way
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation
+     * @throws PropertyServerException a problem with the metadata store
+     */
+    @Override
+    public abstract void declassifyMetadataElementInStore(String                userId,
+                                                          String                metadataElementGUID,
+                                                          String                classificationName,
+                                                          MetadataSourceOptions metadataSourceOptions) throws InvalidParameterException,
+                                                                                                              UserNotAuthorizedException,
+                                                                                                              PropertyServerException;
+
+
+    /**
+     * Create a relationship between two metadata elements.  It is important to put the right element at each end of the relationship
+     * according to the type definition since this will affect how the relationship is interpreted.
+     *
+     * @param userId caller's userId
+     * @param relationshipTypeName name of the type of relationship to create.  This will determine the types of metadata elements that can be
+     *                             related and the properties that can be associated with this relationship.
+     * @param metadataElement1GUID unique identifier of the metadata element at end 1 of the relationship
+     * @param metadataElement2GUID unique identifier of the metadata element at end 2 of the relationship
+     * @param makeAnchorOptions  options to control access to open metadata
+     * @param properties the properties of the relationship
+     *
+     * @return unique identifier of the new relationship
+     *
+     * @throws InvalidParameterException the unique identifier's of the metadata elements are null or invalid in some way; the properties are
+     *                                    not valid for this type of relationship
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation
+     * @throws PropertyServerException a problem with the metadata store
+     */
+    @Override
+    public abstract String createRelatedElementsInStore(String                userId,
+                                                        String                relationshipTypeName,
+                                                        String                metadataElement1GUID,
+                                                        String                metadataElement2GUID,
+                                                        MakeAnchorOptions     makeAnchorOptions,
+                                                        NewElementProperties  properties) throws InvalidParameterException,
+                                                                                                 UserNotAuthorizedException,
+                                                                                                 PropertyServerException;
+
+
+    /**
+     * Update the properties associated with a relationship.
+     *
+     * @param userId caller's userId
+     * @param relationshipGUID unique identifier of the relationship to update
+     * @param updateOptions provides a structure for the additional options when updating a relationship.
+     * @param properties new properties for the relationship
+     *
+     * @throws InvalidParameterException the unique identifier of the relationship is null or invalid in some way; the properties are
+     *                                    not valid for this type of relationship
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation
+     * @throws PropertyServerException a problem with the metadata store
+     */
+    @Override
+    public abstract void updateRelationshipInStore(String            userId,
+                                                   String            relationshipGUID,
+                                                   UpdateOptions     updateOptions,
+                                                   ElementProperties properties) throws InvalidParameterException,
+                                                                                        UserNotAuthorizedException,
+                                                                                        PropertyServerException;
+
+
+    /**
+     * Update all relationships of a particular type between two metadata elements.
+     *
+     * @param userId caller's userId
+     * @param relationshipTypeName name of the type of relationship to create.  This will determine the types of metadata elements that can be
+     *                             related and the properties that can be associated with this relationship.
+     * @param metadataElement1GUID unique identifier of the metadata element at end 1 of the relationship
+     * @param metadataElement2GUID unique identifier of the metadata element at end 2 of the relationship
+     * @param updateOptions provides a structure for the additional options when updating a relationship.
+     * @param properties new properties for the relationship
+     *
+     * @throws InvalidParameterException the unique identifier of the relationship is null or invalid in some way
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation
+     * @throws PropertyServerException a problem with the metadata store
+     */
+    @Override
+    public abstract void updateRelatedElementsInStore(String            userId,
+                                                      String            relationshipTypeName,
+                                                      String            metadataElement1GUID,
+                                                      String            metadataElement2GUID,
+                                                      UpdateOptions     updateOptions,
+                                                      ElementProperties properties) throws InvalidParameterException,
+                                                                                           UserNotAuthorizedException,
+                                                                                           PropertyServerException;
+
+
+    /**
+     * Update the effectivity dates of a specific relationship between metadata elements.
+     * The effectivity dates control the visibility of the classification through specific APIs.
+     *
+     * @param userId caller's userId
+     * @param relationshipGUID unique identifier of the relationship to update
+     * @param metadataSourceOptions  options to control access to open metadata
+     * @param effectiveFrom the date when this element is active - null for active now
+     * @param effectiveTo the date when this element becomes inactive - null for active until deleted
+     *
+     * @throws InvalidParameterException either the unique identifier or the status are invalid in some way
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation
+     * @throws PropertyServerException a problem with the metadata store
+     */
+    @Override
+    public abstract void updateRelationshipEffectivityInStore(String                userId,
+                                                              String                relationshipGUID,
+                                                              MetadataSourceOptions metadataSourceOptions,
+                                                              Date                  effectiveFrom,
+                                                              Date                  effectiveTo) throws InvalidParameterException,
+                                                                                                        UserNotAuthorizedException,
+                                                                                                        PropertyServerException;
+
+
+    /**
+     * Delete a relationship between two metadata elements.
+     *
+     * @param userId caller's userId
+     * @param relationshipGUID unique identifier of the relationship to delete
+     * @param deleteOptions  options to control access to open metadata
+     *
+     * @throws InvalidParameterException the unique identifier of the relationship is null or invalid in some way
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation
+     * @throws PropertyServerException a problem with the metadata store
+     */
+    @Override
+    public abstract void deleteRelationshipInStore(String        userId,
+                                                   String        relationshipGUID,
+                                                   DeleteOptions deleteOptions) throws InvalidParameterException,
+                                                                                       UserNotAuthorizedException,
+                                                                                       PropertyServerException;
+
+
+    /**
+     * Delete all relationships of a particular type between two metadata elements.
+     *
+     * @param userId caller's userId
+     * @param relationshipTypeName name of the type of relationship to create.  This will determine the types of metadata elements that can be
+     *                             related and the properties that can be associated with this relationship.
+     * @param metadataElement1GUID unique identifier of the metadata element at end 1 of the relationship
+     * @param metadataElement2GUID unique identifier of the metadata element at end 2 of the relationship
+     * @param deleteOptions  options to control access to open metadata
+     *
+     * @throws InvalidParameterException the unique identifier of the relationship is null or invalid in some way
+     * @throws UserNotAuthorizedException the userId is not permitted to perform this operation
+     * @throws PropertyServerException a problem with the metadata store
+     */
+    @Override
+    public abstract void detachRelatedElementsInStore(String        userId,
+                                                      String        relationshipTypeName,
+                                                      String        metadataElement1GUID,
+                                                      String        metadataElement2GUID,
+                                                      DeleteOptions deleteOptions) throws InvalidParameterException,
+                                                                                          UserNotAuthorizedException,
+                                                                                          PropertyServerException;
+
+
+    /**
+     * Retrieve the reference data for this element.
+     *
+     * @param userId calling user
+     * @param elementGUID element to query
+     * @return map of reference data
+     * @throws InvalidParameterException bad parameter
+     * @throws PropertyServerException repository error
+     * @throws UserNotAuthorizedException authorization issue
+     */
+    @Override
+    public abstract Map<String, List<SpecificationProperty>> getSpecification(String userId,
+                                                                              String elementGUID) throws InvalidParameterException,
+                                                                                                         PropertyServerException,
+                                                                                                         UserNotAuthorizedException;
+
+    /**
+     * Standard toString method.
+     *
+     * @return print out of variables in a JSON-style
+     */
+    @Override
+    public String toString()
+    {
+        return "OpenMetadataClient{" +
+                "serverName='" + serverName + '\'' +
+                ", serverPlatformURLRoot='" + serverPlatformURLRoot + '\'' +
+                '}';
+    }
+}

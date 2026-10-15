@@ -1,0 +1,32 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+<!-- Copyright Contributors to the Egeria project. -->
+
+![Stable](../../../images/egeria-content-status-released.png#pagewidth)
+
+# Notification Manager OMVS 
+
+The Notification Manager Open Metadata View Service (OMVS) provides a REST API to support user interfaces (UIs)
+supporting a personalized notification service.  This includes the definition of the trigger for the 
+notification, the style of notification and the recipient.
+
+## Key Features
+
+The Notification Manager API supports the following key features:
+
+* **Monitored Resources**: Link notification types to the metadata elements that should be monitored for changes.
+* **Notification Subscribers**: Define the recipients of notifications for specific notification types.
+
+## Further information
+
+* [Notification Manager API Overview](https://egeria-project.org/services/omvs/notification-manager/overview/)
+* [Notification Type Concept](https://egeria-project.org/concepts/notification-type/)
+
+Sample requests for the REST API can be found in [Egeria-api-notification-manager.http](Egeria-api-notification-manager.http).
+Further examples covering notification types and actions, and subscription requests and processes, can be found in
+[Egeria-notification-types-and-actions.http](Egeria-notification-types-and-actions.http),
+[Egeria-baudot-create-subscription.http](Egeria-baudot-create-subscription.http) and
+[Egeria-baudot-subscription-processes.http](Egeria-baudot-subscription-processes.http).
+
+----
+License: [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/),
+Copyright Contributors to the Egeria project.

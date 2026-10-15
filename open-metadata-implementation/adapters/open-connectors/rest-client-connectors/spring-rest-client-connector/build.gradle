@@ -1,0 +1,25 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ * Copyright Contributors to the ODPi Egeria project.
+ */
+
+
+dependencies {
+    compileOnly 'org.slf4j:slf4j-api'
+    compileOnly project(':open-metadata-implementation:adapters:open-connectors')
+    compileOnly project(':open-metadata-implementation:adapters:open-connectors:rest-client-connectors:rest-client-connectors-api')
+    compileOnly project(':open-metadata-implementation:frameworks:open-connector-framework')
+    compileOnly project(':open-metadata-implementation:frameworks:open-metadata-framework')
+    compileOnly project(':open-metadata-implementation:frameworks:audit-log-framework')
+    implementation project(':open-metadata-implementation:user-security:token-manager')
+    implementation 'org.springframework:spring-web'
+    implementation 'org.springframework:spring-core'
+    compileOnly 'com.fasterxml.jackson.core:jackson-annotations'
+
+}
+
+description = 'Spring REST Client Connector'
+
+java {
+    withJavadocJar()
+}

@@ -1,0 +1,52 @@
+#
+# This command updates the sample configuration document for active-metadata-server.  It uses IntelliJ's HTTP Client.
+#
+@baseURL=https://localhost:7443
+@adminUserId=garygeeke
+
+###
+# =====================================================================================================================
+# Manage the authentication token.  Run this request to create/refresh the token.
+
+# @name Token (RequestBody)
+POST {{baseURL}}/api/token
+Content-Type: application/json
+
+{
+  "userId" : "{{adminUserId}}",
+  "password" : "secret"
+}
+
+> {% client.global.set("token", response.body); %}
+
+###
+# ---------------------------------------------
+# Metadata Access Store: active-metadata-store
+#
+
+###
+# @name Enable the PostgreSQL Repository
+# Set up the local repository to use the PostgreSQL Repository implementation.
+POST {{baseURL}}/open-metadata/admin-services/servers/active-metadata-store/local-repository/mode/postgres-repository
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "databaseURL": "~{repositoryDatabaseURL}~?currentSchema=repository_active_metadata_store",
+    "databaseSchema": "repository_active_metadata_store",
+    "secretsStore": "~{egeriaServersSecretsStore}~",
+    "secretsCollectionName": "~{repositorySecretCollectionName}~"
+}
+
+###
+
+@activeMetadataStoreMetadataCollectionId=c5226c53-4917-42b4-8219-f532b19cb550
+
+###
+# @name Set local metadata collection id
+# Set up the identifier of the collection of metadata that originates from this metadata server.
+POST {{baseURL}}/open-metadata/admin-services/servers/active-metadata-store/local-repository/metadata-collection-id
+Authorization: Bearer {{token}}
+Content-Type: text/plain
+
+{{activeMetadataStoreMetadataCollectionId}}

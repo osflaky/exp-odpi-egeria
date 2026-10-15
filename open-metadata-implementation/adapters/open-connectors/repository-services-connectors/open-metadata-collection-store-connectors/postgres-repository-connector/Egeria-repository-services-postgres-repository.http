@@ -1,0 +1,104 @@
+# Egeria-repository-services-postgres-repository
+
+@baseURL=https://localhost:7443
+@adminUserId=garygeeke
+@server=active-metadata-store
+@user=erinoverview
+
+###
+# =====================================================================================================================
+# Manage the authentication token.  Run this request to create/refresh the token.
+
+# @name Token (RequestBody)
+POST {{baseURL}}/api/token
+Content-Type: application/json
+
+{
+  "userId" : "{{adminUserId}}",
+  "password" : "secret"
+}
+
+> {% client.global.set("token", response.body); %}
+
+###
+# @name get metadata collection Id
+POST {{baseURL}}/servers/{{server}}/open-metadata/repository-services/users/{{user}}/metadata-collection-id
+Authorization: Bearer {{token}}
+
+###
+# @name Get types
+POST {{baseURL}}/servers/{{server}}/open-metadata/repository-services/users/{{user}}/types/all
+Authorization: Bearer {{token}}
+
+###
+
+@guid=c857b5a1-e497-4436-ac6b-c2265dcc4892
+
+###
+# @name Get Entity Detail
+# The getEntityDetails requests returns a repository services instance of category **entity**.  An entity describes a node in the graph of metadata.  An asset is stored in the repository as an entity.  This query is set up to retrieve one of the assets created in the main exercise.  Notice that the entity includes information about the type of entity and the audit header information that shows the home repository.
+POST {{baseURL}}/servers/{{server}}/open-metadata/repository-services/users/{{user}}/instances/entity/{{guid}}
+Authorization: Bearer {{token}}
+
+###
+# @name Get Entity Detail (federated query)
+POST {{baseURL}}/servers/{{server}}/open-metadata/repository-services/users/{{user}}/enterprise/instances/entity/{{guid}}
+Authorization: Bearer {{token}}
+
+###
+# @name Get Relationship
+# The getEntityDetails requests returns a repository services instance of category **entity**.  An entity describes a node in the graph of metadata.  An asset is stored in the repository as an entity.  This query is set up to retrieve one of the assets created in the main exercise.  Notice that the entity includes information about the type of entity and the audit header information that shows the home repository.
+POST {{baseURL}}/servers/{{server}}/open-metadata/repository-services/users/{{user}}/instances/relationship/{{guid}}
+Authorization: Bearer {{token}}
+
+###
+# @name Get All Relationships For Entity (federated query)
+# The getEntityDetails requests returns a repository services instance of category **entity**.  An entity describes a node in the graph of metadata.  An asset is stored in the repository as an entity.  This query is set up to retrieve one of the assets created in the main exercise.  Notice that the entity includes information about the type of entity and the audit header information that shows the home repository.
+POST {{baseURL}}/servers/{{server}}/open-metadata/repository-services/users/{{user}}/enterprise/instances/entity/{{guid}}/relationships
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "class" : "TypeLimitedFindRequest",
+    "offset" : 0,
+    "pageSize" : 0
+}
+
+###
+# @name Get Specific Relationships For Entity (federated query)
+# The getEntityDetails requests returns a repository services instance of category **entity**.  An entity describes a node in the graph of metadata.  An asset is stored in the repository as an entity.  This query is set up to retrieve one of the assets created in the main exercise.  Notice that the entity includes information about the type of entity and the audit header information that shows the home repository.
+POST {{baseURL}}/servers/{{server}}/open-metadata/repository-services/users/{{user}}/enterprise/instances/entity/{{guid}}/relationships
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "TypeLimitedFindRequest",
+  "typeGUID" : "bc5a5eb1-881b-4055-aa2c-78f314282ac2",
+  "sequencingOrder" : "GUID",
+  "offset" : 0,
+  "pageSize" : 0
+}
+
+
+###
+# @name Get TypeDef By Name
+POST {{baseURL}}/servers/{{server}}/open-metadata/repository-services/users/{{user}}/types/typedef/name/Asset
+Authorization: Bearer {{token}}
+
+###
+# @name Get AttributeTypeDef By Name
+POST {{baseURL}}/servers/{{server}}/open-metadata/repository-services/users/{{user}}/types/attribute-typedef/name/GovernanceActionStatus
+Authorization: Bearer {{token}}
+
+###
+# @name Find Entities By Property Value
+POST {{baseURL}}/servers/{{server}}/open-metadata/repository-services/users/{{user}}/instances/entities/by-property-value?
+    searchCriteria=.*cust.*
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "class" : "EntityPropertyFindRequest",
+    "offset" : 0,
+    "pageSize" : 100
+}

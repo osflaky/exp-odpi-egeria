@@ -1,0 +1,76 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+<!-- Copyright Contributors to the ODPi Egeria project. -->
+<html lang="{{ site.lang | default: 'en-US' }}">
+
+  <head>
+    <title>{{ site.title | escape }}{% if page.title %} - {{ page.title | escape }}{% endif %}</title>
+    <link href="https://fonts.googleapis.com/css?family=Roboto:400,500" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css?family=Lato:400,700|Roboto:400,500" rel="stylesheet">
+    <meta charset='utf-8'>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width,maximum-scale=2">
+    <link rel="shortcut icon" href="{{ '/assets/favicon.ico?v=' | append: site.github.build_revision | relative_url }}" />
+    <link rel="stylesheet" type="text/css" href="{{ '/assets/css/style-sub.scss?v=' | append: site.github.build_revision | relative_url }}">
+    <link rel="stylesheet" type="text/css" media="screen" href="{{ '/assets/css/style-sub.scss?v=' | append: site.github.build_revision | relative_url }}">
+
+
+  </head>
+
+  <div class="lfheader">
+    <img src="{{ '/assets/img/lf-projects.svg?v=' | append: site.github.build_revision | relative_url }}">
+  </div>
+
+  <div class="container">
+      <div class="sideBar">
+         <div class="sublogo"><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p></div>
+         <div class="sideBartext">Open Metadata and Governance</div>
+         <a href="{{ site.github.repository_url }}"><button>View on Github</button></a>
+         <div class="links">
+             <a href="/">Home</a>
+             <br>
+             <a href="https://egeria-project.org/guides/community/">Contribute</a>
+             <br>
+             <a href="https://egeria-project.org/education/tutorials/">Tutorials</a>
+             <br>
+             <a href="https://egeria-project.org/">Solutions</a>
+             <br>
+             <a href="/release-notes">Release Notes</a>
+             <br>
+             <a href="https://egeria-project.org/">Roadmap</a>
+             <br>
+             <br>
+             <a href="https://egeria-project.org/guides/admin">Admin Guide</a>
+             <br>
+             <a href="https://egeria-project.org/planning/overview">Planning Guide</a>
+             <br>
+             <a href="https://egeria-project.org/guides/developer/overview">Developer Guide</a>
+             <br>
+             <a href="https://egeria-project.org/guides/diagnostic/overview">Diagnostic Guide</a>
+             <br>
+             <br>
+             <a href="/open-metadata-conformance-suite">Conformance Suite</a>
+             <br>
+             <a href="https://egeria-project.org/types">Open Metadata Types</a>
+             <br>
+             <a href="https://egeria-project.org/connectors">Connector Catalog</a>
+             <br>
+             <a href="https://egeria-project.org/practices">Governance</a>
+             <br>
+             <br>
+             <a href="https://egeria-project.org/concepts">Glossary</a>
+             <br>
+             <a href="/Content-Organization.html">Site</a>
+             <br>
+             <a href="/open-metadata-implementation">Design</a>
+             <br>
+             <a href="https://egeria-project.org/">About</a>
+          </div>
+      </div>
+
+      <div class="content">
+
+        {{ content }}
+
+      </div>
+  </div>
+</html>

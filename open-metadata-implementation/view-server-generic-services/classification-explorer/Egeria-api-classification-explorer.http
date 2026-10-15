@@ -1,0 +1,3241 @@
+# Egeria-classification-explorer-omvs
+
+@baseURL=https://localhost:7443
+@viewServer=view-server
+
+###
+# =====================================================================================================================
+# Manage the authentication token.  Run this request to create/refresh the token.
+
+# @name Token (RequestBody)
+POST {{baseURL}}/api/token
+Content-Type: application/json
+
+{
+  "userId" : "peterprofile",
+  "password" : "secret"
+}
+
+> {% client.global.set("token", response.body); %}
+
+###
+
+# Optional request options not show on the example requests below:
+# -------------------------------------------------------------------
+# Note: This a generic service which means the URL marker of "classification-explorer" can be replaced with the URL marker
+# of any other active view service.
+# The URL marker is derived from the name of the requested service - take the short two-word service name, convert to
+# lower case and add a hyphen between the two words - so Automated Curation's OMVS's URL Marker is automated-curation.
+#
+
+###
+
+@elementGUID=add guid here
+
+###
+# =====================================================================================================================
+# These methods are for assigning relationships and classifications that help govern both metadata
+# and its associated resources.  There are also specialist methods for retrieving elements that are clssified
+# and linked using these classiications and relationship types.
+#
+
+
+#==================================================
+# Impact
+#==================================================
+
+###
+# @name getValidMetadataValues - severityLevel values
+# Retrieve all the valid values for the severityLevel property.
+#
+GET {{baseURL}}/servers/{{viewServer}}/api/open-metadata/valid-metadata/get-valid-metadata-values/severityLevel
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+###
+# @name setImpactClassification
+# Classify the element (typically a context event, to do or incident report) to indicate the level of impact
+# that the event described will have on the organization
+# The level of impact is expressed by the severityLevel property.
+#
+# Governance Action Classifications: https://egeria-project.org/types/4/0422-Governed-Data-Classifications/
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/impact
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "NewClassificationRequestBody",
+   "properties" : {
+       "class" : "ImpactProperties",
+       "severityLevel" : 0,
+       "status" : 0,
+       "confidence" : 0,
+       "steward" : "Add value here",
+       "stewardTypeName" : "Add value here",
+       "stewardPropertyName" : "Add value here",
+       "source" : "Add value here",
+       "notes" : "Add value here"
+   },
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+# @name clearImpactClassification
+# Remove the impact classification from the element.
+#
+# Governance Action Classifications: https://egeria-project.org/types/4/0422-Governed-Data-Classifications/
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/impact/remove
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "DeleteClassificationRequestBody",
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+# @name getImpactClassifiedElements
+# Return information about the elements classified with the impact classification.
+#
+# https://egeria-project.org/types/4/0422-Governed-Data-Classifications/
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/by-impact
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "class" : "LevelIdentifierQueryProperties",
+    "effectiveTime" : "{{$isoTimestamp}}",
+    "asOfTime" : "{{$isoTimestamp}}",
+    "forLineage" : false,
+    "forDuplicateProcessing" : false,
+    "metadataElementTypeName" : "GlossaryTerm",
+    "limitResultsByStatus" : [ "ACTIVE", "DELETED"],
+    "sequencingProperty" : "???",
+    "sequencingOrder" : "LAST_UPDATE_RECENT",
+    "returnSpecificLevel" : true,
+    "levelIdentifier" : 3
+}
+
+###
+#==================================================
+# Confidence
+#==================================================
+
+
+###
+# @name getValidMetadataValues - confidenceLevel values
+# Retrieve all the valid values for the confidenceLevel property.
+#
+GET {{baseURL}}/servers/{{viewServer}}/api/open-metadata/valid-metadata/get-valid-metadata-values/confidenceLevel
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+###
+# @name setConfidenceClassification
+# Classify the element (typically an asset) to indicate the level of confidence that the organization
+# has that the data is complete, accurate and up-to-date.  The level of confidence is expressed by the
+# levelIdentifier property.
+#
+# Governed Data Classifications: https://egeria-project.org/types/4/0422-Governed-Data-Classifications/
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/confidence
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "NewClassificationRequestBody",
+   "properties" : {
+       "class" : "ConfidenceProperties",
+       "confidenceLevel" : 0,
+       "status" : 0,
+       "confidence" : 0,
+       "steward" : "Add value here",
+       "stewardTypeName" : "Add value here",
+       "stewardPropertyName" : "Add value here",
+       "source" : "Add value here",
+       "notes" : "Add value here"
+   },
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+# @name clearConfidenceClassification
+# Remove the confidence classification from the element.  This normally occurs when the organization has lost track of the level of
+# confidence to assign to the element.
+#
+# Governance Action Classifications: https://egeria-project.org/types/4/0422-Governed-Data-Classifications/
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/confidence/remove
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "DeleteClassificationRequestBody",
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+# @name getConfidenceClassifiedElements
+# Return information about the elements classified with the confidence classification.
+# Set returnSpecificLevel and the levelIdentifier to the confidenceLevel to select the level of confidence to query.
+#
+# https://egeria-project.org/types/4/0422-Governed-Data-Classifications/
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/by-confidence
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "class" : "LevelIdentifierQueryProperties",
+    "effectiveTime" : "{{$isoTimestamp}}",
+    "asOfTime" : "{{$isoTimestamp}}",
+    "forLineage" : false,
+    "forDuplicateProcessing" : false,
+    "metadataElementTypeName" : "GlossaryTerm",
+    "limitResultsByStatus" : [ "ACTIVE", "DELETED"],
+    "sequencingProperty" : "???",
+    "sequencingOrder" : "LAST_UPDATE_RECENT",
+    "returnSpecificLevel" : true,
+    "levelIdentifier" : 3
+}
+
+###
+#==================================================
+# Criticality
+#==================================================
+
+
+###
+# @name getValidMetadataValues - criticalityLevel values
+# Retrieve all the valid values for the criticalityLevel property.
+#
+GET {{baseURL}}/servers/{{viewServer}}/api/open-metadata/valid-metadata/get-valid-metadata-values/criticalityLevel
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+
+###
+# @name setCriticalityClassification
+# Classify the element (typically an asset) to indicate how critical the element (or associated resource)
+# is to the organization.  The level of criticality is expressed by the levelIdentifier property.
+#
+# Governance Action Classifications: https://egeria-project.org/types/4/0422-Governed-Data-Classifications/
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/criticality
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "NewClassificationRequestBody",
+   "properties" : {
+       "class" : "CriticalityProperties",
+       "criticalityLevel" : 0,
+       "status" : 0,
+       "confidence" : 0,
+       "steward" : "Add value here",
+       "stewardTypeName" : "Add value here",
+       "stewardPropertyName" : "Add value here",
+       "source" : "Add value here",
+       "notes" : "Add value here"
+   },
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+###
+# @name clearCriticalityClassification
+# Remove the criticality classification from the element.  This normally occurs when the organization has lost track of the level of
+# criticality to assign to the element.
+#
+# Governance Action Classifications: https://egeria-project.org/types/4/0422-Governed-Data-Classifications/
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/criticality/remove
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "DeleteClassificationRequestBody",
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+# @name getCriticalityClassifiedElements
+# Return information about the elements classified with the criticality classification.
+# Set returnSpecificLevel and the levelIdentifier to the criticalityLevel to select the level of criticality to query.
+#
+# https://egeria-project.org/types/4/0422-Governed-Data-Classifications/
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/by-criticality
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "class" : "LevelIdentifierQueryProperties",
+    "effectiveTime" : "{{$isoTimestamp}}",
+    "asOfTime" : "{{$isoTimestamp}}",
+    "forLineage" : false,
+    "forDuplicateProcessing" : false,
+    "metadataElementTypeName" : "GlossaryTerm",
+    "limitResultsByStatus" : [ "ACTIVE", "DELETED"],
+    "sequencingProperty" : "???",
+    "sequencingOrder" : "LAST_UPDATE_RECENT",
+    "returnSpecificLevel" : true,
+    "levelIdentifier" : 2
+}
+
+
+###
+#==================================================
+# Confidentiality
+#==================================================
+
+
+###
+# @name getValidMetadataValues - confidentialityLevel values
+# Retrieve all the valid values for the confidentialityLevel property.
+#
+GET {{baseURL}}/servers/{{viewServer}}/api/open-metadata/valid-metadata/get-valid-metadata-values/confidentialityLevel
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+
+###
+# @name setConfidentialityClassification
+# Classify the element (typically a data field, schema attribute or glossary term) to indicate the level of confidentiality
+# that any data associated with the element should be given.  If the classification is attached to a glossary term, the level
+# of confidentiality is a suggestion for any element linked to the glossary term via the SemanticAssignment classification.
+# The level of confidence is expressed by the levelIdentifier property.
+#
+# Governance Action Classifications: https://egeria-project.org/types/4/0422-Governed-Data-Classifications/
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/confidentiality
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "NewClassificationRequestBody",
+   "properties" : {
+       "class" : "ConfidentialityProperties",
+       "confidentialityLevel" : 0,
+       "status" : 0,
+       "confidence" : 0,
+       "steward" : "Add value here",
+       "stewardTypeName" : "Add value here",
+       "stewardPropertyName" : "Add value here",
+       "source" : "Add value here",
+       "notes" : "Add value here"
+   },
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+# @name clearConfidentialityClassification
+# Remove the confidence classification from the element.  This normally occurs when the organization has lost track of the level of
+# confidentiality to assign to the element.
+#
+# Governance Action Classifications: https://egeria-project.org/types/4/0422-Governed-Data-Classifications/
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/confidentiality/remove
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "DeleteClassificationRequestBody",
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+
+###
+# @name getConfidentialityClassifiedElements
+# Return information about the elements classified with the confidentiality classification.
+# Set returnSpecificLevel and the levelIdentifier to the confidentialityLevel to select the level of confidentiality to query.
+#
+# https://egeria-project.org/types/4/0422-Governed-Data-Classifications/
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/by-confidentiality
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "class" : "LevelIdentifierQueryProperties",
+    "effectiveTime" : "{{$isoTimestamp}}",
+    "asOfTime" : "{{$isoTimestamp}}",
+    "forLineage" : false,
+    "forDuplicateProcessing" : false,
+    "metadataElementTypeName" : "GlossaryTerm",
+    "limitResultsByStatus" : [ "ACTIVE", "DELETED"],
+    "sequencingProperty" : "???",
+    "sequencingOrder" : "LAST_UPDATE_RECENT",
+    "returnSpecificLevel" : true,
+    "levelIdentifier" : 2
+}
+
+###
+#==================================================
+# Retention
+#==================================================
+
+
+
+###
+# @name getValidMetadataValues - retentionBasis values
+# Retrieve all the valid values for the retentionBasis property.
+#
+GET {{baseURL}}/servers/{{viewServer}}/api/open-metadata/valid-metadata/get-valid-metadata-values/retentionBasis
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+###
+# @name setRetentionClassification
+# Classify the element (typically an asset) to indicate how long the element (or associated resource)
+# is to be retained by the organization.  The policy to apply to the element/resource is captured by the retentionBasis
+# property.  The dates after which the element/resource is archived and then deleted are specified in the archiveAfter and deleteAfter
+# properties respectively.
+#
+# Governance Action Classifications: https://egeria-project.org/types/4/0422-Governed-Data-Classifications/
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/retention
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "NewClassificationRequestBody",
+   "properties" : {
+       "class" : "RetentionProperties",
+       "retentionBasis" : 0,
+       "status" : 0,
+       "confidence" : 0,
+       "associatedGUID" : "Add value here",
+       "archiveAfter" : "{{$isoTimestamp}}",
+       "deleteAfter" : "{{$isoTimestamp}}",
+       "steward" : "Add value here",
+       "stewardTypeName" : "Add value here",
+       "stewardPropertyName" : "Add value here",
+       "source" : "Add value here",
+       "notes" : "Add value here"
+   },
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+###
+# @name clearRetentionClassification
+# Remove the retention classification from the element.  This normally occurs when the organization has lost track of, or no longer needs to
+# track the retention period to assign to the element.
+#
+# Governance Action Classifications: https://egeria-project.org/types/4/0422-Governed-Data-Classifications/
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/retention/remove
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "DeleteClassificationRequestBody",
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+# @name getRetentionClassifiedElements
+# Return information about the elements classified with the retention classification.
+# Set returnSpecificLevel and the retentionBasis to the confidentialityLevel to select the level of retention to query.
+#
+# https://egeria-project.org/types/4/0422-Governed-Data-Classifications/
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/by-retention
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "class" : "LevelIdentifierQueryProperties",
+    "effectiveTime" : "{{$isoTimestamp}}",
+    "asOfTime" : "{{$isoTimestamp}}",
+    "forLineage" : false,
+    "forDuplicateProcessing" : false,
+    "metadataElementTypeName" : "GlossaryTerm",
+    "limitResultsByStatus" : [ "ACTIVE", "DELETED"],
+    "sequencingProperty" : "???",
+    "sequencingOrder" : "LAST_UPDATE_RECENT",
+    "returnSpecificLevel" : true,
+    "levelIdentifier" : 2
+}
+
+###
+#==================================================
+# Security Tags
+#==================================================
+
+
+
+###
+# @name addSecurityTags
+# Add the security tags for an element.
+#
+# Security Tags: https://egeria-project.org/types/4/0423-Security-Definitions/
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/security-tags
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "NewClassificationRequestBody",
+   "properties" : {
+       "class" : "SecurityTagsProperties",
+       "securityLabels" : [ "Label1", "Label2" ],
+       "securityProperties" : {
+           "propertyName1" : "add property value here",
+           "propertyName2" : "add property value here"
+       },
+       "accessGroups" : {
+           "groupName1" : [ "operation1", "operation2" ],
+           "groupName2" : [ "operation1", "operation3" ]
+       }
+   },
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+# @name clearSecurityTags
+# Remove the security tags classification from an element.
+#
+# Security Tags: https://egeria-project.org/types/4/0423-Security-Definitions/
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/security-tags/remove
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "DeleteClassificationRequestBody",
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+# @name getSecurityTaggedElements
+# Return information about the elements classified with the security tags classification.
+#
+# https://egeria-project.org/types/4/0422-Governed-Data-Classifications/
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/by-security-tags
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "class" : "SecurityTagQueryProperties",
+    "effectiveTime" : "{{$isoTimestamp}}",
+    "asOfTime" : "{{$isoTimestamp}}",
+    "forLineage" : false,
+    "forDuplicateProcessing" : false,
+    "metadataElementTypeName" : "GlossaryTerm",
+    "limitResultsByStatus" : [ "ACTIVE", "DELETED"],
+    "sequencingProperty" : "???",
+    "sequencingOrder" : "LAST_UPDATE_RECENT",
+    "securityLabels" : [ "???" ],
+    "securityProperties" : {
+       "propertyName" : "propertyValue"
+    },
+    "accessGroups" : {
+        "groupName" : [ "???" ]
+    }
+}
+
+
+###
+#==================================================
+# Accounting Codes
+#==================================================
+
+
+
+###
+# @name addAccountingCodes
+# Add the accounting codes for an element.
+#
+# Accounting Codes: https://egeria-project.org/types/7/0715-Digital-Business/
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/accounting-codes
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "NewClassificationRequestBody",
+   "properties" : {
+       "class" : "AccountingCodesProperties",
+       "accountingCode" : "Add accounting code here",
+       "description" : "Add description here",
+       "accountingCodeList" : [ "Code1", "Code2" ],
+       "accountingCodeMap" : {
+           "name1" : "code1",
+           "name2" : "code2"
+       }
+   },
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+# @name clearAccountingCodes
+# Remove the accounting codes classification from an element.
+#
+# Accounting Codes: https://egeria-project.org/types/7/0715-Digital-Business/
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/accounting-codes/remove
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "DeleteClassificationRequestBody",
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+#==================================================
+# Ownership
+#==================================================
+
+
+
+###
+# @name addOwnership
+# Add the ownership classification for an element.
+#
+# Ownership: https://egeria-project.org/types/4/0445-Governance-Roles/
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/ownership
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "NewClassificationRequestBody",
+   "properties" : {
+       "class" : "OwnershipProperties",
+       "owner" : "Add value here",
+       "ownerTypeName" : "Add value here",
+       "ownerPropertyName" : "Add value here"
+   },
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+# @name clearOwnership
+# Remove the ownership classification from an element.
+#
+# Ownership: https://egeria-project.org/types/4/0445-Governance-Roles/
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/ownership/remove
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "DeleteClassificationRequestBody",
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+# @name getOwnersElements
+# Return information about the elements classified with the ownership classification.
+#
+# https://egeria-project.org/types/4/0445-Governance-Roles/
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/by-ownership
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "class" : "FilterRequestBody",
+    "filter" : "????",
+    "effectiveTime" : "{{$isoTimestamp}}",
+    "asOfTime" : "{{$isoTimestamp}}",
+    "forLineage" : false,
+    "forDuplicateProcessing" : false,
+    "metadataElementTypeName" : "GlossaryTerm",
+    "limitResultsByStatus" : [ "ACTIVE", "DELETED"],
+    "sequencingProperty" : "???",
+    "sequencingOrder" : "LAST_UPDATE_RECENT"
+}
+
+###
+#==================================================
+# DigitalResourceOrigin
+#==================================================
+
+
+
+###
+# @name addDigitalResourceOrigin
+# Add the digital resource origin classification for an element.
+#
+# Origin: https://egeria-project.org/types/4/0440-Organizational-Controls/
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/digital-resource-origin
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "NewClassificationRequestBody",
+   "properties" : {
+       "class" : "DigitalResourceOriginProperties",
+       "owner" : "Add value here",
+       "ownerTypeName" : "Add value here",
+       "ownerPropertyName" : "Add value here"
+   },
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+# @name clearDigitalResourceOrigin
+# Remove the digital resource origin classification from an element.
+#
+# Origin: https://egeria-project.org/types/4/0440-Organizational-Controls/
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/digital-resource-origin/remove
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "DeleteClassificationRequestBody",
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+# @name getElementsByOrigin
+# Return information about the digital resources from a specific origin.
+#
+# https://egeria-project.org/types/4/0440-Organizational-Controls/
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/by-digital-resource-origin
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "class" : "FindDigitalResourceOriginProperties",
+    "effectiveTime" : "{{$isoTimestamp}}",
+    "asOfTime" : "{{$isoTimestamp}}",
+    "forLineage" : false,
+    "forDuplicateProcessing" : false,
+    "metadataElementTypeName" : "GlossaryTerm",
+    "limitResultsByStatus" : [ "ACTIVE", "DELETED"],
+    "sequencingProperty" : "???",
+    "sequencingOrder" : "LAST_UPDATE_RECENT",
+    "organizationGUID" : "????",
+    "businessCapabilityGUID" : "????",
+    "otherOriginValues" : {
+         "propertyName" : "propertyValue"
+    }
+}
+
+
+###
+#==================================================
+# ZoneMembership
+#==================================================
+
+
+
+
+###
+# @name addZoneMembership
+# Add the zone membership classification for an element.
+#
+# Governance Zones: https://egeria-project.org/types/4/0424-Governance-Zones/
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/zone-membership
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "NewClassificationRequestBody",
+   "properties" : {
+       "class" : "ZoneMembershipProperties",
+       "owner" : "Add value here",
+       "ownerTypeName" : "Add value here",
+       "ownerPropertyName" : "Add value here"
+   },
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+# @name clearZoneMembership
+# Remove the zone membership classification from an element.
+#
+# Governance Zones: https://egeria-project.org/types/4/0424-Governance-Zones/
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/zone-membership/remove
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "DeleteClassificationRequestBody",
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+###
+#==================================================
+# DataScope
+#==================================================
+
+###
+# @name addDataScope
+# Add the data scope classification to an element.
+#
+# Data Scope: https://egeria-project.org/types/2/0210-Data-Stores/
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/data-scope
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "NewClassificationRequestBody",
+   "properties" : {
+       "class" : "DataScopeProperties",
+       "dataCollectionStartTime" : "{{$isoTimestamp}}",
+       "dataCollectionEndTime" : "{{$isoTimestamp}}",
+       "dataValidityStartTime" : "{{$isoTimestamp}}",
+       "dataValidityEndTime" : "{{$isoTimestamp}}",
+       "dataCoverageStartTime" : "{{$isoTimestamp}}",
+       "dataCoverageEndTime" : "{{$isoTimestamp}}",
+       "minLongitude" : 0,
+       "minLatitude" : 0,
+       "maxLongitude" : 0,
+       "maxLatitude" : 0,
+       "minHeight" : 0,
+       "maxHeight" : 0,
+       "scopeElements" : {},
+       "additionalProperties" : {}
+   },
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+# @name updateDataScope
+# Update the data scope classification to an element.
+#
+# Data Scope: https://egeria-project.org/types/2/0210-Data-Stores/
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/data-scope/update
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "UpdateClassificationRequestBody",
+   "mergeUpdate" : true,
+   "properties" : {
+       "class" : "DataScopeProperties",
+       "dataCollectionStartTime" : "{{$isoTimestamp}}",
+       "dataCollectionEndTime" : "{{$isoTimestamp}}",
+       "dataValidityStartTime" : "{{$isoTimestamp}}",
+       "dataValidityEndTime" : "{{$isoTimestamp}}",
+       "dataCoverageStartTime" : "{{$isoTimestamp}}",
+       "dataCoverageEndTime" : "{{$isoTimestamp}}",
+       "minLongitude" : 0,
+       "minLatitude" : 0,
+       "maxLongitude" : 0,
+       "maxLatitude" : 0,
+       "minHeight" : 0,
+       "maxHeight" : 0,
+       "scopeElements" : {
+           "add scope element name" : "add scope element GUID"
+       },
+       "additionalProperties" : {
+           "property1" : "propertyValue1",
+           "property2" : "propertyValue2"
+       }
+   },
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+# @name clearDataScope
+# Remove the data scope classification from an element.
+#
+# Data Scope: https://egeria-project.org/types/2/0210-Data-Stores/
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/data-scope/remove
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "DeleteClassificationRequestBody",
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+###
+#==================================================
+# Peer deduplication
+#==================================================
+
+
+###
+# @name setKnownDuplicateClassification
+# Classify the element to indicate that is has one or more duplicate in the open metadata ecosystem.
+#
+# Duplicate Management: https://egeria-project.org/features/duplicate-management/overview
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/known-duplicate
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "NewClassificationRequestBody",
+   "properties" : {
+       "class" : "KnownDuplicateProperties"
+   },
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+# @name clearKnownDuplicateClassification
+# Remove the KnownDuplicate classification from the element.
+#
+# Duplicate Management: https://egeria-project.org/features/duplicate-management/overview
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/known-duplicate/remove
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "DeleteClassificationRequestBody",
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+
+@peerDuplicateGUID=add guid here
+
+###
+# @name setupPeerDuplicates
+# Create a PeerDuplicates relationship between elements.
+#
+# Duplicate Management: https://egeria-project.org/features/duplicate-management/overview
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/related-elements/{{elementGUID}}/peer-duplicate/{{peerDuplicateGUID}}/attach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "NewRelationshipRequestBody",
+   "properties" : {
+     "class": "PeerDuplicateLinkProperties",
+     "statusIdentifier" : 0,
+     "steward" : "Add value here",
+     "stewardTypeName" : "Add value here",
+     "stewardPropertyName" : "Add value here",
+     "source" : "Add value here",
+     "notes" : "Add value here"
+  },
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+###
+# @name unlinkElementsAsPeerDuplicates
+# Remove the PeerDuplicateLink a relationship between two elements that showed they represent the same 'thing'.
+#
+# Duplicate Management: https://egeria-project.org/features/duplicate-management/overview
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/related-elements/{{elementGUID}}/peer-duplicate/{{peerDuplicateGUID}}/detach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "DeleteRelationshipRequestBody",
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+###
+#==================================================
+# Consolidated deduplication
+#==================================================
+
+
+###
+# @name setConsolidatedDuplicateClassification
+# Classify the element to indicate that it is derived from one or more duplicates in the open metadata ecosystem.
+#
+# Duplicate Management: https://egeria-project.org/features/duplicate-management/overview
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/consolidated-duplicate
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "NewClassificationRequestBody",
+   "properties" : {
+       "class" : "ConsolidatedDuplicateProperties",
+       "statusIdentifier" : 0,
+       "steward" : "Add value here",
+       "stewardTypeName" : "Add value here",
+       "stewardPropertyName" : "Add value here",
+       "source" : "Add value here",
+       "notes" : "Add value here"
+   },
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+
+###
+# @name clearConsolidatedDuplicateClassification
+# Remove the ConsolidatedDuplicate classification from the element.
+#
+# Duplicate Management: https://egeria-project.org/features/duplicate-management/overview
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/consolidated-duplicate/remove
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "DeleteClassificationRequestBody",
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+
+@sourceElementGUID=add guid here
+
+###
+# @name linkConsolidatedDuplicateToSource
+# Create a relationship between two elements that shows that one is a combination of a number of duplicates, and it should
+# be used instead.
+#
+# Duplicate Management: https://egeria-project.org/features/duplicate-management/overview
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/related-elements/{{elementGUID}}/consolidated-duplicate-source/{{sourceElementGUID}}/attach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "NewRelationshipRequestBody",
+   "properties" : {
+     "class": "ConsolidatedDuplicateLinkProperties"
+  },
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+###
+# @name unlinkConsolidatedDuplicateFromSourceElement
+# Remove the ConsolidatedDuplicateLink relationship between two elements that showed they represent the same "thing".
+#
+# Duplicate Management: https://egeria-project.org/features/duplicate-management/overview
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/related-elements/{{elementGUID}}/consolidated-duplicate-source/{{sourceElementGUID}}/detach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "DeleteRelationshipRequestBody",
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+#==================================================
+# SemanticAssignment
+#==================================================
+
+@glossaryTermGUID=add guid here
+
+
+###
+# @name setupSemanticAssignment
+# Create a semantic assignment relationship between a glossary term and an element (normally a schema attribute, data field or asset).
+# This relationship indicates that the data associated with the element meaning matches the description in the glossary term.
+#
+# Semantic Assignments: https://egeria-project.org/types/3/0370-Semantic-Assignment/
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/semantic-assignment/terms/{{glossaryTermGUID}}/attach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "NewRelationshipRequestBody",
+   "properties" : {
+     "class": "SemanticAssignmentProperties",
+     "expression" : "add value here",
+     "description" : "add value here",
+     "status" : "VALIDATED",
+     "confidence" : 100,
+     "createdBy" : "add value here",
+     "steward" : "add value here",
+     "source" : "add value here"
+  },
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+###
+# @name clearSemanticAssignment
+# Remove a semantic assignment relationship between an element and its glossary term.
+#
+# Semantic Assignments: https://egeria-project.org/types/3/0370-Semantic-Assignment/
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/semantic-assignment/terms/{{glossaryTermGUID}}/detach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "DeleteRelationshipRequestBody",
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+###
+# @name getMeanings
+# Retrieve the glossary terms linked via a "SemanticAssignment" relationship to the requested element.
+#
+# https://egeria-project.org/types/4/0440-Organizational-Controls/
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/glossaries/terms/by-semantic-assignment/{{elementGUID}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "class" : "SemanticAssignmentQueryProperties",
+    "effectiveTime" : "{{$isoTimestamp}}",
+    "asOfTime" : "{{$isoTimestamp}}",
+    "forLineage" : false,
+    "forDuplicateProcessing" : false,
+    "metadataElementTypeName" : "GlossaryTerm",
+    "limitResultsByStatus" : [ "ACTIVE", "DELETED"],
+    "sequencingProperty" : "???",
+    "sequencingOrder" : "LAST_UPDATE_RECENT",
+    "expression" : "????",
+    "description" : "????",
+    "status" : "VALIDATED",
+    "returnSpecificConfidence" : true,
+    "confidence" : 100,
+    "createdBy" : "???",
+    "steward" : "??",
+    "source" : "???"
+
+}
+
+
+###
+# @name getSemanticAssignees
+# Retrieve the elements linked via a "SemanticAssignment" relationship to the requested glossary term.
+#
+# https://egeria-project.org/types/4/0440-Organizational-Controls/
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/by-semantic-assignment/{{glossaryTermGUID}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "class" : "SemanticAssignmentQueryProperties",
+    "effectiveTime" : "{{$isoTimestamp}}",
+    "asOfTime" : "{{$isoTimestamp}}",
+    "forLineage" : false,
+    "forDuplicateProcessing" : false,
+    "metadataElementTypeName" : "GlossaryTerm",
+    "limitResultsByStatus" : [ "ACTIVE", "DELETED"],
+    "sequencingProperty" : "???",
+    "sequencingOrder" : "LAST_UPDATE_RECENT",
+    "expression" : "????",
+    "description" : "????",
+    "status" : "VALIDATED",
+    "returnSpecificConfidence" : true,
+    "confidence" : 100,
+    "createdBy" : "???",
+    "steward" : "??",
+    "source" : "???"
+}
+
+
+###
+#==================================================
+# GovernedBy
+#==================================================
+
+
+@governanceDefinitionGUID=add guid here
+
+
+###
+# @name addGovernanceDefinitionToElement
+# Link a governance definition to an element using the GovernedBy relationship.
+#
+# Governance Definitions: https://egeria-project.org/types/4/0401-Governance-Definitions/
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/governed-by/definition/{{governanceDefinitionGUID}}/attach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "NewRelationshipRequestBody",
+   "properties" : {
+     "class" : "GovernedByProperties",
+     "label" : "add label here",
+     "description" : "add description here"
+   },
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+# @name removeGovernanceDefinitionFromElement
+# Remove the GovernedBy relationship between a governance definition and an element.
+#
+# Governance Definition: https://egeria-project.org/types/4/0401-Governance-Definitions/
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/governed-by/definition/{{governanceDefinitionGUID}}/detach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "DeleteRelationshipRequestBody",
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+###
+# @name getGovernedElements
+# Retrieve the governance definitions linked via a "GovernedBy" relationship to the requested element.
+#
+# https://egeria-project.org/types/4/0401-Governance-Definitions/
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/governed-by/{{governanceDefinitionGUID}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "class" : "ResultsRequestBody",
+    "effectiveTime" : "{{$isoTimestamp}}",
+    "asOfTime" : "{{$isoTimestamp}}",
+    "forLineage" : false,
+    "forDuplicateProcessing" : false,
+    "metadataElementTypeName" : "GlossaryTerm",
+    "limitResultsByStatus" : [ "ACTIVE", "DELETED"],
+    "sequencingProperty" : "???",
+    "sequencingOrder" : "LAST_UPDATE_RECENT"
+}
+
+###
+# @name getGovernedByDefinitions
+# Retrieve the elements linked via a GovernedBy relationship to the requested governance definition.
+#
+# https://egeria-project.org/types/4/0401-Governance-Definitions/
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/governed-by
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "class" : "ResultsRequestBody",
+    "effectiveTime" : "{{$isoTimestamp}}",
+    "asOfTime" : "{{$isoTimestamp}}",
+    "forLineage" : false,
+    "forDuplicateProcessing" : false,
+    "metadataElementTypeName" : "GlossaryTerm",
+    "limitResultsByStatus" : [ "ACTIVE", "DELETED"],
+    "sequencingProperty" : "???",
+    "sequencingOrder" : "LAST_UPDATE_RECENT"
+}
+
+###
+#==================================================
+# GovernanceExpectations
+#==================================================
+
+
+###
+# @name addGovernanceExpectations
+# Add the governance expectations classification to an element.
+#
+# Governance Rollout: https://egeria-project.org/types/4/0450-Governance-Rollout/
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/governance-expectations
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "NewClassificationRequestBody",
+   "properties" : {
+       "class" : "GovernanceExpectationsProperties",
+       "counts" : {
+         "countName1" : 23,
+         "countName2" : 42
+       },
+       "values" : {
+         "valueName1" : "Add string here",
+         "valueName2" : "Add string here"
+       },
+       "flags" : {
+         "flagName1" : true,
+         "flagName2" : false
+       }
+   },
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+# @name updateGovernanceExpectations
+# Update the governance expectations classification to an element.
+#
+# Governance Rollout: https://egeria-project.org/types/4/0450-Governance-Rollout/
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/governance-expectations/update
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "UpdateClassificationRequestBody",
+   "mergeUpdate": true,
+   "properties" : {
+       "class" : "GovernanceExpectationsProperties",
+       "counts" : {
+         "countName1" : 23,
+         "countName2" : 42
+       },
+       "values" : {
+         "valueName1" : "Add string here",
+         "valueName2" : "Add string here"
+       },
+       "flags" : {
+         "flagName1" : true,
+         "flagName2" : false
+       }
+   },
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+# @name clearGovernanceExpectations
+# Remove the governance expectations classification from an element.
+#
+# Governance Rollout: https://egeria-project.org/types/4/0450-Governance-Rollout/
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/governance-expectations/remove
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "DeleteClassificationRequestBody",
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+#==================================================
+# GovernanceMeasurments
+#==================================================
+
+
+###
+# @name addGovernanceMeasurements
+# Add the governance measurements classification to an element.
+#
+# Governance Rollout: https://egeria-project.org/types/4/0450-Governance-Rollout/
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/governance-measurements
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "NewClassificationRequestBody",
+   "properties" : {
+       "class" : "GovernanceMeasurementsProperties",
+       "dataCollectionStartTime" : "{{$isoTimestamp}}",
+       "dataCollectionEndTime" : "{{$isoTimestamp}}",
+       "counts" : {
+         "countName1" : 23,
+         "countName2" : 42
+       },
+       "values" : {
+         "valueName1" : "Add string here",
+         "valueName2" : "Add string here"
+       },
+       "flags" : {
+         "flagName1" : true,
+         "flagName2" : false
+       }
+   },
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+# @name updateGovernanceMeasurements
+# Update the governance measurements classification to an element.
+#
+# Governance Rollout: https://egeria-project.org/types/4/0450-Governance-Rollout/
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/governance-measurements/update
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "UpdateClassificationRequestBody",
+   "mergeUpdate" : true,
+   "properties" : {
+       "class" : "GovernanceMeasurementsProperties",
+       "dataCollectionStartTime" : "{{$isoTimestamp}}",
+       "dataCollectionEndTime" : "{{$isoTimestamp}}",
+       "counts" : {
+         "countName1" : 23,
+         "countName2" : 42
+       },
+       "values" : {
+         "valueName1" : "Add string here",
+         "valueName2" : "Add string here"
+       },
+       "flags" : {
+         "flagName1" : true,
+         "flagName2" : false
+       }
+   },
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+# @name clearGovernanceMeasurements
+# Remove the governance measurements classification from an element.
+#
+# Governance Rollout: https://egeria-project.org/types/4/0450-Governance-Rollout/
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/governance-measurements/remove
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "DeleteClassificationRequestBody",
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+#==================================================
+# ResourceList
+#==================================================
+
+@resourceGUID=add guid here
+
+###
+# @name addResourceListToElement
+# Link a resource to an element using the ResourceList relationship. Request body is optional.
+#
+# Resource Lists: https://egeria-project.org/types/0/0019-More-Information/
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/resource-list/{{resourceGUID}}/attach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "NewRelationshipRequestBody",
+   "properties": {
+      "class" : "ResourceListProperties",
+      "resourceUse" : "Add resource use identifier here",
+      "label" : "Add label here",
+      "description" : "Add description here",
+      "additionalProperties" : {
+        "property1" : "Add value here",
+        "property2" : "Add value here"
+      }
+   },
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+# @name removeResourceListFromElement
+# Remove the ResourceList relationship between a resource and an element. Request body is optional.
+#
+# Resource Lists: https://egeria-project.org/types/0/0019-More-Information/
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/resource-list/{{resourceGUID}}/detach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "DeleteRelationshipRequestBody",
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+# @name getResourceList
+# Retrieve the elements linked via a ResourceList relationship to the requested element. Request body is optional.
+#
+# Resource Lists: https://egeria-project.org/types/0/0019-More-Information/
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/resource-list
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "ResultsRequestBody",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "limitResultsByStatus" : ["ACTIVE"],
+  "asOfTime" : "{{$isoTimestamp}}",
+  "sequencingOrder": "CREATION_DATE_RECENT",
+  "sequencingProperty": ""
+}
+
+
+###
+# @name getSupportedByResource
+# Retrieve the elements linked via a ResourceList relationship to the requested resource. Request body is optional.
+#
+# Resource Lists: https://egeria-project.org/types/0/0019-More-Information/
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/resource-list/{{resourceGUID}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "ResultsRequestBody",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "limitResultsByStatus" : ["ACTIVE"],
+  "asOfTime" : "{{$isoTimestamp}}",
+  "sequencingOrder": "CREATION_DATE_RECENT",
+  "sequencingProperty": ""
+}
+
+
+###
+#==================================================
+# MoreInformation
+#==================================================
+
+###
+# @name addMoreInformationToElement
+# Link a resource to an element using the MoreInformation relationship.
+#
+# @param serverName  name of the server instance to connect to
+# @param urlMarker  view service URL marker
+# @param elementGUID unique identifier of the metadata element to link
+# @param resourceGUID identifier of the resource to link
+# @param requestBody properties for relationship request
+#
+# @return void or
+# InvalidParameterException guid or userId is null or
+# PropertyServerException problem accessing property server or
+# UserNotAuthorizedException security access problem
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/more-information/{{resourceGUID}}/attach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "NewRelationshipRequestBody",
+   "properties": {
+      "class" : "MoreInformationProperties",
+      "label" : "Guiding question",
+      "description" : "Add description here"
+   },
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+
+###
+# @name removeMoreInformationFromElement
+
+# Remove the MoreInformation relationship between a resource and an element.
+#
+# @param serverName  name of the server instance to connect to
+# @param urlMarker  view service URL marker
+# @param elementGUID unique identifier of the metadata element to update
+# @param resourceGUID identifier of the resource to link
+# @param requestBody properties for relationship request
+#
+# @return void or
+# InvalidParameterException guid or userId is null or
+# PropertyServerException problem accessing property server or
+# UserNotAuthorizedException security access problem
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/more-information/{{resourceGUID}}/detach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "DeleteRelationshipRequestBody",
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+#==================================================
+# SourcedFrom
+#==================================================
+
+
+
+###
+# @name getSourceElements
+# Retrieve the elements linked via a SourcedFrom relationship to the requested element.  The elements returned were used to create the requested element.  Typically only one element is returned.
+#
+# https://egeria-project.org/types/0/0011-Managing-Referenceables/
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/source
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "class" : "ResultsRequestBody",
+    "effectiveTime" : "{{$isoTimestamp}}",
+    "asOfTime" : "{{$isoTimestamp}}",
+    "forLineage" : false,
+    "forDuplicateProcessing" : false,
+    "metadataElementTypeName" : "GlossaryTerm",
+    "limitResultsByStatus" : [ "ACTIVE", "DELETED"],
+    "sequencingProperty" : "???",
+    "sequencingOrder" : "LAST_UPDATE_RECENT"
+}
+
+
+###
+# @name getElementsSourcedFrom
+# Retrieve the elements linked via the SourcedFrom relationship to the requested element. The elements returned were created using the requested element as a template.
+#
+# https://egeria-project.org/types/0/0011-Managing-Referenceables/
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/sourced-from
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "class" : "ResultsRequestBody",
+    "effectiveTime" : "{{$isoTimestamp}}",
+    "asOfTime" : "{{$isoTimestamp}}",
+    "forLineage" : false,
+    "forDuplicateProcessing" : false,
+    "metadataElementTypeName" : "GlossaryTerm",
+    "limitResultsByStatus" : [ "ACTIVE", "DELETED"],
+    "sequencingProperty" : "???",
+    "sequencingOrder" : "LAST_UPDATE_RECENT"
+}
+
+
+###
+#==================================================
+# SupplementaryProperties
+#==================================================
+
+###
+# @name addSupplementaryPropertiesToElement
+# Link a glossary term to an element using the SupplementaryProperties relationship.
+#
+# Supplementary Properties: https://egeria-project.org/types/0/0011-Managing-Reference-Values/
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/supplementary-properties/{{glossaryTermGUID}}/attach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "NewRelationshipRequestBody",
+   "properties": {
+      "class" : "SupplementaryPropertiesProperties",
+      "label" : "Guiding question",
+      "description" : "Add description here"
+   },
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+# @name removeSupplementaryPropertiesFromElement
+# Remove the SupplementaryProperties relationship between a glossary term and an element.
+#
+# Supplementary Properties: https://egeria-project.org/types/0/0011-Managing-Reference-Values/
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/supplementary-properties/{{glossaryTermGUID}}/detach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "DeleteRelationshipRequestBody",
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+#==================================================
+# ScopedBy
+#==================================================
+
+@scopeGUID=add guid here
+
+###
+# @name addScopeToElement
+# Link a scope to an element using the ScopedBy relationship.
+#
+# Scopes: https://egeria-project.org/types/1/0120-Assignment-Scopes/
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/scoped-by/{{scopeGUID}}/attach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "NewRelationshipRequestBody",
+   "properties": {
+      "class" : "ScopedByProperties"
+   },
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+# @name removeScopeFromElement
+# Remove the ScopedBy relationship between a scope and an element.
+#
+# Scopes: https://egeria-project.org/types/1/0120-Assignment-Scopes/
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/scoped-by/{{scopeGUID}}/detach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "DeleteRelationshipRequestBody",
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+###
+# @name getScopes
+# Retrieve the scopes linked via the ScopedBy relationship to the requested element.
+#
+# Scopes: https://egeria-project.org/types/1/0120-Assignment-Scopes/
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/scoped-by
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "class" : "ResultsRequestBody",
+    "effectiveTime" : "{{$isoTimestamp}}",
+    "asOfTime" : "{{$isoTimestamp}}",
+    "forLineage" : false,
+    "forDuplicateProcessing" : false,
+    "metadataElementTypeName" : "GlossaryTerm",
+    "limitResultsByStatus" : [ "ACTIVE", "DELETED"],
+    "sequencingProperty" : "???",
+    "sequencingOrder" : "LAST_UPDATE_RECENT"
+}
+
+###
+# @name getScopedElements
+# Retrieve the elements linked via the ScopedBy relationship to the scope.
+#
+# Scopes: https://egeria-project.org/types/1/0120-Assignment-Scopes/
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/scoped-by/{{scopeGUID}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "class" : "ResultsRequestBody",
+    "effectiveTime" : "{{$isoTimestamp}}",
+    "asOfTime" : "{{$isoTimestamp}}",
+    "forLineage" : false,
+    "forDuplicateProcessing" : false,
+    "metadataElementTypeName" : "GlossaryTerm",
+    "limitResultsByStatus" : [ "ACTIVE", "DELETED"],
+    "sequencingProperty" : "???",
+    "sequencingOrder" : "LAST_UPDATE_RECENT"
+}
+
+###
+#==================================================
+# AssignmentScope
+#==================================================
+
+@actorGUID=add guid here
+
+###
+# @name assignActorToElement
+# Attach an actor to an element.
+#
+# @param serverName  name of the server instance to connect to
+# @param urlMarker  view service URL marker
+# @param elementGUID            unique identifier of the element (project, product, etc.)
+# @param actorGUID unique identifier of the actor
+# @param requestBody properties for relationship request
+#
+# @return void or
+# InvalidParameterException full path or userId is null or
+# PropertyServerException problem accessing property server or
+# UserNotAuthorizedException security access problem
+#
+# assignments: https://egeria-project.org/types/1/0120-Assignment-Scopes/
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/assigned-to-actor/{{actorGUID}}/attach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "NewRelationshipRequestBody",
+   "properties" : {},
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+# @name unassignActorFromElement
+# Detach an actor from an element.
+#
+# @param serverName  name of the server instance to connect to
+# @param urlMarker  view service URL marker
+# @param elementGUID            unique identifier of the element (project, product, etc.)
+# @param actorGUID unique identifier of the actor
+# @param requestBody properties for relationship request
+#
+# @return void or
+# InvalidParameterException full path or userId is null or
+# PropertyServerException problem accessing property server or
+# UserNotAuthorizedException security access problem
+#
+# Assignments: https://egeria-project.org/types/1/0120-Assignment-Scopes/
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/assigned-to-actor/{{scopeGUID}}/detach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "DeleteRelationshipRequestBody",
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+
+###
+#==================================================
+# License
+#==================================================
+
+
+@licenseTypeGUID=add guid here
+@licenseGUID=add guid here
+
+###
+# @name licenseElement
+# Link an element to a license type and include details of the license in the relationship properties.
+# The GUID returned is the identifier of the relationship.
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/license-types/{{licenseTypeGUID}}/license
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "NewRelationshipRequestBody",
+   "properties": {
+      "class" : "LicenseProperties",
+      "licenseId" : "",
+      "startDate" : "{{$isoTimestamp}}",
+      "endDate" : "{{$isoTimestamp}}",
+      "conditions" : "",
+      "licensedBy" : "",
+      "licensedByTypeName" : "",
+      "licensedByPropertyName" : "",
+      "custodian" : "",
+      "custodianTypeName" : "",
+      "custodianPropertyName" : "",
+      "licensee" : "",
+      "licenseeTypeName" : "",
+      "licenseePropertyName" : "",
+      "entitlements" : "",
+      "restrictions" : "",
+      "obligations" : "",
+      "notes" : ""
+   },
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+# @name updateLicense
+# Update the properties of a license.  Remember to include the licenseId in the properties if the element has multiple
+# licenses for the same license type.
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/licenses/{{licenseGUID}}/update
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "UpdateRelationshipRequestBody",
+   "properties": {
+      "class" : "LicenseProperties",
+      "licenseId" : "",
+      "startDate" : "{{$isoTimestamp}}",
+      "endDate" : "{{$isoTimestamp}}",
+      "conditions" : "",
+      "licensedBy" : "",
+      "licensedByTypeName" : "",
+      "licensedByPropertyName" : "",
+      "custodian" : "",
+      "custodianTypeName" : "",
+      "custodianPropertyName" : "",
+      "licensee" : "",
+      "licenseeTypeName" : "",
+      "licenseePropertyName" : "",
+      "entitlements" : "",
+      "restrictions" : "",
+      "obligations" : "",
+      "notes" : ""
+   },
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+###
+# @name unlicenseElement
+# Remove the license for an element.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/licenses/{licenseGUID}/delete
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "DeleteRelationshipRequestBody",
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+# @name getLicensedElements
+# Retrieve the elements linked via a License relationship to the requested LicenseType.
+#
+# https://https://egeria-project.org/types/4/0481-Licenses/
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/licenses/{{licenseTypeGUID}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "class" : "ResultsRequestBody",
+    "forLineage" : false,
+    "forDuplicateProcessing" : false,
+    "effectiveTime" : "{{$isoTimestamp}}",
+    "asOfTime" : "{{$isoTimestamp}}",
+    "limitResultsByStatus" : [ "ACTIVE", "DELETED"],
+    "sequencingProperty" : "???",
+    "sequencingOrder" : "LAST_UPDATE_RECENT"
+}
+
+
+###
+# @name getLicenses
+# Retrieve the license types linked via a License relationship to the requested element.
+#
+# https://https://egeria-project.org/types/4/0481-Licenses/
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/licenses
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "class" : "ResultsRequestBody",
+    "forLineage" : false,
+    "forDuplicateProcessing" : false,
+    "effectiveTime" : "{{$isoTimestamp}}",
+    "asOfTime" : "{{$isoTimestamp}}",
+    "limitResultsByStatus" : [ "ACTIVE", "DELETED"],
+    "sequencingProperty" : "???",
+    "sequencingOrder" : "LAST_UPDATE_RECENT"
+}
+
+
+###
+#==================================================
+# Certification
+#==================================================
+
+@certificationTypeGUID=Add guid here
+@certificationGUID=Add guid here
+
+###
+# @name certifyElement
+# Link an element to a certification type and include details of the certification in the relationship properties.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/certification-types/{{certificationTypeGUID}}/certify
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "NewRelationshipRequestBody",
+   "properties": {
+      "class" : "CertificationProperties",
+      "certificateId" : "",
+      "startDate" : "{{$isoTimestamp}}",
+      "endDate" : "{{$isoTimestamp}}",
+      "conditions" : "",
+      "certifiedBy" : "",
+      "certifiedByTypeName" : "",
+      "certifiedByPropertyName" : "",
+      "custodian" : "",
+      "custodianTypeName" : "",
+      "custodianPropertyName" : "",
+      "recipient" : "",
+      "recipientTypeName" : "",
+      "recipientPropertyName" : "",
+      "notes" : ""
+   },
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+# @name updateCertification
+# Update the properties of a certification.  Remember to include the certificationId in the properties if the element has multiple
+# certifications for the same certification type.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/certifications/{{certificationGUID}}/update
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "UpdateRelationshipRequestBody",
+   "properties": {
+      "class" : "CertificationProperties",
+      "certificateId" : "",
+      "startDate" : "{{$isoTimestamp}}",
+      "endDate" : "{{$isoTimestamp}}",
+      "conditions" : "",
+      "certifiedBy" : "",
+      "certifiedByTypeName" : "",
+      "certifiedByPropertyName" : "",
+      "custodian" : "",
+      "custodianTypeName" : "",
+      "custodianPropertyName" : "",
+      "recipient" : "",
+      "recipientTypeName" : "",
+      "recipientPropertyName" : "",
+      "notes" : ""
+   },
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+# @name decertifyElement
+# Remove the certification for an element.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/certifications/{{certificationGUID}}/delete
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "DeleteRelationshipRequestBody",
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+# @name getCertifiedElements
+# Retrieve the elements linked via a Certification relationship to the requested CertificationType.
+#
+# https://https://egeria-project.org/types/4/0481-Licenses/
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/certifications/{{certificationTypeGUID}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "class" : "ResultsRequestBody",
+    "forLineage" : false,
+    "forDuplicateProcessing" : false,
+    "effectiveTime" : "{{$isoTimestamp}}",
+    "asOfTime" : "{{$isoTimestamp}}",
+    "limitResultsByStatus" : [ "ACTIVE", "DELETED"],
+    "sequencingProperty" : "???",
+    "sequencingOrder" : "LAST_UPDATE_RECENT"
+}
+
+
+###
+# @name getCertifications
+# Retrieve the certification types linked via a Certification relationship to the requested element.
+#
+# https://https://egeria-project.org/types/4/0481-Licenses/
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/certifications
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "class" : "ResultsRequestBody",
+    "forLineage" : false,
+    "forDuplicateProcessing" : false,
+    "effectiveTime" : "{{$isoTimestamp}}",
+    "asOfTime" : "{{$isoTimestamp}}",
+    "limitResultsByStatus" : [ "ACTIVE", "DELETED"],
+    "sequencingProperty" : "???",
+    "sequencingOrder" : "LAST_UPDATE_RECENT"
+}
+
+
+###
+#==================================================
+# SearchKeyword
+#==================================================
+# Search keyword improve the findability of elements
+# Search keyword:  https://egeria-project.org/concepts/search-keyword/
+
+@searchKeywordGUID=add guid here
+
+
+###
+# @name addSearchKeywordToElement
+#  Creates a search keyword and attaches it to an element.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/search-keywords
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewAttachmentRequestBody",
+  "properties" : {
+    "class" : "SearchKeywordProperties",
+    "displayName" : "myKeyword",
+    "description" : "Add search keyword text here"
+  }
+}
+
+
+###
+# @name updateSearchKeyword
+# Update an existing search keyword.
+# The request body property mergeUpdate indicates wither the new properties should be merged with existing properties (true) or completely replace them (false)
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/search-keywords/{{searchKeywordGUID}}/update
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "UpdateElementRequestBody",
+  "mergeUpdate": true,
+  "properties" : {
+    "class" : "SearchKeywordProperties",
+    "displayName" : "myKeyword",
+    "description" : "Add search keyword text here"
+  }
+}
+
+
+###
+# @name removeSearchKeywordFromElement
+# Removes a search keyword added to the element by this user.  This deletes the link to the search keyword and the search keyword itself.
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/search-keywords/{{searchKeywordGUID}}/remove
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+
+
+###
+# @name getSearchKeywordByGUID
+# Return the requested search keyword.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/search-keywords/{{searchKeywordGUID}}/retrieve
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "GetRequestBody",
+  "asOfTime" : "{{$isoTimestamp}}",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name getSearchKeywordsByKeyword
+# Return the list of search keywords containing the supplied keyword.
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/search-keywords/by-keyword
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "FilterRequestBody",
+  "filter" : "Add value here",
+  "startFrom" : 0,
+  "pageSize": 10,
+  "asOfTime" : "{{$isoTimestamp}}",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false,
+  "limitResultsByStatus" : ["ACTIVE"],
+  "sequencingOrder" : "PROPERTY_ASCENDING",
+  "sequencingProperty" : "qualifiedName"
+}
+
+
+###
+# @name findSearchKeywords
+# Return the list of search keywords containing the supplied string. The search string is located in the request body and is interpreted as a plain string.  The request parameters, startsWith, endsWith and ignoreCase can be used to allow a fuzzy search.  The request body also supports the specification of an effective time to restrict the search to element that are/were effective at a particular time.
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/search-keywords/by-search-string
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "SearchStringRequestBody",
+  "searchString" : "Add value here",
+  "startsWith" : false,
+  "endsWith" : false,
+  "ignoreCase" : true,
+  "startFrom" : 0,
+  "pageSize": 10,
+  "asOfTime" : "{{$isoTimestamp}}",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false,
+  "limitResultsByStatus" : ["ACTIVE"],
+  "sequencingOrder" : "PROPERTY_ASCENDING",
+  "sequencingProperty" : "qualifiedName"
+}
+
+
+###
+# =====================================================================================================================
+# Generic Queries
+
+###
+# @name getRootElementByGUID
+# Retrieve the metadata element using its unique identifier.
+#
+# https://egeria-project.org/types/
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "class" : "GetRequestBody",
+    "effectiveTime" : "{{$isoTimestamp}}",
+    "asOfTime" : "{{$isoTimestamp}}",
+    "forLineage" : false,
+    "forDuplicateProcessing" : false
+}
+
+
+###
+# @name getRootElementByUniqueName
+# Retrieve the metadata element using its unique name (typically the qualified name, but it is possible to specify a different property name in the request body as long as it is unique).  If multiple matching instances are found, and exception is thrown.
+#
+# https://egeria-project.org/services/gaf-metadata-management/
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/by-unique-name
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "class" : "FindPropertyNameProperties",
+    "propertyValue" : "????",
+    "propertyName" : "qualifiedName",
+    "effectiveTime" : "{{$isoTimestamp}}",
+    "asOfTime" : "{{$isoTimestamp}}",
+    "forLineage" : false,
+    "forDuplicateProcessing" : false
+}
+
+###
+# @name getMetadataElementGUIDByUniqueName
+# Retrieve the metadata element GUID using its unique name (typically the qualified name, but it is possible to specify a different property name in the request body as long as it is unique).  If multiple matching instances are found, and exception is thrown.
+#
+# https://egeria-project.org/services/gaf-metadata-management/
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/guid-by-unique-name
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "class" : "FindPropertyNameProperties",
+    "propertyValue" : "???",
+    "propertyName" : "qualifiedName",
+    "effectiveTime" : "{{$isoTimestamp}}",
+    "asOfTime" : "{{$isoTimestamp}}",
+    "forLineage" : false,
+    "forDuplicateProcessing" : false
+}
+
+
+###
+# @name getRootElementsByType
+# Retrieve elements of the requested type name. If no type name is specified then any type of element may be returned.
+#
+# https://egeria-project.org/types/
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/by-type
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "class" : "ResultsRequestBody",
+    "metadataElementTypeName" : "CertificationType",
+    "forLineage" : false,
+    "forDuplicateProcessing" : false,
+    "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+# @name findRootElements (nested condition)
+# Return a list of metadata elements that match the supplied criteria.  The results can be returned over many pages.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/by-complex-query
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "FindRequestBody",
+  "metadataElementTypeName": "ValidValueDefinition",
+  "searchProperties": {
+    "class" : "SearchProperties",
+    "conditions": [ {
+      "property" : "identifier",
+      "operator": "LIKE",
+      "value": {
+        "class" : "PrimitiveTypePropertyValue",
+        "typeName" : "string",
+        "primitiveValue" : "deployedImplementationType"
+      }
+    }],
+    "matchCriteria": "ANY"
+  }
+}
+
+
+###
+# @name getRootElementsByPropertyValue
+# Retrieve elements by a value found in one of the properties specified.  The value must match exactly.
+# An open metadata type name may be supplied to restrict the results.
+#
+# https://egeria-project.org/types/
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/by-exact-property-value
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "class" : "FindPropertyNamesProperties",
+    "metadataElementTypeName" : "Project",
+    "propertyValue" : "Campaign:Clinical Trials Management",
+    "propertyNames" : ["displayName", "qualifiedName"],
+    "forLineage" : false,
+    "forDuplicateProcessing" : false,
+    "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+# @name findRootElementsByPropertyValue
+# Retrieve elements by a value found in one of the properties specified.  The value must be contained in the
+# properties rather than needing to be an exact match.
+# An open metadata type name may be supplied to restrict the results.
+#
+# https://egeria-project.org/types/
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/by-property-value-search
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "class" : "FindPropertyNamesProperties",
+    "metadataElementTypeName" : "CertificationType",
+    "propertyValue" : "Approved Hospital",
+    "propertyNames" : ["displayName", "qualifiedName", "identifier"],
+    "forLineage" : false,
+    "forDuplicateProcessing" : false,
+    "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+###
+# @name getRootElementsByCategory
+# Retrieve elements by a value found in the category property.  The value must match exactly.
+# An open metadata type name may be supplied to restrict the results.
+# A mermaidGraph of the results is also supplied.
+#
+# https://egeria-project.org/types/
+
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/by-category
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "FilterRequestBody",
+  "filter" : "Add category here",
+  "startFrom" : 0,
+  "pageSize": 10,
+  "asOfTime" : "{{$isoTimestamp}}",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false,
+  "limitResultsByStatus" : ["ACTIVE"],
+  "sequencingOrder" : "PROPERTY_ASCENDING",
+  "sequencingProperty" : "qualifiedName"
+}
+
+###
+# @name findRootAuthoredElements
+# https://egeria-project.org/concepts/referenceable
+# Returns the list of authored elements matching the search string and optional content status.
+#
+# @param serverName name of the service to route the request to
+# @param urlMarker  view service URL marker
+# @param requestBody string to find in the properties
+#
+# @return a list of authored elements
+#  InvalidParameterException  one of the parameters is null or invalid.
+#  PropertyServerException    a problem retrieving information from the property server(s).
+#  UserNotAuthorizedException the requesting user is not authorized to issue this request.
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/authored-elements/by-search-string
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "ContentStatusSearchString",
+  "searchString" : "mediaUsage"
+}
+
+###
+# @name getRootAuthoredElementsByCategory
+# https://egeria-project.org/concepts/referenceable
+# Returns the list of authored elements matching the category and optional content status.
+#
+# @param serverName name of the service to route the request to
+# @param urlMarker  view service URL marker
+# @param requestBody string to find in the properties
+#
+# @return a list of authored elements
+#  InvalidParameterException  one of the parameters is null or invalid.
+#  PropertyServerException    a problem retrieving information from the property server(s).
+#  UserNotAuthorizedException the requesting user is not authorized to issue this request.
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/authored-elements/by-category
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "ContentStatusFilterRequestBody",
+  "filter" : "xxx",
+  "contentStatusList" : ["ACTIVE"],
+  "startFrom" : 0,
+  "pageSize": 0,
+  "asOfTime" : "{{$isoTimestamp}}",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false,
+  "limitResultsByStatus" : ["ACTIVE"],
+  "sequencingOrder" : "PROPERTY_ASCENDING",
+  "sequencingProperty" : "qualifiedName"
+}
+
+
+
+###
+
+@classificationName=GovernanceProject
+
+###
+# @name getRootElementsByClassification (any element type)
+# Retrieve elements with the requested classification name. It is also possible to limit the results
+# by specifying a type name for the elements that should be returned. If no type name is specified then
+# any type of element may be returned.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/by-classification/{{classificationName}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "class" : "ResultsRequestBody",
+    "forLineage" : false,
+    "forDuplicateProcessing" : false,
+    "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+
+###
+# @name getRootElementsByClassification (specific element type)
+# Retrieve elements with the requested classification name. It is also possible to limit the results
+# by specifying a type name for the elements that should be returned. If no type name is specified then
+# any type of element may be returned.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/by-classification/{{classificationName}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "class" : "ResultsRequestBody",
+    "metadataElementTypeName" : "Project",
+    "forLineage" : false,
+    "forDuplicateProcessing" : false,
+    "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+# @name getRootElementsByClassificationWithPropertyValue
+# Retrieve elements with the requested classification name and with the requested a value found in one of the
+# classification's properties specified.  The value must match exactly. An open metadata type name may be supplied
+# to restrict the types of elements returned.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/by-classification/{{classificationName}}/with-exact-property-value
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "class" : "FindPropertyNamesProperties",
+    "metadataElementTypeName" : "Project",
+    "propertyValue" : "Clinical Trials",
+    "propertyNames" : ["displayName", "qualifiedName"],
+    "forLineage" : false,
+    "forDuplicateProcessing" : false,
+    "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+###
+# @name findRootElementsByClassificationWithPropertyValue
+# Retrieve elements with the requested classification name and with the requested a value found in
+# one of the classification's properties specified.  The value must only be contained in the
+# properties rather than needing to be an exact match.
+# An open metadata type name may be supplied to restrict the results.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/by-classification/{{classificationName}}/with-property-value-search
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "class" : "FindPropertyNamesProperties",
+    "metadataElementTypeName" : "Project",
+    "propertyValue" : "Clinical Trials",
+    "propertyNames" : ["displayName", "qualifiedName"],
+    "forLineage" : false,
+    "forDuplicateProcessing" : false,
+    "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+# @name getRelatedRootElements (all relationship types; specific element type returned)
+# Retrieve elements linked via the requested relationship type name. It is also possible to limit the results by
+# specifying a type name for the elements that should be returned. If no type name is specified then any type of
+# element may be returned.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/by-relationship?startAtEnd=1
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "class" : "ResultsRequestBody",
+    "metadataElementTypeName" : "Project",
+    "forLineage" : false,
+    "forDuplicateProcessing" : false,
+    "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+
+###
+# @name getRelatedRootElements (all relationship types, all element types)
+# Retrieve elements linked via the requested relationship type name. It is also possible to limit the results by
+# specifying a type name for the elements that should be returned. If no type name is specified then any type of
+# element may be returned.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/by-relationship?startAtEnd=1
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "class" : "ResultsRequestBody",
+    "forLineage" : false,
+    "forDuplicateProcessing" : false,
+    "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+
+###
+
+@relationshipTypeName=GovernedBy
+
+###
+# @name getRelatedRootElements
+# Retrieve elements linked via the requested relationship type name. It is also possible to limit the results by
+# specifying a type name for the elements that should be returned. If no type name is specified then any type of
+# element may be returned.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/by-relationship/{{relationshipTypeName}}?startAtEnd=1
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "class" : "ResultsRequestBody",
+    "forLineage" : false,
+    "forDuplicateProcessing" : false,
+    "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+# @name getRelatedRootElements (specific element types returned)
+# Retrieve elements linked via the requested relationship type name. It is also possible to limit the results by
+# specifying a type name for the elements that should be returned. If no type name is specified then any type of
+# element may be returned.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/by-relationship/{{relationshipTypeName}}?startAtEnd=1
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "class" : "ResultsRequestBody",
+    "metadataElementTypeName" : "CertificationType",
+    "forLineage" : false,
+    "forDuplicateProcessing" : false,
+    "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+# @name getRelatedRootElementsWithPropertyValue
+# Retrieve elements linked via the requested relationship type name and with the requested a value found in one of
+# the classification's properties specified.  The value must match exactly. An open metadata type name may be
+# supplied to restrict the types of elements returned.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/by-relationship/{{relationshipTypeName}}/with-exact-property-value?startAtEnd=1
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "class" : "FindPropertyNamesProperties",
+    "metadataElementTypeName" : "Project",
+    "propertyValue" : "Clinical Trials",
+    "propertyNames" : ["displayName", "qualifiedName"],
+    "forLineage" : false,
+    "forDuplicateProcessing" : false,
+    "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+###
+# @name findRelatedRootElementsWithPropertyValue
+# Retrieve elements linked via the requested relationship type name and with the requested value found in one of the
+# relationship's properties specified.  The value must only be contained in the properties rather than needing to be
+# an exact match.  An open metadata type name may be supplied to restrict the results.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/by-relationship/{{relationshipTypeName}}/with-property-value-search?startAtEnd=1
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "class" : "FindPropertyNamesProperties",
+    "metadataElementTypeName" : "Project",
+    "propertyValue" : "Clinical Trials",
+    "propertyNames" : ["displayName", "qualifiedName"],
+    "forLineage" : false,
+    "forDuplicateProcessing" : false,
+    "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+# @name getRelationships (any type)
+# Retrieve all relationships of the any relationship type name.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/relationships
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "class" : "ResultsRequestBody",
+    "forLineage" : false,
+    "forDuplicateProcessing" : false,
+    "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+###
+# @name getRelationships (specific type)
+# Retrieve relationships of the requested relationship type name.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/relationships/{{relationshipTypeName}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "class" : "ResultsRequestBody",
+    "forLineage" : false,
+    "forDuplicateProcessing" : false,
+    "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+###
+# @name getRelationshipsWithPropertyValue (any type)
+# Retrieve relationships of the requested relationship type name and with the requested a value found in
+# one of the relationship's properties specified.  The value must match exactly.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/relationships/with-exact-property-value
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "class" : "FindPropertyNamesProperties",
+    "propertyValue" : "Organization:Hampton Hospital",
+    "propertyNames" : ["displayName", "qualifiedName"],
+    "forLineage" : false,
+    "forDuplicateProcessing" : false,
+    "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+# @name getRelationshipsWithPropertyValue (specific type)
+# Retrieve relationships of the requested relationship type name and with the requested a value found in
+# one of the relationship's properties specified.  The value must match exactly.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/relationships/{{relationshipTypeName}}/with-exact-property-value
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "class" : "FindPropertyNamesProperties",
+    "propertyValue" : "Organization:Hampton Hospital",
+    "propertyNames" : ["displayName", "qualifiedName"],
+    "forLineage" : false,
+    "forDuplicateProcessing" : false,
+    "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+###
+# @name findRelationshipsWithPropertyValue (any type)
+# Retrieve relationships of any relationship type name and with the requested a value found in one of
+# the relationship's properties specified.  The value must only be contained in the properties rather than
+# needing to be an exact match.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/relationships/with-property-value-search
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "class" : "FindPropertyNamesProperties",
+    "propertyValue" : "Clinical Trials",
+    "propertyNames" : ["displayName", "qualifiedName"],
+    "forLineage" : false,
+    "forDuplicateProcessing" : false,
+    "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+###
+# @name findRelationshipsWithPropertyValue
+# Retrieve relationships of the requested relationship type name and with the requested a value found in one of
+# the relationship's properties specified.  The value must only be contained in the properties rather than
+# needing to be an exact match.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/relationships/{{relationshipTypeName}}/with-property-value-search
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "class" : "FindPropertyNamesProperties",
+    "propertyValue" : "Clinical Trials",
+    "propertyNames" : ["displayName", "qualifiedName"],
+    "forLineage" : false,
+    "forDuplicateProcessing" : false,
+    "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+###
+
+@guid=Add guid here
+@relationshipGUID=Add guid here
+
+
+###
+# @name getRelationshipByGUID
+# Retrieve the relationship using its unique identifier.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/relationship-summaries/by-guid/{{relationshipGUID}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "class" : "GetRequestBody"
+}
+
+
+###
+# @name retrieveInstanceForGUID
+# Retrieve the header for the instance identified by the supplied unique identifier.  It may be an element (entity) or a relationship between elements.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/guids/{{guid}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "class" : "EffectiveTimeRequestBody",
+    "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+###
+# =====================================================================================================================
+# Cross-cutting element classifications
+# https://egeria-project.org/concepts/referenceable
+
+
+###
+# @name setElementAsIncomplete
+# Classify an element to say that its description is incomplete.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/incomplete
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewClassificationRequestBody",
+  "properties": {
+    "class": "IncompleteProperties",
+    "effectiveFrom": "{{$isoTimestamp}}",
+    "effectiveTo": "{{$isoTimestamp}}"
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name clearElementAsIncomplete
+# Remove the incomplete designation from an element.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/incomplete/remove
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteClassificationRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name setElementAsPromise
+# Classify an element to say that it is a promise to deliver a real-world digital resource/artifact.
+# Once classified, the element is only returned to lineage requests (forLineage=true).
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/promise
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewClassificationRequestBody",
+  "properties": {
+    "class": "PromiseProperties",
+    "deploymentStatus": "UNDER_DEVELOPMENT",
+    "userDefinedDeploymentStatus": "add status here",
+    "startTime": "{{$isoTimestamp}}",
+    "dueTime": "{{$isoTimestamp}}",
+    "lastReviewTime": "{{$isoTimestamp}}",
+    "completionTime": "{{$isoTimestamp}}",
+    "additionalProperties": {
+      "property1Name" : "property1Value",
+      "property2Name" : "property2Value"
+    },
+    "effectiveFrom": "{{$isoTimestamp}}",
+    "effectiveTo": "{{$isoTimestamp}}"
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name clearElementAsPromise
+# Remove the promise designation from an element - typically because the real-world digital resource/artifact
+# has now been delivered.  forLineage must be true, since the classified element is otherwise invisible.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/promise/remove
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteClassificationRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : true,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name setElementAsObjectIdentifier
+# Classify an element to say that it identifies an object.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/object-identifier
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewClassificationRequestBody",
+  "properties": {
+    "class": "ObjectIdentifierProperties",
+    "effectiveFrom": "{{$isoTimestamp}}",
+    "effectiveTo": "{{$isoTimestamp}}"
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name clearElementAsObjectIdentifier
+# Remove the object identifier designation from an element.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/object-identifier/remove
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteClassificationRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name setElementAsReferenceData
+# Classify an element to say that it contains reference data.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/reference-data
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewClassificationRequestBody",
+  "properties": {
+    "class": "ReferenceDataProperties",
+    "effectiveFrom": "{{$isoTimestamp}}",
+    "effectiveTo": "{{$isoTimestamp}}"
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name clearElementAsReferenceData
+# Remove the reference data designation from an element.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/reference-data/remove
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteClassificationRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name setElementAsMobileResource
+# Classify an element to say that the resource it describes can move location.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/mobile-resource
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewClassificationRequestBody",
+  "properties": {
+    "class": "MobileResourceProperties",
+    "effectiveFrom": "{{$isoTimestamp}}",
+    "effectiveTo": "{{$isoTimestamp}}"
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name clearElementAsMobileResource
+# Remove the mobile resource designation from an element.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/mobile-resource/remove
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteClassificationRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name setElementAsInstanceMetadata
+# Classify an element to say that it describes metadata about instances rather than the instances themselves.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/instance-metadata
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewClassificationRequestBody",
+  "properties": {
+    "class": "InstanceMetadataProperties",
+    "instanceMetadataTypeName": "add type name here",
+    "description": "add description here",
+    "effectiveFrom": "{{$isoTimestamp}}",
+    "effectiveTo": "{{$isoTimestamp}}"
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name clearElementAsInstanceMetadata
+# Remove the instance metadata designation from an element.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/instance-metadata/remove
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteClassificationRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name setElementAsMetamodelInstance
+# Classify an element to say that it is an instance of an element in a metadata model.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/metamodel-instance
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewClassificationRequestBody",
+  "properties": {
+    "class": "MetamodelInstanceProperties",
+    "metamodelElementGUID": "add guid here",
+    "effectiveFrom": "{{$isoTimestamp}}",
+    "effectiveTo": "{{$isoTimestamp}}"
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name clearElementAsMetamodelInstance
+# Remove the metamodel instance designation from an element.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/classification-explorer/elements/{{elementGUID}}/metamodel-instance/remove
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteClassificationRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+

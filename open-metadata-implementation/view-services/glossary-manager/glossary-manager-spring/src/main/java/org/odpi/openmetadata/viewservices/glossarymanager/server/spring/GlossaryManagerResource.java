@@ -1,0 +1,1272 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Copyright Contributors to the ODPi Egeria project */
+package org.odpi.openmetadata.viewservices.glossarymanager.server.spring;
+
+import io.swagger.v3.oas.annotations.ExternalDocumentation;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.enums.SecuritySchemeIn;
+import io.swagger.v3.oas.annotations.enums.SecuritySchemeType;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.security.SecurityScheme;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import org.odpi.openmetadata.commonservices.ffdc.rest.*;
+import org.odpi.openmetadata.viewservices.glossarymanager.rest.GlossaryTermActivityTypeListResponse;
+import org.odpi.openmetadata.viewservices.glossarymanager.rest.GlossaryTermRelationshipStatusListResponse;
+import org.odpi.openmetadata.viewservices.glossarymanager.rest.GlossaryTermStatusListResponse;
+import org.odpi.openmetadata.viewservices.glossarymanager.server.GlossaryManagerRESTServices;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+/**
+ * The GlossaryManagerResource provides the Spring API endpoints of the Glossary Manager Open Metadata View Service (OMVS).
+ * This interface provides a service for Egeria UIs.
+ */
+
+@RestController
+@RequestMapping("/servers/{serverName}/api/open-metadata/glossary-manager")
+@SecurityScheme(
+        name = "BearerAuthorization",
+        type = SecuritySchemeType.HTTP,
+        bearerFormat = "JWT",
+        scheme = "bearer",
+        in = SecuritySchemeIn.HEADER
+)
+@Tag(name="API: Glossary Manager",
+     description="Create and maintain glossary terms and organize them into glossaries.  This work may be part of a controlled workflow process allowing for review and approval cycles.",
+     externalDocs=@ExternalDocumentation(description="Further Information",
+                                         url="https://egeria-project.org/services/omvs/glossary-manager/overview/"))
+
+public class GlossaryManagerResource
+{
+
+    private final GlossaryManagerRESTServices restAPI = new GlossaryManagerRESTServices();
+
+
+    /**
+     * Default constructor
+     */
+    public GlossaryManagerResource()
+    {
+    }
+
+
+    /* ========================================================
+     * The glossary is the root object for a glossary.  It is created through the Collection Manager API.
+     * The following classifications are used to describe the purpose of the glossary.
+     */
+
+
+    /**
+     * Classify the glossary to indicate that it can be used as a taxonomy.
+     * This means each term is attached to one, and only one folder and the folders are organized as a hierarchy
+     * with a single root folder.
+     * Taxonomies are used as a way of organizing assets and other related metadata.  The terms in the taxonomy
+     * are linked to the assets etc. and as such they are logically categorized by the linked folder.
+     *
+     * @param serverName name of the server to route the request to
+     * @param glossaryGUID unique identifier of the metadata element to remove
+     * @param requestBody properties to help with the mapping of the elements in the external asset manager and open metadata
+     *
+     * @return  void or
+     * InvalidParameterException  one of the parameters is invalid
+     * UserNotAuthorizedException the user is not authorized to issue this request
+     * PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    @PostMapping(path = "/glossaries/{glossaryGUID}/is-taxonomy")
+    @SecurityRequirement(name = "BearerAuthorization")
+
+    @Operation(summary="setGlossaryAsTaxonomy",
+            description="Classify the glossary to indicate that it can be used as a taxonomy." +
+                    " This means each term is attached to one, and only one folder and the folders are organized as a hierarchy" +
+                    " with a single root folder." +
+                    " Taxonomies are used as a way of organizing assets and other related metadata.  The terms in the taxonomy" +
+                    " are linked to the assets etc. and as such they are logically categorized by the linked folder.",
+            externalDocs=@ExternalDocumentation(description="Further Information",
+                    url="https://egeria-project.org/services/omvs/glossary-manager/overview/"))
+
+    public VoidResponse setGlossaryAsTaxonomy(@PathVariable String                    serverName,
+                                              @PathVariable String                    glossaryGUID,
+                                              @RequestBody NewClassificationRequestBody requestBody)
+    {
+        return restAPI.setGlossaryAsTaxonomy(serverName, glossaryGUID, requestBody);
+    }
+
+
+    /**
+     * Remove the taxonomy designation from the glossary.
+     *
+     * @param serverName name of the server to route the request to
+     * @param glossaryGUID unique identifier of the metadata element to remove
+     * @param requestBody correlation properties for the external asset manager
+     *
+     * @return  void or
+     * InvalidParameterException  one of the parameters is invalid
+     * UserNotAuthorizedException the user is not authorized to issue this request
+     * PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    @PostMapping(path = "/glossaries/{glossaryGUID}/is-taxonomy/remove")
+    @SecurityRequirement(name = "BearerAuthorization")
+
+    @Operation(summary="clearGlossaryAsTaxonomy",
+            description="Remove the taxonomy designation from the glossary.",
+            externalDocs=@ExternalDocumentation(description="Further Information",
+                    url="https://egeria-project.org/services/omvs/glossary-manager/overview/"))
+    public VoidResponse clearGlossaryAsTaxonomy(@PathVariable String                    serverName,
+                                                @PathVariable String                    glossaryGUID,
+                                                @RequestBody(required = false)
+                                                              MetadataSourceRequestBody requestBody)
+    {
+        return restAPI.clearGlossaryAsTaxonomy(serverName, glossaryGUID, requestBody);
+    }
+
+
+    /**
+     * Classify a glossary to declare that it has no two GlossaryTerm definitions with
+     * the same name.  This means there is only one definition for each term.  Typically, the terms are also of a similar
+     * level of granularity and are limited to a specific scope of use.
+     * Canonical vocabularies are used to semantically classify assets in an unambiguous way.
+     *
+     * @param serverName name of the server to route the request to
+     * @param glossaryGUID unique identifier of the metadata element to remove
+     * @param requestBody description of the situations where this glossary is relevant.
+     *
+     * @return  void or
+     * InvalidParameterException  one of the parameters is invalid
+     * UserNotAuthorizedException the user is not authorized to issue this request
+     * PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    @PostMapping(path = "/glossaries/{glossaryGUID}/is-canonical-vocabulary")
+    @SecurityRequirement(name = "BearerAuthorization")
+
+    @Operation(summary="setGlossaryAsCanonical",
+            description="Classify a glossary to declare that it has no two GlossaryTerm definitions with" +
+                    " the same name.  This means there is only one definition for each term.  Typically, the terms are also of a similar" +
+                    " level of granularity and are limited to a specific scope of use." +
+                    " Canonical vocabularies are used to semantically classify assets in an unambiguous way.",
+            externalDocs=@ExternalDocumentation(description="Further Information",
+                    url="https://egeria-project.org/services/omvs/glossary-manager/overview/"))
+
+    public VoidResponse setGlossaryAsCanonical(@PathVariable String                    serverName,
+                                               @PathVariable String                    glossaryGUID,
+                                               @RequestBody NewClassificationRequestBody requestBody)
+    {
+        return restAPI.setGlossaryAsCanonical(serverName, glossaryGUID, requestBody);
+    }
+
+
+    /**
+     * Remove the canonical vocabulary designation from the glossary.
+     *
+     * @param serverName name of the server to route the request to
+     * @param glossaryGUID unique identifier of the metadata element to remove
+     * @param requestBody correlation properties for the external asset manager
+     *
+     * @return  void or
+     * InvalidParameterException  one of the parameters is invalid
+     * UserNotAuthorizedException the user is not authorized to issue this request
+     * PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    @PostMapping(path = "/glossaries/{glossaryGUID}/is-canonical-vocabulary/remove")
+    @SecurityRequirement(name = "BearerAuthorization")
+
+    @Operation(summary="clearGlossaryAsCanonical",
+            description="Remove the canonical vocabulary designation from the glossary.",
+            externalDocs=@ExternalDocumentation(description="Further Information",
+                    url="https://egeria-project.org/services/omvs/glossary-manager/overview/"))
+
+    public VoidResponse clearGlossaryAsCanonical(@PathVariable String                    serverName,
+                                                 @PathVariable String                    glossaryGUID,
+                                                 @RequestBody(required = false)
+                                                               MetadataSourceRequestBody requestBody)
+    {
+        return restAPI.clearGlossaryAsCanonical(serverName, glossaryGUID, requestBody);
+    }
+
+
+    /**
+     * Classify a glossary to declare that it describes the terms used in naming standards.  The terms in this
+     * type of glossary are the name parts that are combined to form names that follow the organization's
+     * naming standards.
+     *
+     * @param serverName name of the server to route the request to
+     * @param glossaryGUID unique identifier of the metadata element to classify
+     * @param requestBody properties for the classification
+     *
+     * @return  void or
+     * InvalidParameterException  one of the parameters is invalid
+     * UserNotAuthorizedException the user is not authorized to issue this request
+     * PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    @PostMapping(path = "/glossaries/{glossaryGUID}/is-naming-standards-vocabulary")
+    @SecurityRequirement(name = "BearerAuthorization")
+
+    @Operation(summary="setGlossaryAsNamingStandardsVocabulary",
+            description="Classify a glossary to declare that it describes the terms used in naming standards." +
+                    "  The terms in this type of glossary are the name parts that are combined to form names" +
+                    " that follow the organization's naming standards.",
+            externalDocs=@ExternalDocumentation(description="Further Information",
+                    url="https://egeria-project.org/services/omvs/glossary-manager/overview/"))
+
+    public VoidResponse setGlossaryAsNamingStandardsVocabulary(@PathVariable String                       serverName,
+                                                               @PathVariable String                       glossaryGUID,
+                                                               @RequestBody  NewClassificationRequestBody requestBody)
+    {
+        return restAPI.setGlossaryAsNamingStandardsVocabulary(serverName, glossaryGUID, requestBody);
+    }
+
+
+    /**
+     * Remove the naming standards vocabulary designation from the glossary.
+     *
+     * @param serverName name of the server to route the request to
+     * @param glossaryGUID unique identifier of the metadata element to update
+     * @param requestBody correlation properties for the external asset manager
+     *
+     * @return  void or
+     * InvalidParameterException  one of the parameters is invalid
+     * UserNotAuthorizedException the user is not authorized to issue this request
+     * PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    @PostMapping(path = "/glossaries/{glossaryGUID}/is-naming-standards-vocabulary/remove")
+    @SecurityRequirement(name = "BearerAuthorization")
+
+    @Operation(summary="clearGlossaryAsNamingStandardsVocabulary",
+            description="Remove the naming standards vocabulary designation from the glossary.",
+            externalDocs=@ExternalDocumentation(description="Further Information",
+                    url="https://egeria-project.org/services/omvs/glossary-manager/overview/"))
+
+    public VoidResponse clearGlossaryAsNamingStandardsVocabulary(@PathVariable String                    serverName,
+                                                                 @PathVariable String                    glossaryGUID,
+                                                                 @RequestBody(required = false)
+                                                                               MetadataSourceRequestBody requestBody)
+    {
+        return restAPI.clearGlossaryAsNamingStandardsVocabulary(serverName, glossaryGUID, requestBody);
+    }
+
+
+    /* ===============================================================================
+     * A glossary typically contains many glossary terms, linked with relationships.
+     */
+
+    /**
+     * Return the list of glossary term status enum values.  These are of type ContentStatus and are added to
+     * the contentStatus attribute of GlossaryTerm.
+     *
+     * @param serverName name of the server to route the request to
+     * @return list of enum values
+     */
+    @GetMapping(path = "/glossaries/terms/status-list")
+    @SecurityRequirement(name = "BearerAuthorization")
+
+    @Operation(summary="getGlossaryTermStatuses",
+            description="Return the list of glossary term status enum values.  " +
+                    "These are of type ContentStatus and are added to the 'contentStatus' attribute of GlossaryTerm.",
+            externalDocs=@ExternalDocumentation(description="Further Information",
+                    url="https://egeria-project.org/services/omvs/glossary-manager/overview/"))
+
+    public GlossaryTermStatusListResponse getGlossaryTermStatuses(@PathVariable String serverName)
+    {
+        return restAPI.getGlossaryTermStatuses(serverName);
+    }
+
+
+    /**
+     * Return the list of glossary term relationship status enum values.
+     *
+     * @param serverName name of the server to route the request to
+     * @return list of enum values
+     */
+    @GetMapping(path = "/glossaries/terms/relationships/status-list")
+    @SecurityRequirement(name = "BearerAuthorization")
+
+    @Operation(summary="getGlossaryTermRelationshipStatuses",
+            description="Return the list of glossary term relationship status enum values.",
+            externalDocs=@ExternalDocumentation(description="Further Information",
+                    url="https://egeria-project.org/services/omvs/glossary-manager/overview/"))
+
+    public GlossaryTermRelationshipStatusListResponse getGlossaryTermRelationshipStatuses(@PathVariable String serverName)
+    {
+        return restAPI.getGlossaryTermRelationshipStatuses(serverName);
+    }
+
+
+    /**
+     * Return the list of glossary term activity types enum values.
+     *
+     * @param serverName name of the server to route the request to
+     * @return list of enum values
+     */
+    @GetMapping(path = "/glossaries/terms/activity-types")
+    @SecurityRequirement(name = "BearerAuthorization")
+
+    @Operation(summary="getGlossaryTermActivityTypes",
+            description="Return the list of glossary term activity types enum values.",
+            externalDocs=@ExternalDocumentation(description="Further Information",
+                    url="https://egeria-project.org/services/omvs/glossary-manager/overview/"))
+
+    public GlossaryTermActivityTypeListResponse getGlossaryTermActivityTypes(@PathVariable String serverName)
+    {
+        return restAPI.getGlossaryTermActivityTypes(serverName);
+    }
+
+
+    /**
+     * Create a new metadata element to represent a glossary term.
+     *
+     * @param serverName name of the server to route the request to
+     * @param requestBody properties that override the template
+     *
+     * @return unique identifier of the new metadata element for the glossary term or
+     * InvalidParameterException  one of the parameters is invalid
+     * UserNotAuthorizedException the user is not authorized to issue this request
+     * PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    @PostMapping(path = "/glossaries/terms")
+    @SecurityRequirement(name = "BearerAuthorization")
+
+    @Operation(summary="createGlossaryTerm",
+            description="Create a new metadata element to represent a glossary term.",
+            externalDocs=@ExternalDocumentation(description="Further Information",
+                    url="https://egeria-project.org/services/omvs/glossary-manager/overview/"))
+
+    public GUIDResponse createGlossaryTerm(@PathVariable String                  serverName,
+                                           @RequestBody  NewElementRequestBody requestBody)
+    {
+        return restAPI.createGlossaryTerm(serverName,  requestBody);
+    }
+
+
+
+    /**
+     * Create a new metadata element to represent a glossary term using an existing metadata element as a template.
+     *
+     * @param serverName name of the server to route the request to
+     * @param templateGUID unique identifier of the metadata element to copy
+     * @param requestBody properties that override the template
+     *
+     * @return unique identifier of the new metadata element for the glossary term or
+     * InvalidParameterException  one of the parameters is invalid
+     * UserNotAuthorizedException the user is not authorized to issue this request
+     * PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    @PostMapping(path = "/glossaries/terms/from-template/{templateGUID}")
+    @SecurityRequirement(name = "BearerAuthorization")
+
+    @Operation(summary="createGlossaryTermFromTemplate",
+            description="Create a new metadata element to represent a glossary term using an existing metadata element as a template.",
+            externalDocs=@ExternalDocumentation(description="Further Information",
+                    url="https://egeria-project.org/services/omvs/glossary-manager/overview/"))
+
+    public GUIDResponse createGlossaryTermFromTemplate(@PathVariable String              serverName,
+                                                       @PathVariable String              templateGUID,
+                                                       @RequestBody  TemplateRequestBody requestBody)
+    {
+        return restAPI.createGlossaryTermFromTemplate(serverName, templateGUID,  requestBody);
+    }
+
+
+    /**
+     * Update the metadata element representing a glossary term.
+     *
+     * @param serverName name of the server to route the request to
+     * @param glossaryTermGUID unique identifier of the glossary term to update
+     * @param requestBody new properties for the glossary term
+     *
+     * @return  boolean or
+     * InvalidParameterException  one of the parameters is invalid
+     * UserNotAuthorizedException the user is not authorized to issue this request
+     * PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    @PostMapping(path = "/glossaries/terms/{glossaryTermGUID}/update")
+    @SecurityRequirement(name = "BearerAuthorization")
+
+    @Operation(summary="updateGlossaryTerm",
+            description="Update the metadata element representing a glossary term.",
+            externalDocs=@ExternalDocumentation(description="Further Information",
+                    url="https://egeria-project.org/services/omvs/glossary-manager/overview/"))
+
+    public BooleanResponse updateGlossaryTerm(@PathVariable String                   serverName,
+                                              @PathVariable String                   glossaryTermGUID,
+                                              @RequestBody  UpdateElementRequestBody requestBody)
+    {
+        return restAPI.updateGlossaryTerm(serverName, glossaryTermGUID, requestBody);
+    }
+
+
+    /**
+     * Update the glossary term using the properties and classifications from the parentGUID stored in the request body.
+     *
+     * @param serverName name of the server to route the request to
+     * @param glossaryTermGUID unique identifier of the glossary term to update
+     * @param templateGUID template to use
+     * @param requestBody status and correlation properties
+     *
+     * @return  void or
+     * InvalidParameterException  one of the parameters is invalid
+     * UserNotAuthorizedException the user is not authorized to issue this request
+     * PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    @PostMapping(path = "/glossaries/terms/{glossaryTermGUID}/update/from-template/{templateGUID}")
+    @SecurityRequirement(name = "BearerAuthorization")
+
+    @Operation(summary="updateGlossaryTermFromTemplate",
+            description="Update the glossary term using the properties and classifications from the parentGUID stored in the request body.",
+            externalDocs=@ExternalDocumentation(description="Further Information",
+                    url="https://egeria-project.org/services/omvs/glossary-manager/overview/"))
+
+    public VoidResponse updateGlossaryTermFromTemplate(@PathVariable String                        serverName,
+                                                       @PathVariable String                        glossaryTermGUID,
+                                                       @PathVariable String                        templateGUID,
+                                                       @RequestBody UpdateWithTemplateRequestBody requestBody)
+    {
+        return restAPI.updateGlossaryTermFromTemplate(serverName, glossaryTermGUID, templateGUID, requestBody);
+    }
+
+
+    /**
+     * Move the glossary term from one glossary to another.
+     *
+     * @param serverName name of the server to route the request to
+     * @param glossaryTermGUID unique identifier of the glossary term to update
+     * @param glossaryGUID unique identifier of the destination glossary
+     * @param requestBody status and correlation properties
+     *
+     * @return  void or
+     * InvalidParameterException  one of the parameters is invalid
+     * UserNotAuthorizedException the user is not authorized to issue this request
+     * PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    @PostMapping(path = "/glossaries/terms/{glossaryTermGUID}/move-to/{glossaryGUID}")
+    @SecurityRequirement(name = "BearerAuthorization")
+
+    @Operation(summary="moveGlossaryTerm",
+            description="Move the glossary term from one glossary to another.",
+            externalDocs=@ExternalDocumentation(description="Further Information",
+                    url="https://egeria-project.org/services/omvs/glossary-manager/overview/"))
+
+    public VoidResponse moveGlossaryTerm(@PathVariable String                   serverName,
+                                         @PathVariable String                   glossaryTermGUID,
+                                         @PathVariable String                   glossaryGUID,
+                                         @RequestBody(required = false) DeleteRelationshipRequestBody requestBody)
+    {
+        return restAPI.moveGlossaryTerm(serverName, glossaryTermGUID, glossaryGUID, requestBody);
+    }
+
+
+    /**
+     * Return the list of term-to-term relationship names.
+     *
+     * @param serverName name of the server instance to connect to
+     * @return list of type names that are subtypes of asset or
+     * throws InvalidParameterException full path or userId is null or
+     * throws PropertyServerException problem accessing property server or
+     * throws UserNotAuthorizedException security access problem.
+     */
+    @GetMapping(path = "/glossaries/terms/relationships/type-names")
+    @SecurityRequirement(name = "BearerAuthorization")
+
+    @Operation(summary="getTermRelationshipTypeNames",
+            description="Return the list of term-to-term relationship names.",
+            externalDocs=@ExternalDocumentation(description="Further Information",
+                    url="https://egeria-project.org/services/omvs/glossary-manager/overview/"))
+
+    public NameListResponse getTermRelationshipTypeNames(@PathVariable String serverName)
+    {
+        return restAPI.getTermRelationshipTypeNames(serverName);
+    }
+
+
+    /**
+     * Link two terms together using a specialist relationship.
+     *
+     * @param serverName name of the server to route the request to
+     * @param relationshipTypeName name of the type of relationship to create
+     * @param glossaryTermOneGUID unique identifier of the glossary term at end 1
+     * @param glossaryTermTwoGUID unique identifier of the glossary term at end 2
+     * @param requestBody properties for the relationship
+     *
+     * @return  void or
+     * InvalidParameterException  one of the parameters is invalid
+     * UserNotAuthorizedException the user is not authorized to issue this request
+     * PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    @PostMapping(path = "/glossaries/terms/{glossaryTermOneGUID}/relationships/{relationshipTypeName}/terms/{glossaryTermTwoGUID}")
+    @SecurityRequirement(name = "BearerAuthorization")
+
+    @Operation(summary="setupTermRelationship",
+            description="Link two terms together using a specialist relationship.",
+            externalDocs=@ExternalDocumentation(description="Further Information",
+                    url="https://egeria-project.org/services/omvs/glossary-manager/overview/"))
+
+    public VoidResponse setupTermRelationship(@PathVariable String                  serverName,
+                                              @PathVariable String                  glossaryTermOneGUID,
+                                              @PathVariable String                  relationshipTypeName,
+                                              @PathVariable String                  glossaryTermTwoGUID,
+                                              @RequestBody(required = false) NewRelationshipRequestBody requestBody)
+    {
+        return restAPI.setupTermRelationship(serverName, glossaryTermOneGUID, relationshipTypeName, glossaryTermTwoGUID, requestBody);
+    }
+
+
+    /**
+     * Update the relationship properties for the two terms.
+     *
+     * @param serverName name of the server to route the request to
+     * @param relationshipTypeName name of the type of relationship to create
+     * @param glossaryTermOneGUID unique identifier of the glossary term at end 1
+     * @param glossaryTermTwoGUID unique identifier of the glossary term at end 2
+     * @param requestBody properties for the relationship
+     *
+     * @return  void or
+     * InvalidParameterException  one of the parameters is invalid
+     * UserNotAuthorizedException the user is not authorized to issue this request
+     * PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    @PostMapping(path = "/glossaries/terms/{glossaryTermOneGUID}/relationships/{relationshipTypeName}/terms/{glossaryTermTwoGUID}/update")
+    @SecurityRequirement(name = "BearerAuthorization")
+
+    @Operation(summary="updateTermRelationship",
+            description="Update the relationship properties for the two terms.",
+            externalDocs=@ExternalDocumentation(description="Further Information",
+                    url="https://egeria-project.org/services/omvs/glossary-manager/overview/"))
+
+    public VoidResponse updateTermRelationship(@PathVariable String                  serverName,
+                                               @PathVariable String                  glossaryTermOneGUID,
+                                               @PathVariable String                  relationshipTypeName,
+                                               @PathVariable String                  glossaryTermTwoGUID,
+                                               @RequestBody  UpdateRelationshipRequestBody requestBody)
+    {
+        return restAPI.updateTermRelationship(serverName, glossaryTermOneGUID, relationshipTypeName, glossaryTermTwoGUID, requestBody);
+    }
+
+
+    /**
+     * Remove the relationship between two terms.
+     *
+     * @param serverName name of the server to route the request to
+     * @param relationshipTypeName name of the type of relationship to create
+     * @param glossaryTermOneGUID unique identifier of the glossary term at end 1
+     * @param glossaryTermTwoGUID unique identifier of the glossary term at end 2
+     * @param requestBody properties of the relationship
+     *
+     * @return  void or
+     * InvalidParameterException  one of the parameters is invalid
+     * UserNotAuthorizedException the user is not authorized to issue this request
+     * PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    @PostMapping(path = "/glossaries/terms/{glossaryTermOneGUID}/relationships/{relationshipTypeName}/terms/{glossaryTermTwoGUID}/remove")
+    @SecurityRequirement(name = "BearerAuthorization")
+
+    @Operation(summary="clearTermRelationship",
+            description="Remove the relationship between two terms.",
+            externalDocs=@ExternalDocumentation(description="Further Information",
+                    url="https://egeria-project.org/services/omvs/glossary-manager/overview/"))
+
+    public VoidResponse clearTermRelationship(@PathVariable String                        serverName,
+                                              @PathVariable String                        glossaryTermOneGUID,
+                                              @PathVariable String                        relationshipTypeName,
+                                              @PathVariable String                        glossaryTermTwoGUID,
+                                              @RequestBody(required = false)
+                                                  DeleteRelationshipRequestBody requestBody)
+    {
+        return restAPI.clearTermRelationship(serverName, glossaryTermOneGUID, relationshipTypeName, glossaryTermTwoGUID, requestBody);
+    }
+
+
+    /**
+     * Classify the glossary term to indicate that it describes an abstract concept.
+     *
+     * @param serverName name of the server to route the request to
+     * @param glossaryTermGUID unique identifier of the metadata element to update
+     * @param requestBody properties to help with the mapping of the elements in the external asset manager and open metadata
+     *
+     * @return  void or
+     * InvalidParameterException  one of the parameters is invalid
+     * UserNotAuthorizedException the user is not authorized to issue this request
+     * PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    @PostMapping(path = "/glossaries/terms/{glossaryTermGUID}/is-abstract-concept")
+    @SecurityRequirement(name = "BearerAuthorization")
+
+    @Operation(summary="setTermAsAbstractConcept",
+            description="Classify the glossary term to indicate that it describes an abstract concept.",
+            externalDocs=@ExternalDocumentation(description="Further Information",
+                    url="https://egeria-project.org/services/omvs/glossary-manager/overview/"))
+
+    public VoidResponse setTermAsAbstractConcept(@PathVariable String                       serverName,
+                                                 @PathVariable String                       glossaryTermGUID,
+                                                 @RequestBody(required = false)
+                                                     NewClassificationRequestBody requestBody)
+    {
+        return restAPI.setTermAsAbstractConcept(serverName, glossaryTermGUID, requestBody);
+    }
+
+
+    /**
+     * Remove the abstract concept designation from the glossary term.
+     *
+     * @param serverName name of the server to route the request to
+     * @param glossaryTermGUID unique identifier of the metadata element to update
+     * @param requestBody properties to help with the mapping of the elements in the external asset manager and open metadata
+     *
+     * @return  void or
+     * InvalidParameterException  one of the parameters is invalid
+     * UserNotAuthorizedException the user is not authorized to issue this request
+     * PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    @PostMapping(path = "/glossaries/terms/{glossaryTermGUID}/is-abstract-concept/delete")
+    @SecurityRequirement(name = "BearerAuthorization")
+
+    @Operation(summary="clearTermAsAbstractConcept",
+            description="Remove the abstract concept designation from the glossary term.",
+            externalDocs=@ExternalDocumentation(description="Further Information",
+                    url="https://egeria-project.org/services/omvs/glossary-manager/overview/"))
+
+    public VoidResponse clearTermAsAbstractConcept(@PathVariable String                    serverName,
+                                                   @PathVariable String                    glossaryTermGUID,
+                                                   @RequestBody(required = false)
+                                                                 DeleteClassificationRequestBody requestBody)
+    {
+        return restAPI.clearTermAsAbstractConcept(serverName, glossaryTermGUID, requestBody);
+    }
+
+
+    /**
+     * Classify the glossary term to indicate that it describes a prime word.
+     *
+     * @param serverName name of the server to route the request to
+     * @param glossaryTermGUID unique identifier of the metadata element to update
+     * @param requestBody properties to help with the mapping of the elements in the external asset manager and open metadata
+     *
+     * @return  void or
+     * InvalidParameterException  one of the parameters is invalid
+     * UserNotAuthorizedException the user is not authorized to issue this request
+     * PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    @PostMapping(path = "/glossaries/terms/{glossaryTermGUID}/is-prime-word")
+    @SecurityRequirement(name = "BearerAuthorization")
+
+    @Operation(summary="setTermAsPrimeWord",
+            description="Classify the glossary term to indicate that it describes a prime word.",
+            externalDocs=@ExternalDocumentation(description="Further Information",
+                    url="https://egeria-project.org/services/omvs/glossary-manager/overview/"))
+
+    public VoidResponse setTermAsPrimeWord(@PathVariable String                       serverName,
+                                           @PathVariable String                       glossaryTermGUID,
+                                           @RequestBody(required = false)
+                                           NewClassificationRequestBody requestBody)
+    {
+        return restAPI.setTermAsPrimeWord(serverName, glossaryTermGUID, requestBody);
+    }
+
+
+    /**
+     * Remove the prime word designation from the glossary term.
+     *
+     * @param serverName name of the server to route the request to
+     * @param glossaryTermGUID unique identifier of the metadata element to update
+     * @param requestBody properties to help with the mapping of the elements in the external asset manager and open metadata
+     *
+     * @return  void or
+     * InvalidParameterException  one of the parameters is invalid
+     * UserNotAuthorizedException the user is not authorized to issue this request
+     * PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    @PostMapping(path = "/glossaries/terms/{glossaryTermGUID}/is-prime-word/delete")
+    @SecurityRequirement(name = "BearerAuthorization")
+
+    @Operation(summary="clearTermAsPrimeWord",
+            description="Remove the prime word designation from the glossary term.",
+            externalDocs=@ExternalDocumentation(description="Further Information",
+                    url="https://egeria-project.org/services/omvs/glossary-manager/overview/"))
+
+    public VoidResponse clearTermAsPrimeWord(@PathVariable String                    serverName,
+                                             @PathVariable String                    glossaryTermGUID,
+                                             @RequestBody(required = false)
+                                             DeleteClassificationRequestBody requestBody)
+    {
+        return restAPI.clearTermAsPrimeWord(serverName, glossaryTermGUID, requestBody);
+    }
+
+
+    /**
+     * Classify the glossary term to indicate that it describes a modifier.
+     *
+     * @param serverName name of the server to route the request to
+     * @param glossaryTermGUID unique identifier of the metadata element to update
+     * @param requestBody properties to help with the mapping of the elements in the external asset manager and open metadata
+     *
+     * @return  void or
+     * InvalidParameterException  one of the parameters is invalid
+     * UserNotAuthorizedException the user is not authorized to issue this request
+     * PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    @PostMapping(path = "/glossaries/terms/{glossaryTermGUID}/is-modifier")
+    @SecurityRequirement(name = "BearerAuthorization")
+
+    @Operation(summary="setTermAsModifier",
+            description="Classify the glossary term to indicate that it describes a modifier.",
+            externalDocs=@ExternalDocumentation(description="Further Information",
+                    url="https://egeria-project.org/services/omvs/glossary-manager/overview/"))
+
+    public VoidResponse setTermAsModifier(@PathVariable String                       serverName,
+                                          @PathVariable String                       glossaryTermGUID,
+                                          @RequestBody(required = false)
+                                          NewClassificationRequestBody requestBody)
+    {
+        return restAPI.setTermAsModifier(serverName, glossaryTermGUID, requestBody);
+    }
+
+
+    /**
+     * Remove the modifier designation from the glossary term.
+     *
+     * @param serverName name of the server to route the request to
+     * @param glossaryTermGUID unique identifier of the metadata element to update
+     * @param requestBody properties to help with the mapping of the elements in the external asset manager and open metadata
+     *
+     * @return  void or
+     * InvalidParameterException  one of the parameters is invalid
+     * UserNotAuthorizedException the user is not authorized to issue this request
+     * PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    @PostMapping(path = "/glossaries/terms/{glossaryTermGUID}/is-modifier/delete")
+    @SecurityRequirement(name = "BearerAuthorization")
+
+    @Operation(summary="clearTermAsModifier",
+            description="Remove the modifier designation from the glossary term.",
+            externalDocs=@ExternalDocumentation(description="Further Information",
+                    url="https://egeria-project.org/services/omvs/glossary-manager/overview/"))
+
+    public VoidResponse clearTermAsModifier(@PathVariable String                    serverName,
+                                            @PathVariable String                    glossaryTermGUID,
+                                            @RequestBody(required = false)
+                                            DeleteClassificationRequestBody requestBody)
+    {
+        return restAPI.clearTermAsModifier(serverName, glossaryTermGUID, requestBody);
+    }
+
+
+    /**
+     * Classify the glossary term to indicate that it describes a class word.
+     *
+     * @param serverName name of the server to route the request to
+     * @param glossaryTermGUID unique identifier of the metadata element to update
+     * @param requestBody properties to help with the mapping of the elements in the external asset manager and open metadata
+     *
+     * @return  void or
+     * InvalidParameterException  one of the parameters is invalid
+     * UserNotAuthorizedException the user is not authorized to issue this request
+     * PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    @PostMapping(path = "/glossaries/terms/{glossaryTermGUID}/is-class-word")
+    @SecurityRequirement(name = "BearerAuthorization")
+
+    @Operation(summary="setTermAsClassWord",
+            description="Classify the glossary term to indicate that it describes a class word.",
+            externalDocs=@ExternalDocumentation(description="Further Information",
+                    url="https://egeria-project.org/services/omvs/glossary-manager/overview/"))
+
+    public VoidResponse setTermAsClassWord(@PathVariable String                       serverName,
+                                           @PathVariable String                       glossaryTermGUID,
+                                           @RequestBody(required = false)
+                                           NewClassificationRequestBody requestBody)
+    {
+        return restAPI.setTermAsClassWord(serverName, glossaryTermGUID, requestBody);
+    }
+
+
+    /**
+     * Remove the class word designation from the glossary term.
+     *
+     * @param serverName name of the server to route the request to
+     * @param glossaryTermGUID unique identifier of the metadata element to update
+     * @param requestBody properties to help with the mapping of the elements in the external asset manager and open metadata
+     *
+     * @return  void or
+     * InvalidParameterException  one of the parameters is invalid
+     * UserNotAuthorizedException the user is not authorized to issue this request
+     * PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    @PostMapping(path = "/glossaries/terms/{glossaryTermGUID}/is-class-word/delete")
+    @SecurityRequirement(name = "BearerAuthorization")
+
+    @Operation(summary="clearTermAsClassWord",
+            description="Remove the class word designation from the glossary term.",
+            externalDocs=@ExternalDocumentation(description="Further Information",
+                    url="https://egeria-project.org/services/omvs/glossary-manager/overview/"))
+
+    public VoidResponse clearTermAsClassWord(@PathVariable String                    serverName,
+                                             @PathVariable String                    glossaryTermGUID,
+                                             @RequestBody(required = false)
+                                             DeleteClassificationRequestBody requestBody)
+    {
+        return restAPI.clearTermAsClassWord(serverName, glossaryTermGUID, requestBody);
+    }
+
+
+    /**
+     * Classify the glossary term to indicate that it describes a data value.
+     *
+     * @param serverName name of the server to route the request to
+     * @param glossaryTermGUID unique identifier of the metadata element to update
+     * @param requestBody properties to help with the mapping of the elements in the external asset manager and open metadata
+     *
+     * @return  void or
+     * InvalidParameterException  one of the parameters is invalid
+     * UserNotAuthorizedException the user is not authorized to issue this request
+     * PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    @PostMapping(path = "/glossaries/terms/{glossaryTermGUID}/is-data-value")
+    @SecurityRequirement(name = "BearerAuthorization")
+
+    @Operation(summary="setTermAsDataValue",
+            description="Classify the glossary term to indicate that it describes a data value.",
+            externalDocs=@ExternalDocumentation(description="Further Information",
+                    url="https://egeria-project.org/services/omvs/glossary-manager/overview/"))
+
+    public VoidResponse setTermAsDataValue(@PathVariable String                       serverName,
+                                           @PathVariable String                       glossaryTermGUID,
+
+                                           @RequestBody(required = false)
+                                               NewClassificationRequestBody requestBody)
+    {
+        return restAPI.setTermAsDataValue(serverName, glossaryTermGUID, requestBody);
+    }
+
+
+    /**
+     * Remove the data value designation from the glossary term.
+     *
+     * @param serverName name of the server to route the request to
+     * @param glossaryTermGUID unique identifier of the metadata element to update
+     * @param requestBody properties to help with the mapping of the elements in the external asset manager and open metadata
+     *
+     * @return  void or
+     * InvalidParameterException  one of the parameters is invalid
+     * UserNotAuthorizedException the user is not authorized to issue this request
+     * PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    @PostMapping(path = "/glossaries/terms/{glossaryTermGUID}/is-data-value/remove")
+    @SecurityRequirement(name = "BearerAuthorization")
+
+    @Operation(summary="clearTermAsDataValue",
+            description="Remove the data value designation from the glossary term.",
+            externalDocs=@ExternalDocumentation(description="Further Information",
+                    url="https://egeria-project.org/services/omvs/glossary-manager/overview/"))
+
+    public VoidResponse clearTermAsDataValue(@PathVariable String                    serverName,
+                                             @PathVariable String                    glossaryTermGUID,
+                                             @RequestBody(required = false)
+                                                 DeleteClassificationRequestBody requestBody)
+    {
+        return restAPI.clearTermAsDataValue(serverName, glossaryTermGUID, requestBody);
+    }
+
+
+
+    /**
+     * Classify the glossary term to indicate that it describes a question.
+     *
+     * @param serverName name of the server to route the request to
+     * @param glossaryTermGUID unique identifier of the metadata element to update
+     * @param requestBody properties to help with the mapping of the elements in the external asset manager and open metadata
+     *
+     * @return  void or
+     * InvalidParameterException  one of the parameters is invalid
+     * UserNotAuthorizedException the user is not authorized to issue this request
+     * PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    @PostMapping(path = "/glossaries/terms/{glossaryTermGUID}/is-question")
+    @SecurityRequirement(name = "BearerAuthorization")
+
+    @Operation(summary="setTermAsQuestion",
+            description="Classify the glossary term to indicate that it describes a question.",
+            externalDocs=@ExternalDocumentation(description="Further Information",
+                    url="https://egeria-project.org/services/omvs/glossary-manager/overview/"))
+
+    public VoidResponse setTermAsQuestion(@PathVariable String                       serverName,
+                                           @PathVariable String                       glossaryTermGUID,
+                                           @RequestBody(required = false)
+                                           NewClassificationRequestBody requestBody)
+    {
+        return restAPI.setTermAsQuestion(serverName, glossaryTermGUID, requestBody);
+    }
+
+
+    /**
+     * Remove the question designation from the glossary term.
+     *
+     * @param serverName name of the server to route the request to
+     * @param glossaryTermGUID unique identifier of the metadata element to update
+     * @param requestBody properties to help with the mapping of the elements in the external asset manager and open metadata
+     *
+     * @return  void or
+     * InvalidParameterException  one of the parameters is invalid
+     * UserNotAuthorizedException the user is not authorized to issue this request
+     * PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    @PostMapping(path = "/glossaries/terms/{glossaryTermGUID}/is-question/remove")
+    @SecurityRequirement(name = "BearerAuthorization")
+
+    @Operation(summary="clearTermAsQuestion",
+            description="Remove the question designation from the glossary term.",
+            externalDocs=@ExternalDocumentation(description="Further Information",
+                    url="https://egeria-project.org/services/omvs/glossary-manager/overview/"))
+
+    public VoidResponse clearTermAsQuestion(@PathVariable String                    serverName,
+                                            @PathVariable String                    glossaryTermGUID,
+                                            @RequestBody(required = false)
+                                             DeleteClassificationRequestBody requestBody)
+    {
+        return restAPI.clearTermAsQuestion(serverName, glossaryTermGUID, requestBody);
+    }
+
+
+    /**
+     * Classify the glossary term to indicate that it describes a data value.
+     *
+     * @param serverName name of the server to route the request to
+     * @param glossaryTermGUID unique identifier of the metadata element to update
+     * @param requestBody type of activity and correlators
+     *
+     * @return  void or
+     * InvalidParameterException  one of the parameters is invalid
+     * UserNotAuthorizedException the user is not authorized to issue this request
+     * PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    @PostMapping(path = "/glossaries/terms/{glossaryTermGUID}/is-activity")
+    @SecurityRequirement(name = "BearerAuthorization")
+
+    @Operation(summary="setTermAsActivity",
+            description="Classify the glossary term to indicate that it describes a data value.",
+            externalDocs=@ExternalDocumentation(description="Further Information",
+                    url="https://egeria-project.org/services/omvs/glossary-manager/overview/"))
+
+    public VoidResponse setTermAsActivity(@PathVariable String                    serverName,
+                                          @PathVariable String                    glossaryTermGUID,
+                                          @RequestBody NewClassificationRequestBody requestBody)
+    {
+        return restAPI.setTermAsActivity(serverName, glossaryTermGUID, requestBody);
+    }
+
+
+    /**
+     * Remove the activity designation from the glossary term.
+     *
+     * @param serverName name of the server to route the request to
+     * @param glossaryTermGUID unique identifier of the metadata element to update
+     * @param requestBody properties to help with the mapping of the elements in the external asset manager and open metadata
+     *
+     * @return  void or
+     * InvalidParameterException  one of the parameters is invalid
+     * UserNotAuthorizedException the user is not authorized to issue this request
+     * PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    @PostMapping(path = "/glossaries/terms/{glossaryTermGUID}/is-activity/remove")
+    @SecurityRequirement(name = "BearerAuthorization")
+
+    @Operation(summary="clearTermAsActivity",
+            description="Remove the activity designation from the glossary term.",
+            externalDocs=@ExternalDocumentation(description="Further Information",
+                    url="https://egeria-project.org/services/omvs/glossary-manager/overview/"))
+
+    public VoidResponse clearTermAsActivity(@PathVariable String                    serverName,
+                                            @PathVariable String                    glossaryTermGUID,
+                                            @RequestBody(required = false)
+                                                DeleteClassificationRequestBody requestBody)
+    {
+        return restAPI.clearTermAsActivity(serverName, glossaryTermGUID, requestBody);
+    }
+
+
+    /**
+     * Classify the glossary term to indicate that it describes a context.
+     *
+     * @param serverName name of the server to route the request to
+     * @param glossaryTermGUID unique identifier of the metadata element to update
+     * @param requestBody more details of the context
+     *
+     * @return  void or
+     * InvalidParameterException  one of the parameters is invalid
+     * UserNotAuthorizedException the user is not authorized to issue this request
+     * PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    @PostMapping(path = "/glossaries/terms/{glossaryTermGUID}/is-context-definition")
+    @SecurityRequirement(name = "BearerAuthorization")
+
+    @Operation(summary="setTermAsContext",
+            description="Classify the glossary term to indicate that it describes a context.",
+            externalDocs=@ExternalDocumentation(description="Further Information",
+                    url="https://egeria-project.org/services/omvs/glossary-manager/overview/"))
+
+    public VoidResponse setTermAsContext(@PathVariable String                    serverName,
+                                         @PathVariable String                    glossaryTermGUID,
+                                         @RequestBody NewClassificationRequestBody requestBody)
+    {
+        return restAPI.setTermAsContext(serverName, glossaryTermGUID, requestBody);
+    }
+
+
+    /**
+     * Remove the context definition designation from the glossary term.
+     *
+     * @param serverName name of the server to route the request to
+     * @param glossaryTermGUID unique identifier of the metadata element to update
+     * @param requestBody properties to help with the mapping of the elements in the external asset manager and open metadata
+     *
+     * @return  void or
+     * InvalidParameterException  one of the parameters is invalid
+     * UserNotAuthorizedException the user is not authorized to issue this request
+     * PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    @PostMapping(path = "/glossaries/terms/{glossaryTermGUID}/is-context-definition/delete")
+    @SecurityRequirement(name = "BearerAuthorization")
+
+    @Operation(summary="clearTermAsContext",
+            description="Remove the context definition designation from the glossary term.",
+            externalDocs=@ExternalDocumentation(description="Further Information",
+                    url="https://egeria-project.org/services/omvs/glossary-manager/overview/"))
+
+    public VoidResponse clearTermAsContext(@PathVariable String                   serverName,
+                                           @PathVariable String                   glossaryTermGUID,
+                                           @RequestBody(required = false)
+                                               DeleteClassificationRequestBody requestBody)
+    {
+        return restAPI.clearTermAsContext(serverName, glossaryTermGUID, requestBody);
+    }
+
+
+    /**
+     * Remove the metadata element representing a glossary term.
+     *
+     * @param serverName name of the server to route the request to
+     * @param glossaryTermGUID unique identifier of the metadata element to remove
+     * @param requestBody properties to help with the mapping of the elements in the external asset manager and open metadata
+     *
+     * @return  void or
+     * InvalidParameterException  one of the parameters is invalid
+     * UserNotAuthorizedException the user is not authorized to issue this request
+     * PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    @PostMapping(path = "/glossaries/terms/{glossaryTermGUID}/delete")
+    @SecurityRequirement(name = "BearerAuthorization")
+
+    @Operation(summary="deleteGlossaryTerm",
+            description="Remove the metadata element representing a glossary term.",
+            externalDocs=@ExternalDocumentation(description="Further Information",
+                    url="https://egeria-project.org/services/omvs/glossary-manager/overview/"))
+
+    public VoidResponse deleteGlossaryTerm(@PathVariable String                         serverName,
+                                           @PathVariable String                         glossaryTermGUID,
+                                           @RequestBody(required = false)
+                                               DeleteElementRequestBody requestBody)
+    {
+        return restAPI.deleteGlossaryTerm(serverName, glossaryTermGUID, requestBody);
+    }
+
+
+
+    /**
+     * Retrieve the list of glossary term metadata elements that contain the search string.
+     * The search string is treated as a regular expression.
+     *
+     * @param serverName name of the server to route the request to
+     * @param requestBody query
+     *
+     * @return list of matching metadata elements or
+     * InvalidParameterException  one of the parameters is invalid
+     * UserNotAuthorizedException the user is not authorized to issue this request
+     * PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    @PostMapping(path = "/glossaries/terms/by-search-string")
+    @SecurityRequirement(name = "BearerAuthorization")
+
+    @Operation(summary="findGlossaryTerms",
+            description="Retrieve the list of glossary term metadata elements that contain the search string.  The search string is located in the request body and is interpreted as a plain string.  The request parameters, startsWith, endsWith and ignoreCase can be used to allow a fuzzy search.  The request body also supports the specification of a glossaryGUID to restrict the search to within a single glossary.",
+            externalDocs=@ExternalDocumentation(description="Further Information",
+                    url="https://egeria-project.org/services/omvs/glossary-manager/overview/"))
+
+    public OpenMetadataRootElementsResponse findGlossaryTerms(@PathVariable String                  serverName,
+                                                              @RequestBody(required = false)  SearchStringRequestBody requestBody)
+    {
+        return restAPI.findGlossaryTerms(serverName, requestBody);
+    }
+
+
+    /**
+     * Retrieve the list of glossary term metadata elements with a matching qualified or display name.
+     * There are no wildcards supported on this request.
+     *
+     * @param serverName name of the server to route the request to
+     * @param requestBody asset manager identifiers and name
+     *
+     * @return list of matching metadata elements or
+     * InvalidParameterException  one of the parameters is invalid
+     * UserNotAuthorizedException the user is not authorized to issue this request
+     * PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    @PostMapping(path = "/glossaries/terms/by-name")
+    @SecurityRequirement(name = "BearerAuthorization")
+
+    @Operation(summary="getGlossaryTermsByName",
+            description="Retrieve the list of glossary term metadata elements with a matching qualified or display name.",
+            externalDocs=@ExternalDocumentation(description="Further Information",
+                    url="https://egeria-project.org/services/omvs/glossary-manager/overview/"))
+
+    public OpenMetadataRootElementsResponse   getGlossaryTermsByName(@PathVariable String             serverName,
+                                                                     @RequestBody(required = false)  FilterRequestBody requestBody)
+    {
+        return restAPI.getGlossaryTermsByName(serverName, requestBody);
+    }
+
+
+    /**
+     * Retrieve the glossary term metadata element with the supplied unique identifier.
+     *
+     * @param serverName name of the server to route the request to
+     * @param glossaryTermGUID unique identifier of the requested metadata element
+     * @param requestBody asset manager identifiers
+     *
+     * @return matching metadata element or
+     * InvalidParameterException  one of the parameters is invalid
+     * UserNotAuthorizedException the user is not authorized to issue this request
+     * PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    @PostMapping(path = "/glossaries/terms/{glossaryTermGUID}")
+    @SecurityRequirement(name = "BearerAuthorization")
+
+    @Operation(summary="getGlossaryTermByGUID",
+            description="Retrieve the glossary term metadata element with the supplied unique identifier.",
+            externalDocs=@ExternalDocumentation(description="Further Information",
+                    url="https://egeria-project.org/services/omvs/glossary-manager/overview/"))
+
+    public OpenMetadataRootElementResponse getGlossaryTermByGUID(@PathVariable String                             serverName,
+                                                                 @PathVariable String                             glossaryTermGUID,
+                                                                 @RequestBody(required = false) GetRequestBody requestBody)
+    {
+        return restAPI.getGlossaryTermByGUID(serverName, glossaryTermGUID, requestBody);
+    }
+
+    /**
+     * Attach a glossary term to an element that it is relevant to the context of.
+     *
+     * @param serverName name of the server to route the request to
+     * @param glossaryTermGUID unique identifier of the glossary term that describes the context
+     * @param contextElementGUID unique identifier of the element that the term is used in the context of
+     * @param requestBody properties for the request
+     *
+     * @return response object
+     * InvalidParameterException  one of the parameters is invalid
+     * UserNotAuthorizedException the user is not authorized to issue this request
+     * PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    @PostMapping(path = "/glossary-terms/{glossaryTermGUID}/used-in-contexts/{contextElementGUID}/attach")
+    @SecurityRequirement(name = "BearerAuthorization")
+
+    @Operation(summary="linkUsedInContext",
+            description="Attach a glossary term to an element that it is relevant to the context of.",
+            externalDocs=@ExternalDocumentation(description="Further Information",
+                    url="https://egeria-project.org/concepts/glossary-term"))
+
+    public VoidResponse linkUsedInContext(@PathVariable String serverName,
+                                          @PathVariable String glossaryTermGUID,
+                                          @PathVariable String contextElementGUID,
+                                          @RequestBody (required = false)
+                                          NewRelationshipRequestBody requestBody)
+    {
+        return restAPI.linkUsedInContext(serverName, glossaryTermGUID, contextElementGUID, requestBody);
+    }
+
+
+    /**
+     * Detach a glossary term from an element that it was relevant to the context of.
+     *
+     * @param serverName name of the server to route the request to
+     * @param glossaryTermGUID unique identifier of the glossary term that describes the context
+     * @param contextElementGUID unique identifier of the element that the term is used in the context of
+     * @param requestBody properties for the request
+     *
+     * @return response object
+     * InvalidParameterException  one of the parameters is invalid
+     * UserNotAuthorizedException the user is not authorized to issue this request
+     * PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    @PostMapping(path = "/glossary-terms/{glossaryTermGUID}/used-in-contexts/{contextElementGUID}/detach")
+    @SecurityRequirement(name = "BearerAuthorization")
+
+    @Operation(summary="detachUsedInContext",
+            description="Detach a glossary term from an element that it was relevant to the context of.",
+            externalDocs=@ExternalDocumentation(description="Further Information",
+                    url="https://egeria-project.org/concepts/glossary-term"))
+
+    public VoidResponse detachUsedInContext(@PathVariable String serverName,
+                                            @PathVariable String glossaryTermGUID,
+                                            @PathVariable String contextElementGUID,
+                                            @RequestBody (required = false)
+                                            DeleteRelationshipRequestBody requestBody)
+    {
+        return restAPI.detachUsedInContext(serverName, glossaryTermGUID, contextElementGUID, requestBody);
+    }
+
+    /**
+     * Classify a glossary term to say that it supplements the description of another element.
+     *
+     * @param serverName name of the server to route the request to
+     * @param glossaryTermGUID unique identifier of the glossary term
+     * @param requestBody properties for the request
+     *
+     * @return response object
+     * InvalidParameterException  one of the parameters is invalid
+     * UserNotAuthorizedException the user is not authorized to issue this request
+     * PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    @PostMapping(path = "/glossary-terms/{glossaryTermGUID}/element-supplement")
+    @SecurityRequirement(name = "BearerAuthorization")
+
+    @Operation(summary="setTermAsElementSupplement",
+            description="Classify a glossary term to say that it supplements the description of another element.",
+            externalDocs=@ExternalDocumentation(description="Further Information",
+                    url="https://egeria-project.org/concepts/glossary-term"))
+
+    public VoidResponse setTermAsElementSupplement(@PathVariable String serverName,
+                                                   @PathVariable String glossaryTermGUID,
+                                                   @RequestBody (required = false)
+                                                   NewClassificationRequestBody requestBody)
+    {
+        return restAPI.setTermAsElementSupplement(serverName, glossaryTermGUID, requestBody);
+    }
+
+
+    /**
+     * Remove the element supplement designation from a glossary term.
+     *
+     * @param serverName name of the server to route the request to
+     * @param glossaryTermGUID unique identifier of the glossary term
+     * @param requestBody properties for the request
+     *
+     * @return response object
+     * InvalidParameterException  one of the parameters is invalid
+     * UserNotAuthorizedException the user is not authorized to issue this request
+     * PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    @PostMapping(path = "/glossary-terms/{glossaryTermGUID}/element-supplement/remove")
+    @SecurityRequirement(name = "BearerAuthorization")
+
+    @Operation(summary="clearTermAsElementSupplement",
+            description="Remove the element supplement designation from a glossary term.",
+            externalDocs=@ExternalDocumentation(description="Further Information",
+                    url="https://egeria-project.org/concepts/glossary-term"))
+
+    public VoidResponse clearTermAsElementSupplement(@PathVariable String serverName,
+                                                     @PathVariable String glossaryTermGUID,
+                                                     @RequestBody (required = false)
+                                                     DeleteClassificationRequestBody requestBody)
+    {
+        return restAPI.clearTermAsElementSupplement(serverName, glossaryTermGUID, requestBody);
+    }
+}

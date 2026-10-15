@@ -1,0 +1,60 @@
+
+@ucURL=http://localhost:8087
+#@ucURL=http://localhost:8187
+
+###
+# @name list functions
+GET {{ucURL}}/api/2.1/unity-catalog/functions?catalog_name=unity&schema_name=default&max_results=10
+
+###
+# @name create function
+# Unlike catalogs/schemas/volumes/tables, the function properties must be nested inside a "function_info"
+# wrapper - this is CreateFunctionRequest, not a flat CreateFunction.
+POST {{ucURL}}/api/2.1/unity-catalog/functions
+Content-Type: application/json
+
+{
+  "function_info" :
+  {
+    "name": "createWisdom",
+    "catalog_name" : "unity",
+    "schema_name" : "default",
+    "comment": "Test function 1",
+    "input_params": {
+      "parameters": [
+        {
+          "name": "topic",
+          "type_text": "string",
+          "type_json": "{\"name\":\"topic\",\"type\":\"string\",\"nullable\":false,\"metadata\":{}}",
+          "type_name": "STRING",
+          "position": 0,
+          "parameter_mode": "IN",
+          "parameter_type": "PARAM"
+        }
+      ]
+    },
+    "data_type": "STRING",
+    "full_data_type": "STRING",
+    "routine_body": "EXTERNAL",
+    "routine_definition": "return \"wisdom about \" + topic;",
+    "parameter_style" : "S",
+    "is_deterministic": true,
+    "sql_data_access": "NO_SQL",
+    "is_null_call": false,
+    "security_type" : "DEFINER",
+    "specific_name": "createWisdom",
+    "external_language" : "Java"
+  }
+}
+
+###
+# @name get function
+GET {{ucURL}}/api/2.1/unity-catalog/functions/unity.default.createWisdom
+Content-Type: application/json
+
+
+###
+# @name delete function
+DELETE {{ucURL}}/api/2.1/unity-catalog/functions/unity.default.createWisdom
+Content-Type: application/json
+

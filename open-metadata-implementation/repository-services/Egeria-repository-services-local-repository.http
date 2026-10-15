@@ -1,0 +1,198 @@
+# Egeria-repository-services-local-repository
+
+#
+# These commands rebuild the sample configuration documents for postgres-metadata-server
+# They use IntelliJ's HTTP Client.
+#
+@baseURL=https://localhost:7443
+@user=erinoverview
+@auditLogTopic=logging
+@localMatadataCollectionId=3fe67e5a-28eb-42bb-910c-600c3a8d6fb2
+@server=active-metadata-store
+##
+# =====================================================================================================================
+# Manage the authentication token.  Run this request to create/refresh the token.
+
+# @name Token (RequestBody)
+POST {{baseURL}}/api/token
+Content-Type: application/json
+
+{
+  "userId" : "{{user}}",
+  "password" : "secret"
+}
+
+> {% client.global.set("token", response.body); %}
+
+###
+# @name get metadata collection Id
+POST {{baseURL}}/servers/{{server}}/open-metadata/repository-services/users/{{user}}/metadata-collection-id
+Authorization: Bearer {{token}}
+
+###
+# @name Get types
+POST {{baseURL}}/servers/{{server}}/open-metadata/repository-services/users/{{user}}/types/all
+Authorization: Bearer {{token}}
+
+###
+# @name Get TypeDef By Name
+POST {{baseURL}}/servers/{{server}}/open-metadata/repository-services/users/{{user}}/types/typedef/name/Asset
+Authorization: Bearer {{token}}
+
+###
+# @name Get AttributeTypeDef By Name
+POST {{baseURL}}/servers/{{server}}/open-metadata/repository-services/users/{{user}}/types/attribute-typedef/name/GovernanceActionStatus
+Authorization: Bearer {{token}}
+
+###
+
+@entityGUID=84e3f4d7-bd2b-4f34-9a34-7f018a7570fd
+
+
+###
+# @name Is Entity Known
+# The isEntityKnown requests returns a repository services instance of category **entity**.  An entity describes a node in the graph of metadata.  An asset is stored in the repository as an entity.  This query is set up to retrieve one of the assets created in the main exercise.  Notice that the entity includes information about the type of entity and the audit header information that shows the home repository.
+POST {{baseURL}}/servers/postgres-metadata-store/open-metadata/repository-services/users/{{user}}/instances/entity/{{entityGUID}}/existence
+Authorization: Bearer {{token}}
+
+
+###
+# @name Get Entity Detail
+# The getEntityDetail requests returns a repository services instance of category **entity**.  An entity describes a node in the graph of metadata.  An asset is stored in the repository as an entity.  This query is set up to retrieve one of the assets created in the main exercise.  Notice that the entity includes information about the type of entity and the audit header information that shows the home repository.
+POST {{baseURL}}/servers/postgres-metadata-store/open-metadata/repository-services/users/{{user}}/instances/entity/{{entityGUID}}
+Authorization: Bearer {{token}}
+
+
+###
+# @name Get Entity Summary
+# The getEntitySummary requests returns a repository services instance of category **entity**.  An entity describes a node in the graph of metadata.  An asset is stored in the repository as an entity.  This query is set up to retrieve one of the assets created in the main exercise.  Notice that the entity includes information about the type of entity and the audit header information that shows the home repository.
+POST {{baseURL}}/servers/postgres-metadata-store/open-metadata/repository-services/users/{{user}}/instances/entity/{{entityGUID}}/summary
+Authorization: Bearer {{token}}
+
+###
+# @name Get Entity Detail (asOfTime)
+# The getEntityDetail requests returns a repository services instance of category **entity**.  An entity describes a node in the graph of metadata.  An asset is stored in the repository as an entity.  This query is set up to retrieve one of the assets created in the main exercise.  Notice that the entity includes information about the type of entity and the audit header information that shows the home repository.
+POST {{baseURL}}/servers/postgres-metadata-store/open-metadata/repository-services/users/{{user}}/instances/entity/{{entityGUID}}/history
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "HistoryRequest",
+  "asOfTime" : "1020-10-15"
+}
+
+
+
+###
+# @name Get Entity Detail (Historical Versions)
+# The getEntityDetail requests returns a repository services instance of category **entity**.  An entity describes a node in the graph of metadata.  An asset is stored in the repository as an entity.  This query is set up to retrieve one of the assets created in the main exercise.  Notice that the entity includes information about the type of entity and the audit header information that shows the home repository.
+POST {{baseURL}}/servers/postgres-metadata-store/open-metadata/repository-services/users/{{user}}/instances/entity/{{entityGUID}}/history/all
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "HistoryRangeRequest"
+}
+
+
+
+
+###
+# @name Get Entity Detail (Historical Versions with time)
+# The getEntityDetail requests returns a repository services instance of category **entity**.  An entity describes a node in the graph of metadata.  An asset is stored in the repository as an entity.  This query is set up to retrieve one of the assets created in the main exercise.  Notice that the entity includes information about the type of entity and the audit header information that shows the home repository.
+POST {{baseURL}}/servers/postgres-metadata-store/open-metadata/repository-services/users/{{user}}/instances/entity/{{entityGUID}}/history/all
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "HistoryRangeRequest",
+  "fromTime" : "2024-10-15",
+  "toTime" : "2024-10-15",
+  "sequencingOrder" : "FORWARDS"
+}
+
+
+
+###
+
+@relationshipGUID=put guid here
+
+###
+# @name Get Relationship
+# The getRelationship requests returns a repository services instance of category **entity**.  An entity describes a node in the graph of metadata.  An asset is stored in the repository as an entity.  This query is set up to retrieve one of the assets created in the main exercise.  Notice that the entity includes information about the type of entity and the audit header information that shows the home repository.
+POST {{baseURL}}/servers/{{server}}/open-metadata/repository-services/users/{{user}}/instances/relationship/{{relationshipGUID}}
+Authorization: Bearer {{token}}
+
+###
+# @name Get All Relationships For Entity
+# The getEntityDetails requests returns a repository services instance of category **entity**.  An entity describes a node in the graph of metadata.  An asset is stored in the repository as an entity.  This query is set up to retrieve one of the assets created in the main exercise.  Notice that the entity includes information about the type of entity and the audit header information that shows the home repository.
+POST {{baseURL}}/servers/{{server}}/open-metadata/repository-services/users/{{user}}/instances/entity/{{entityGUID}}/relationships
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "class" : "TypeLimitedFindRequest",
+    "offset" : 0,
+    "pageSize" : 0
+}
+
+
+###
+# @name Get All Relationships For Entity (asOfTime)
+# The getEntityDetails requests returns a repository services instance of category **entity**.  An entity describes a node in the graph of metadata.  An asset is stored in the repository as an entity.  This query is set up to retrieve one of the assets created in the main exercise.  Notice that the entity includes information about the type of entity and the audit header information that shows the home repository.
+POST {{baseURL}}/servers/{{server}}/open-metadata/repository-services/users/{{user}}/instances/entity/{{entityGUID}}/relationships
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "TypeLimitedFindRequest",
+  "offset" : 0,
+  "pageSize" : 0,
+  "asOfTime" : "2024-10-15"
+}
+
+
+###
+# @name Get Specific Relationships For Entity
+# The getEntityDetails requests returns a repository services instance of category **entity**.  An entity describes a node in the graph of metadata.  An asset is stored in the repository as an entity.  This query is set up to retrieve one of the assets created in the main exercise.  Notice that the entity includes information about the type of entity and the audit header information that shows the home repository.
+POST {{baseURL}}/servers/{{server}}/open-metadata/repository-services/users/{{user}}/instances/entity/{{entityGUID}}/relationships
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "TypeLimitedFindRequest",
+  "typeGUID" : "bc5a5eb1-881b-4055-aa2c-78f314282ac2",
+  "sequencingOrder" : "CREATION_DATE_RECENT",
+  "offset" : 0,
+  "pageSize" : 0
+}
+
+
+###
+# @name Find Entities By Property Value
+POST {{baseURL}}/servers/{{server}}/open-metadata/repository-services/users/{{user}}/instances/entities/by-property-value?
+    searchCriteria=PostgreSQL
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "EntityPropertyFindRequest",
+  "offset" : 0,
+  "pageSize" : 100
+}
+
+
+###
+# @name Find Entities By Property Value (case insensitive)
+POST {{baseURL}}/servers/{{server}}/open-metadata/repository-services/users/{{user}}/instances/entities/by-property-value?
+    searchCriteria=(?i)PostgreSQL
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "EntityPropertyFindRequest",
+  "offset" : 0,
+  "pageSize" : 100
+}
+
+

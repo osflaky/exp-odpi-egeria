@@ -1,0 +1,317 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Copyright Contributors to the ODPi Egeria project. */
+package org.odpi.openmetadata.frameworks.openmetadata.properties;
+
+import org.odpi.openmetadata.frameworks.openmetadata.properties.softwaredevelopment.SoftwareSourceProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.softwaredevelopment.ReusableTechniqueUseProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.softwaredevelopment.DependentSoftwareComponentProperties;
+import com.fasterxml.jackson.annotation.*;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.actors.*;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.assets.DataSetContentProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.assets.SampleDataProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.assets.SourcedFromProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.assets.apis.APIEndpointProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.assets.filesandfolders.*;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.assets.infrastructure.AttachedStorageProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.assets.infrastructure.CapabilityAssetUseProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.assets.infrastructure.DeployedOnProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.assets.infrastructure.HostClusterMemberProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.assets.infrastructure.OperatingPlatformManifestProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.assets.infrastructure.OperatingPlatformUseProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.assets.infrastructure.SoftwarePackageDependencyProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.assets.processes.PortDelegationProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.assets.processes.ProcessHierarchyProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.assets.processes.ProcessPortProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.assets.processes.actions.ActionTargetProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.assets.processes.connectors.CatalogTargetProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.assets.processes.connectors.RegisteredIntegrationConnectorProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.assets.processes.connectors.SupportedGovernanceServiceProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.assets.reports.ImpactedResourceProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.assets.topics.AssociatedLogProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.collections.CollectionMembershipProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.communities.CrowdSourcingContributionProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.connections.*;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.datadictionaries.*;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.designmodels.ConceptBeadRelationshipEndProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.designmodels.IsAConceptBeadProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.designmodels.TypedByConceptBeadProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.digitalbusiness.AgreementActorProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.digitalbusiness.AgreementItemProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.digitalbusiness.ContractLinkProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.digitalbusiness.DigitalSubscriberProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.externalidentifiers.ExternalIdLinkProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.externalreferences.CitedDocumentLinkProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.externalreferences.MediaReferenceProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.feedback.*;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.glossaries.GlossaryTermRelationshipProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.governance.*;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.governance.governanceactions.GovernanceActionExecutorProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.governance.governanceactions.GovernanceActionProcessFlowProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.governance.governanceactions.NextGovernanceActionProcessStepProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.governance.governanceactions.TargetForGovernanceActionProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.resources.ResourceListProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.schema.*;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.schema.apis.APIHeaderProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.schema.apis.APIOperationsProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.schema.apis.APIRequestProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.schema.apis.APIResponseProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.schema.databases.RelationalDBSchemaProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.security.AssociatedSecurityListProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.security.ZoneHierarchyProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.softwarecapabilities.MetadataCohortPeerProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.softwarecapabilities.SupportedSoftwareCapabilityProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.softwarecapabilities.VisibleEndpointProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.surveyreports.*;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.translations.TranslationLinkProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.validvalues.*;
+
+import java.util.Map;
+import java.util.Objects;
+
+import static com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility.NONE;
+import static com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility.PUBLIC_ONLY;
+
+/**
+ * RelationshipBeanProperties provides the base class for relationship beans.
+ * This provides extended properties to allow the existing types to be extended.
+ */
+@JsonAutoDetect(getterVisibility=PUBLIC_ONLY, setterVisibility=PUBLIC_ONLY, fieldVisibility=NONE)
+@JsonInclude(JsonInclude.Include.NON_NULL)
+@JsonIgnoreProperties(ignoreUnknown=true)
+@JsonTypeInfo(use = JsonTypeInfo.Id.NAME,
+        include = JsonTypeInfo.As.PROPERTY,
+        property = "class")
+@JsonSubTypes(
+        {
+                @JsonSubTypes.Type(value = AcceptedAnswerProperties.class, name = "AcceptedAnswerProperties"),
+                @JsonSubTypes.Type(value = ActionTargetProperties.class, name = "ActionTargetProperties"),
+                @JsonSubTypes.Type(value = AgreementActorProperties.class, name = "AgreementActorProperties"),
+                @JsonSubTypes.Type(value = AgreementItemProperties.class, name = "AgreementItemProperties"),
+                @JsonSubTypes.Type(value = APIEndpointProperties.class, name = "APIEndpointProperties"),
+                @JsonSubTypes.Type(value = APIHeaderProperties.class, name = "APIHeaderProperties"),
+                @JsonSubTypes.Type(value = APIOperationsProperties.class, name = "APIOperationsProperties"),
+                @JsonSubTypes.Type(value = APIRequestProperties.class, name = "APIRequestProperties"),
+                @JsonSubTypes.Type(value = APIResponseProperties.class, name = "APIResponseProperties"),
+                @JsonSubTypes.Type(value = ArchiveContentsProperties.class, name = "ArchiveContentsProperties"),
+                @JsonSubTypes.Type(value = SchemaProperties.class, name = "AssetSchemaTypeProperties"),
+                @JsonSubTypes.Type(value = AssignmentScopeProperties.class, name = "AssignmentScopeProperties"),
+                @JsonSubTypes.Type(value = AssociatedLogProperties.class, name = "AssociatedLogProperties"),
+                @JsonSubTypes.Type(value = AssociatedSecurityListProperties.class, name = "AssociatedSecurityGroupProperties"),
+                @JsonSubTypes.Type(value = AttachedCommentProperties.class, name = "AttachedCommentProperties"),
+                @JsonSubTypes.Type(value = AttachedLikeProperties.class, name = "AttachedLikeProperties"),
+                @JsonSubTypes.Type(value = AttachedNoteLogProperties.class, name = "AttachedNoteLogProperties"),
+                @JsonSubTypes.Type(value = AttachedNoteLogEntryProperties.class, name = "AttachedNoteLogEntryProperties"),
+                @JsonSubTypes.Type(value = AttachedRatingProperties.class, name = "AttachedRatingProperties"),
+                @JsonSubTypes.Type(value = AttachedStorageProperties.class, name = "AttachedStorageProperties"),
+                @JsonSubTypes.Type(value = AttachedTagProperties.class, name = "AttachedTagProperties"),
+                @JsonSubTypes.Type(value = CapabilityAssetUseProperties.class, name = "CapabilityAssetUseProperties"),
+                @JsonSubTypes.Type(value = CatalogTargetProperties.class, name = "CatalogTargetProperties"),
+                @JsonSubTypes.Type(value = CertificationProperties.class, name = "CertificationProperties"),
+                @JsonSubTypes.Type(value = CitedDocumentLinkProperties.class, name = "CitedDocumentLinkProperties"),
+                @JsonSubTypes.Type(value = CollectionMembershipProperties.class, name = "CollectionMembershipProperties"),
+                @JsonSubTypes.Type(value = ConceptBeadRelationshipEndProperties.class, name = "ConceptBeadRelationshipEndProperties"),
+                @JsonSubTypes.Type(value = ConnectionConnectorTypeProperties.class, name = "ConnectionConnectorTypeProperties"),
+                @JsonSubTypes.Type(value = ConnectToEndpointProperties.class, name = "ConnectToEndpointProperties"),
+                @JsonSubTypes.Type(value = ConsistentValidValuesProperties.class, name = "ConsistentValidValuesProperties"),
+                @JsonSubTypes.Type(value = ConsolidatedDuplicateLinkProperties.class, name = "ConsolidatedDuplicateLinkProperties"),
+                @JsonSubTypes.Type(value = ContactThroughProperties.class, name = "ContactThroughProperties"),
+                @JsonSubTypes.Type(value = ContractLinkProperties.class, name = "ContractLinkProperties"),
+                @JsonSubTypes.Type(value = ContributionProperties.class, name = "ContributionProperties"),
+                @JsonSubTypes.Type(value = CrowdSourcingContributionProperties.class, name = "CrowdSourcingContributionProperties"),
+                @JsonSubTypes.Type(value = DataSetContentProperties.class, name = "DataSetContentProperties"),
+                @JsonSubTypes.Type(value = DeployedOnProperties.class, name = "DeployedOnProperties"),
+                @JsonSubTypes.Type(value = DerivedSchemaTypeQueryTargetProperties.class, name = "DerivedSchemaTypeQueryTargetProperties"),
+                @JsonSubTypes.Type(value = DigitalSubscriberProperties.class, name = "DigitalSubscriberProperties"),
+                @JsonSubTypes.Type(value = PeerDuplicateLinkProperties.class, name = "PeerDuplicateLinkProperties"),
+                @JsonSubTypes.Type(value = EmbeddedConnectionProperties.class, name = "EmbeddedConnectionProperties"),
+                @JsonSubTypes.Type(value = ExternalIdLinkProperties.class, name = "ExternalIdLinkProperties"),
+                @JsonSubTypes.Type(value = FolderHierarchyProperties.class, name = "FolderHierarchyProperties"),
+                @JsonSubTypes.Type(value = ForeignKeyProperties.class, name = "ForeignKeyProperties"),
+                @JsonSubTypes.Type(value = GlossaryTermRelationshipProperties.class, name = "GlossaryTermRelationshipProperties"),
+                @JsonSubTypes.Type(value = GovernanceActionExecutorProperties.class, name = "GovernanceActionExecutorProperties"),
+                @JsonSubTypes.Type(value = GovernanceActionProcessFlowProperties.class, name = "GovernanceActionProcessFlowProperties"),
+                @JsonSubTypes.Type(value = GovernanceResultsProperties.class, name = "GovernanceResultsProperties"),
+                @JsonSubTypes.Type(value = GraphEdgeLinkProperties.class, name = "GraphEdgeLinkProperties"),
+                @JsonSubTypes.Type(value = HostClusterMemberProperties.class, name = "HostClusterMemberProperties"),
+                @JsonSubTypes.Type(value = ImpactedResourceProperties.class, name = "ImpactedResourceProperties"),
+                @JsonSubTypes.Type(value = IsAConceptBeadProperties.class, name = "IsAConceptBeadProperties"),
+                @JsonSubTypes.Type(value = ITInfrastructureProfileProperties.class, name = "ITInfrastructureProfileProperties"),
+                @JsonSubTypes.Type(value = ITProfileRoleAppointmentProperties.class, name = "ITProfileRoleAppointmentProperties"),
+                @JsonSubTypes.Type(value = LabeledRelationshipProperties.class, name = "LabeledRelationshipProperties"),
+                @JsonSubTypes.Type(value = LicenseProperties.class, name = "LicenseProperties"),
+                @JsonSubTypes.Type(value = LinkedDataFieldProperties.class, name = "LinkedDataFieldProperties"),
+                @JsonSubTypes.Type(value = LinkedExternalSchemaTypeProperties.class, name = "LinkedExternalSchemaTypeProperties"),
+                @JsonSubTypes.Type(value = LinkedFileProperties.class, name = "LinkedFileProperties"),
+                @JsonSubTypes.Type(value = MapFromElementTypeProperties.class, name = "MapFromElementTypeProperties"),
+                @JsonSubTypes.Type(value = MapToElementTypeProperties.class, name = "MapToElementTypeProperties"),
+                @JsonSubTypes.Type(value = MediaReferenceProperties.class, name = "MediaReferenceProperties"),
+                @JsonSubTypes.Type(value = MetadataCohortPeerProperties.class, name = "MetadataCohortPeerProperties"),
+                @JsonSubTypes.Type(value = NestedFileProperties.class, name = "NestedFileProperties"),
+                @JsonSubTypes.Type(value = NextGovernanceActionProcessStepProperties.class, name = "NextGovernanceActionProcessStepProperties"),
+                @JsonSubTypes.Type(value = OperatingPlatformManifestProperties.class, name = "OperatingPlatformManifestProperties"),
+                @JsonSubTypes.Type(value = OperatingPlatformUseProperties.class, name = "OperatingPlatformUseProperties"),
+                @JsonSubTypes.Type(value = PartOfRelationshipProperties.class, name = "PartOfRelationshipProperties"),
+                @JsonSubTypes.Type(value = PeerDuplicateLinkProperties.class, name = "PeerDuplicateLinkProperties"),
+                @JsonSubTypes.Type(value = PortDelegationProperties.class, name = "PortDelegationProperties"),
+                @JsonSubTypes.Type(value = PersonRoleAppointmentProperties.class, name = "PersonRoleAppointmentProperties"),
+                @JsonSubTypes.Type(value = ProcessHierarchyProperties.class, name = "ProcessHierarchyProperties"),
+                @JsonSubTypes.Type(value = ProcessPortProperties.class, name = "ProcessPortProperties"),
+                @JsonSubTypes.Type(value = ProfileIdentityProperties.class, name = "ProfileIdentityProperties"),
+                @JsonSubTypes.Type(value = ReferenceValueAssignmentProperties.class, name = "ReferenceValueAssignmentProperties"),
+                @JsonSubTypes.Type(value = RegisteredIntegrationConnectorProperties.class, name = "RegisteredIntegrationConnectorProperties"),
+                @JsonSubTypes.Type(value = RelationalDBSchemaProperties.class, name = "RelationalDBSchemaProperties"),
+                @JsonSubTypes.Type(value = RequestForActionTargetProperties.class, name = "RequestForActionTargetProperties"),
+                @JsonSubTypes.Type(value = ResourceListProperties.class, name = "ResourceListProperties"),
+                @JsonSubTypes.Type(value = ResourceProfileDataProperties.class, name = "ResourceProfileDataProperties"),
+                @JsonSubTypes.Type(value = RoledRelationshipProperties.class, name = "RoledRelationshipProperties"),
+                @JsonSubTypes.Type(value = SchemaAttributeRelationshipProperties.class, name = "SchemaAttributeRelationshipProperties"),
+                @JsonSubTypes.Type(value = SampleDataProperties.class, name = "SampleDataProperties"),
+                @JsonSubTypes.Type(value = SchemaTypeOptionProperties.class, name = "SchemaTypeOptionProperties"),
+                @JsonSubTypes.Type(value = ScopedByProperties.class, name = "ScopedByProperties"),
+                @JsonSubTypes.Type(value = SearchKeywordLinkProperties.class, name = "SearchKeywordLinkProperties"),
+                @JsonSubTypes.Type(value = SemanticAssignmentProperties.class, name = "SemanticAssignmentProperties"),
+                @JsonSubTypes.Type(value = ServerEndpointProperties.class, name = "ServerEndpointProperties"),
+                @JsonSubTypes.Type(value = SoftwarePackageDependencyProperties.class, name = "SoftwarePackageDependencyProperties"),
+                @JsonSubTypes.Type(value = SourcedFromProperties.class, name = "SourcedFromProperties"),
+                @JsonSubTypes.Type(value = SpecificationPropertyAssignmentProperties.class, name = "SpecificationPropertyAssignmentProperties"),
+                @JsonSubTypes.Type(value = SubjectAreaHierarchyProperties.class, name = "SubjectAreaHierarchyProperties"),
+                @JsonSubTypes.Type(value = SupportedGovernanceServiceProperties.class, name = "SupportedGovernanceServiceProperties"),
+                @JsonSubTypes.Type(value = SupportedSoftwareCapabilityProperties.class, name = "SupportedSoftwareCapabilityProperties"),
+                @JsonSubTypes.Type(value = SupportingDefinitionProperties.class, name = "SupportingDefinitionProperties"),
+                @JsonSubTypes.Type(value = DependentSoftwareComponentProperties.class, name = "DependentSoftwareComponentProperties"),
+                @JsonSubTypes.Type(value = ReusableTechniqueUseProperties.class, name = "ReusableTechniqueUseProperties"),
+                @JsonSubTypes.Type(value = SoftwareSourceProperties.class, name = "SoftwareSourceProperties"),
+                @JsonSubTypes.Type(value = TargetForGovernanceActionProperties.class, name = "TargetForGovernanceActionProperties"),
+                @JsonSubTypes.Type(value = TeamStructureProperties.class, name = "TeamStructureProperties"),
+                @JsonSubTypes.Type(value = TeamRoleAppointmentProperties.class, name = "TeamRoleAppointmentProperties"),
+                @JsonSubTypes.Type(value = TranslationLinkProperties.class, name = "TranslationLinkProperties"),
+                @JsonSubTypes.Type(value = TypedByConceptBeadProperties.class, name = "TypedByConceptBeadProperties"),
+                @JsonSubTypes.Type(value = ValidValuesAssignmentProperties.class, name = "ValidValuesAssignmentProperties"),
+                @JsonSubTypes.Type(value = ValidValueAssociationProperties.class, name = "ValidValueAssociationProperties"),
+                @JsonSubTypes.Type(value = ValidValueMemberProperties.class, name = "ValidValueMemberProperties"),
+                @JsonSubTypes.Type(value = ValidValuesImplementationProperties.class, name = "ValidValuesImplementationProperties"),
+                @JsonSubTypes.Type(value = ValidValuesMappingProperties.class, name = "ValidValuesMappingProperties"),
+                @JsonSubTypes.Type(value = VisibleEndpointProperties.class, name = "VisibleEndpointProperties"),
+                @JsonSubTypes.Type(value = ZoneHierarchyProperties.class, name = "ZoneHierarchyProperties"),
+
+        })
+public class RelationshipBeanProperties extends RelationshipProperties
+{
+    protected String               typeName             = null;
+    private   Map<String, Object>  extendedProperties   = null;
+
+    /**
+     * Default constructor
+     */
+    public RelationshipBeanProperties()
+    {
+        super();
+    }
+
+
+    /**
+     * Copy/clone constructor.  Retrieves values from the supplied template
+     *
+     * @param template element to copy
+     */
+    public RelationshipBeanProperties(RelationshipBeanProperties template)
+    {
+        super(template);
+
+        if (template != null)
+        {
+            typeName             = template.getTypeName();
+            extendedProperties   = template.getExtendedProperties();
+        }
+    }
+
+
+    /**
+     * Return the name of the open metadata type for this metadata element.
+     *
+     * @return string name
+     */
+    public String getTypeName()
+    {
+        return typeName;
+    }
+
+
+    /**
+     * Set up the name of the open metadata type for this element.
+     *
+     * @param typeName string name
+     */
+    public void setTypeName(String typeName)
+    {
+        this.typeName = typeName;
+    }
+
+
+    /**
+     * Return the properties that have been defined for a subtype of this object that are not supported explicitly
+     * by this bean.
+     *
+     * @return property map
+     */
+    public Map<String, Object> getExtendedProperties()
+    {
+        return extendedProperties;
+    }
+
+
+    /**
+     * Set up the properties that have been defined for a subtype of this object that are not supported explicitly
+     * by this bean.
+     *
+     * @param extendedProperties property map
+     */
+    public void setExtendedProperties(Map<String, Object> extendedProperties)
+    {
+        this.extendedProperties = extendedProperties;
+    }
+
+
+    /**
+     * Standard toString method.
+     *
+     * @return print out of variables in a JSON-style
+     */
+    @Override
+    public String toString()
+    {
+        return "RelationshipBeanProperties{" +
+                "typeName='" + typeName + '\'' +
+                ", extendedProperties=" + extendedProperties +
+                "} " + super.toString();
+    }
+
+
+
+    /**
+     * Compare the values of the supplied object with those stored in the current object.
+     *
+     * @param objectToCompare supplied object
+     * @return boolean result of comparison
+     */
+    @Override
+    public boolean equals(Object objectToCompare)
+    {
+        if (this == objectToCompare) return true;
+        if (objectToCompare == null || getClass() != objectToCompare.getClass()) return false;
+        if (!super.equals(objectToCompare)) return false;
+        RelationshipBeanProperties that = (RelationshipBeanProperties) objectToCompare;
+        return Objects.equals(typeName, that.typeName) && Objects.equals(extendedProperties, that.extendedProperties);
+    }
+
+    /**
+     * Return hash code based on properties.
+     *
+     * @return int
+     */
+    @Override
+    public int hashCode()
+    {
+        return Objects.hash(super.hashCode(), typeName, extendedProperties);
+    }
+}

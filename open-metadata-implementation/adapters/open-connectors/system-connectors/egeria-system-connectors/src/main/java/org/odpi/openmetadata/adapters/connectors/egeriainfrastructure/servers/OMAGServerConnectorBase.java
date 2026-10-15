@@ -1,0 +1,412 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Copyright Contributors to the ODPi Egeria project. */
+
+package org.odpi.openmetadata.adapters.connectors.egeriainfrastructure.servers;
+
+import org.odpi.openmetadata.adapters.connectors.egeriainfrastructure.control.OMAGServerPlatformConfigurationProperty;
+import org.odpi.openmetadata.adapters.connectors.egeriainfrastructure.extractor.EgeriaExtractor;
+import org.odpi.openmetadata.adapters.connectors.egeriainfrastructure.ffdc.OMAGConnectorAuditCode;
+import org.odpi.openmetadata.adapters.connectors.egeriainfrastructure.ffdc.OMAGConnectorErrorCode;
+import org.odpi.openmetadata.adapters.connectors.egeriainfrastructure.properties.OMAGServerProperties;
+import org.odpi.openmetadata.adminservices.configuration.properties.OMAGServerConfig;
+import org.odpi.openmetadata.adminservices.ffdc.exception.OMAGConfigurationErrorException;
+import org.odpi.openmetadata.frameworks.auditlog.AuditLog;
+import org.odpi.openmetadata.frameworks.auditlog.AuditLoggingComponent;
+import org.odpi.openmetadata.frameworks.auditlog.ComponentDescription;
+import org.odpi.openmetadata.frameworks.connectors.ConnectorBase;
+import org.odpi.openmetadata.frameworks.connectors.VirtualConnectorExtension;
+import org.odpi.openmetadata.frameworks.connectors.ffdc.ConnectorCheckedException;
+import org.odpi.openmetadata.frameworks.connectors.properties.beans.Endpoint;
+import org.odpi.openmetadata.frameworks.openmetadata.ffdc.InvalidParameterException;
+import org.odpi.openmetadata.frameworks.openmetadata.ffdc.PropertyServerException;
+import org.odpi.openmetadata.frameworks.openmetadata.ffdc.UserNotAuthorizedException;
+import org.odpi.openmetadata.serveroperations.properties.ServerServicesStatus;
+import org.odpi.openmetadata.serveroperations.properties.ServerStatus;
+
+import java.util.List;
+
+public abstract class OMAGServerConnectorBase extends ConnectorBase implements AuditLoggingComponent,
+                                                                               VirtualConnectorExtension
+{
+    private String   connectorName;
+    private String   platformName = "Local OMAG Server Platform";
+    private String   targetRootURL = null;
+    private String   delegatingUserId = null;
+
+    protected EgeriaExtractor extractor = null;
+
+
+    /**
+     * Constructor used to set up the name of this connector (supplied by the subclasses).
+     *
+     * @param connectorName name of the connector
+     */
+    public OMAGServerConnectorBase(String connectorName)
+    {
+        this.connectorName = connectorName;
+    }
+
+
+    /**
+     * Receive an audit log object that can be used to record audit log messages.  The caller has initialized it
+     * with the correct component description and log destinations.
+     *
+     * @param auditLog audit log object
+     */
+    @Override
+    public void setAuditLog(AuditLog auditLog)
+    {
+        this.auditLog = auditLog;
+    }
+
+
+    /**
+     * Return the component description that is used by this connector in the audit log.
+     *
+     * @return id, name, description, wiki page URL.
+     */
+    @Override
+    public ComponentDescription getConnectorComponentDescription()
+    {
+        if ((this.auditLog != null) && (this.auditLog.getReport() != null))
+        {
+            return auditLog.getReport().getReportingComponent();
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Set up a new platform name (must be called before start()).
+     *
+     * @param platformName new platform name
+     */
+    public void setPlatformName(String platformName)
+    {
+        this.platformName = platformName;
+    }
+
+
+    /**
+     * Set up the delegating userId - needed for operational calls.
+     *
+     * @param delegatingUserId user id
+     */
+    public void setDelegatingUserId(String delegatingUserId)
+    {
+        this.delegatingUserId = delegatingUserId;
+    }
+
+
+    /**
+     * Indicates that the connector is completely configured and can begin processing.
+     * This call can be used to register with non-blocking services.
+     *
+     * @throws ConnectorCheckedException the connector detected a problem.
+     * @throws UserNotAuthorizedException the connector was disconnected before/during start
+     */
+    @Override
+    public void start() throws ConnectorCheckedException, UserNotAuthorizedException
+    {
+        super.start();
+
+        final String methodName = "start";
+
+        if (connectionBean.getDisplayName() != null)
+        {
+            connectorName = connectionBean.getDisplayName();
+        }
+
+        /*
+         * Retrieve the configuration
+         */
+        Endpoint endpoint = connectionBean.getEndpoint();
+
+        if (endpoint != null)
+        {
+            targetRootURL = endpoint.getNetworkAddress();
+        }
+
+        if (targetRootURL == null)
+        {
+            throw new ConnectorCheckedException(OMAGConnectorErrorCode.NULL_URL.getMessageDefinition(connectorName),
+                                                this.getClass().getName(),
+                                                methodName);
+        }
+
+        String serverName = null;
+
+        if ((connectionBean.getConfigurationProperties() != null) &&
+                (connectionBean.getConfigurationProperties().get(OMAGServerPlatformConfigurationProperty.SERVER_NAME.getName()) != null))
+        {
+            serverName = connectionBean.getConfigurationProperties().get(OMAGServerPlatformConfigurationProperty.SERVER_NAME.getName()).toString();
+        }
+
+        if (serverName == null)
+        {
+            throw new ConnectorCheckedException(OMAGConnectorErrorCode.NULL_SERVER_NAME.getMessageDefinition(connectorName),
+                                                this.getClass().getName(),
+                                                methodName);
+        }
+
+        /*
+         * Set up the extractor client.
+         */
+        try
+        {
+            extractor = new EgeriaExtractor(targetRootURL, platformName, serverName, delegatingUserId, secretsStoreConnectorMap, auditLog);
+        }
+        catch (Exception error)
+        {
+            super.logRecord(methodName, OMAGConnectorAuditCode.UNEXPECTED_EXCEPTION.getMessageDefinition(connectorName,
+                                                                                                         error.getClass().getName(),
+                                                                                                         methodName,
+                                                                                                         error.getMessage()));
+
+            throw new ConnectorCheckedException(OMAGConnectorErrorCode.UNEXPECTED_EXCEPTION.getMessageDefinition(connectorName,
+                                                                                                                 error.getClass().getName(),
+                                                                                                                 methodName,
+                                                                                                                 error.getMessage()),
+                                                this.getClass().getName(),
+                                                methodName,
+                                                error);
+        }
+    }
+
+
+    /*
+     *===========================================================================
+     * Specialized methods
+     */
+
+
+    /**
+     * Return the latest status information about a particular service.
+     *
+     * @return server report
+     * @throws Exception a variety of exceptions from the different clients
+     */
+    public OMAGServerProperties getServerReport() throws Exception
+    {
+        return extractor.getServerReport();
+    }
+
+
+    /*
+     * ========================================================================================
+     * Activate and deactivate the open metadata and governance capabilities in the OMAG Server
+     */
+
+
+    /**
+     * Return the complete set of configuration properties in use by the server.
+     *
+     * @return OMAGServerConfig properties
+     * @throws UserNotAuthorizedException      the supplied userId is not authorized to issue this command.
+     * @throws InvalidParameterException   invalid serverName parameter.
+     * @throws OMAGConfigurationErrorException something went wrong with the REST call stack.
+     */
+    public OMAGServerConfig getStoredOMAGServerConfig() throws UserNotAuthorizedException,
+                                                               InvalidParameterException,
+                                                               OMAGConfigurationErrorException
+    {
+        return extractor.getStoredOMAGServerConfig();
+    }
+
+
+    /**
+     * Return the complete set of configuration properties in use by the server.
+     *
+     * @return OMAGServerConfig properties
+     * @throws UserNotAuthorizedException      the supplied userId is not authorized to issue this command.
+     * @throws InvalidParameterException   invalid serverName parameter.
+     * @throws OMAGConfigurationErrorException something went wrong with the REST call stack.
+     */
+    public OMAGServerConfig getResolvedOMAGServerConfig() throws UserNotAuthorizedException,
+                                                                 InvalidParameterException,
+                                                                 OMAGConfigurationErrorException
+    {
+        return extractor.getResolvedOMAGServerConfig();
+    }
+
+
+    /**
+     * Activate the Open Metadata and Governance (OMAG) server using the configuration document stored for this server.
+     *
+     * @return success message
+     * @throws UserNotAuthorizedException the supplied userId is not authorized to issue this command.
+     * @throws InvalidParameterException invalid parameter.
+     * @throws PropertyServerException unusual state in the server.
+     */
+    public String activateServer() throws UserNotAuthorizedException,
+                                          InvalidParameterException,
+                                          PropertyServerException
+    {
+        return extractor.activateServer();
+    }
+
+
+
+    /**
+     * Temporarily deactivate any open metadata and governance services.
+     *
+     * @throws UserNotAuthorizedException the supplied userId is not authorized to issue this command.
+     * @throws InvalidParameterException invalid parameter.
+     * @throws PropertyServerException unusual state in the platform.
+     */
+    public void shutdownServer() throws UserNotAuthorizedException,
+                                        InvalidParameterException,
+                                        PropertyServerException
+    {
+        extractor.shutdownServer();
+    }
+
+
+    /**
+     * Permanently deactivate any open metadata and governance services and unregister from
+     * any cohorts.
+     *
+     * @throws UserNotAuthorizedException the supplied userId is not authorized to issue this command.
+     * @throws InvalidParameterException invalid parameter.
+     * @throws PropertyServerException unusual state in the platform.
+     */
+
+    public void shutdownAndUnregisterServer() throws UserNotAuthorizedException,
+                                                     InvalidParameterException,
+                                                     PropertyServerException
+    {
+        extractor.shutdownAndUnregisterServer();
+    }
+
+
+
+    /*
+     * =============================================================
+     * Operational status and control
+     */
+
+    /**
+     * Retrieve the server status
+     *
+     * @return The server status
+     *
+     * @throws InvalidParameterException  one of the parameters is invalid
+     * @throws UserNotAuthorizedException the user is not authorized to issue this request
+     * @throws PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    public ServerStatus getServerStatus() throws InvalidParameterException,
+                                                 UserNotAuthorizedException,
+                                                 PropertyServerException
+    {
+        return extractor.getServerStatus();
+    }
+
+
+    /**
+     * Return the configuration used for the current active instance of the server.  Null is returned if
+     * the server instance is not running.
+     *
+     * @return configuration properties used to initialize the server or null if not running
+     * @throws UserNotAuthorizedException the supplied userId is not authorized to issue this command.
+     * @throws InvalidParameterException invalid parameter.
+     * @throws PropertyServerException unusual state in the platform.
+     */
+    public OMAGServerConfig getActiveConfiguration() throws UserNotAuthorizedException,
+                                                            InvalidParameterException,
+                                                            PropertyServerException
+    {
+        return extractor.getActiveConfiguration();
+    }
+
+
+
+    /**
+     * Return the status of a running server (use platform services to find out if the server is running).
+     *
+     * @return status of the server
+     * @throws UserNotAuthorizedException the supplied userId is not authorized to issue this command.
+     * @throws InvalidParameterException invalid parameter.
+     * @throws PropertyServerException unusual state in the platform.
+     */
+    public ServerServicesStatus getActiveServerStatus() throws UserNotAuthorizedException,
+                                                               InvalidParameterException,
+                                                               PropertyServerException
+    {
+        return extractor.getActiveServerStatus();
+    }
+
+
+    /**
+     * Retrieve a list of the active services on a server
+     *
+     * @return List of service names
+     *
+     * @throws InvalidParameterException  one of the parameters is invalid
+     * @throws UserNotAuthorizedException the user is not authorized to issue this request
+     * @throws PropertyServerException    a problem reported in the open metadata server(s)
+     */
+    public List<String> getActiveServices() throws InvalidParameterException,
+                                                   UserNotAuthorizedException,
+                                                   PropertyServerException
+    {
+        return extractor.getActiveServices();
+    }
+
+
+    /**
+     * A new server needs to register the metadataCollectionId for its metadata repository with the other servers in the
+     * open metadata repository.  It only needs to do this once and uses a timestamp to record that the registration
+     * event has been sent.
+     * If the server has already registered in the past, it sends a reregistration request.
+     *
+     * @param cohortName name of cohort
+     *
+     * @return boolean to indicate that the request has been issued.  If false it is likely that the cohort name is not known
+     *
+     * @throws InvalidParameterException one of the supplied parameters caused a problem
+     * @throws PropertyServerException a problem communicating with the remote server.
+     * @throws UserNotAuthorizedException the user is not authorized to perform the operation requested
+     */
+    public boolean connectToCohort(String cohortName) throws InvalidParameterException,
+                                                             PropertyServerException,
+                                                             UserNotAuthorizedException
+    {
+        return extractor.connectToCohort(cohortName);
+    }
+
+
+
+    /**
+     * Disconnect communications from a specific cohort.
+     *
+     * @param cohortName name of cohort
+     * @return boolean flag to indicate success.
+     * @throws InvalidParameterException one of the supplied parameters caused a problem
+     * @throws PropertyServerException a problem communicating with the remote server.
+     * @throws UserNotAuthorizedException the user is not authorized to perform the operation requested
+     */
+    public boolean disconnectFromCohort(String cohortName) throws InvalidParameterException,
+                                                                  PropertyServerException,
+                                                                  UserNotAuthorizedException
+    {
+        return extractor.disconnectFromCohort(cohortName);
+    }
+
+
+    /**
+     * Unregister from a specific cohort and disconnect from cohort communications.
+     *
+     * @param cohortName name of cohort
+     * @return boolean flag to indicate success.
+     * @throws InvalidParameterException one of the supplied parameters caused a problem
+     * @throws PropertyServerException a problem communicating with the remote server.
+     * @throws UserNotAuthorizedException the user is not authorized to perform the operation requested
+     */
+    public boolean unregisterFromCohort(String cohortName) throws InvalidParameterException,
+                                                                  PropertyServerException,
+                                                                  UserNotAuthorizedException
+    {
+        return extractor.unregisterFromCohort(cohortName);
+    }
+}

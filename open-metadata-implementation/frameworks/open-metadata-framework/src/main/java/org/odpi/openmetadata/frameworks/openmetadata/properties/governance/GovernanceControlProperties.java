@@ -1,0 +1,147 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Copyright Contributors to the ODPi Egeria project. */
+package org.odpi.openmetadata.frameworks.openmetadata.properties.governance;
+
+import com.fasterxml.jackson.annotation.*;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.dataprocessing.DataProcessingPurposeProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.governance.governanceactions.GovernanceActionProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.security.SecurityAccessControlProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.security.SecurityGroupProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.types.OpenMetadataType;
+
+import javax.swing.*;
+import java.util.Objects;
+
+import static com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility.NONE;
+import static com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility.PUBLIC_ONLY;
+
+/**
+ * SecurityGroupProperties defines a security group technical control.
+ */
+@JsonAutoDetect(getterVisibility=PUBLIC_ONLY, setterVisibility=PUBLIC_ONLY, fieldVisibility=NONE)
+@JsonInclude(JsonInclude.Include.NON_NULL)
+@JsonIgnoreProperties(ignoreUnknown=true)
+@JsonTypeInfo(use = JsonTypeInfo.Id.NAME,
+        include = JsonTypeInfo.As.PROPERTY,
+        property = "class")
+@JsonSubTypes(
+        {
+                @JsonSubTypes.Type(value = DataProcessingPurposeProperties.class, name = "DataProcessingPurposeProperties"),
+                @JsonSubTypes.Type(value = DataLensProperties.class, name = "DataLensProperties"),
+                @JsonSubTypes.Type(value = ExceptionTypeProperties.class, name = "ExceptionTypeProperties"),
+                @JsonSubTypes.Type(value = GovernanceRuleProperties.class, name = "GovernanceRuleProperties"),
+                @JsonSubTypes.Type(value = GovernanceMetricProperties.class, name = "GovernanceMetricProperties"),
+                @JsonSubTypes.Type(value = GovernanceActionProperties.class, name = "GovernanceActionProperties"),
+                @JsonSubTypes.Type(value = GovernanceProcedureProperties.class, name = "GovernanceProcedureProperties"),
+                @JsonSubTypes.Type(value = GovernanceResponsibilityProperties.class, name = "GovernanceResponsibilityProperties"),
+                @JsonSubTypes.Type(value = NotificationTypeProperties.class, name = "NotificationTypeProperties"),
+                @JsonSubTypes.Type(value = RequirementProperties.class, name = "RequirementProperties"),
+                @JsonSubTypes.Type(value = ResearchQuestionProperties.class, name = "ResearchQuestionProperties"),
+                @JsonSubTypes.Type(value = SecurityAccessControlProperties.class, name = "SecurityAccessControlProperties"),
+                @JsonSubTypes.Type(value = TermsAndConditionsProperties.class, name = "TermsAndConditionsProperties"),
+        })
+public class GovernanceControlProperties extends GovernanceDefinitionProperties
+{
+    private  String implementationDescription = null;
+
+
+    /**
+     * Default Constructor
+     */
+    public GovernanceControlProperties()
+    {
+        super();
+        super.typeName = OpenMetadataType.GOVERNANCE_CONTROL.typeName;
+    }
+
+
+    /**
+     * Copy/Clone Constructor
+     *
+     * @param template object to copy
+     */
+    public GovernanceControlProperties(GovernanceControlProperties template)
+    {
+        super(template);
+
+        if (template != null)
+        {
+            this.implementationDescription = template.getImplementationDescription();
+        }
+    }
+
+
+    /**
+     * Return the specific distinguishedName of the security group.
+     *
+     * @return string description
+     */
+    public String getImplementationDescription()
+    {
+        return implementationDescription;
+    }
+
+
+    /**
+     * Set up the specific distinguishedName of the security group.
+     *
+     * @param implementationDescription string description
+     */
+    public void setImplementationDescription(String implementationDescription)
+    {
+        this.implementationDescription = implementationDescription;
+    }
+
+
+    /**
+     * JSON-style toString
+     *
+     * @return string containing the properties and their values
+     */
+    @Override
+    public String toString()
+    {
+        return "GovernanceControlProperties{" +
+                "implementationDescription='" + implementationDescription + '\'' +
+                "} " + super.toString();
+    }
+
+
+    /**
+     * Compare the values of the supplied object with those stored in the current object.
+     *
+     * @param objectToCompare supplied object
+     * @return boolean result of comparison
+     */
+    @Override
+    public boolean equals(Object objectToCompare)
+    {
+        if (this == objectToCompare)
+        {
+            return true;
+        }
+        if (objectToCompare == null || getClass() != objectToCompare.getClass())
+        {
+            return false;
+        }
+        if (!super.equals(objectToCompare))
+        {
+            return false;
+        }
+        GovernanceControlProperties that = (GovernanceControlProperties) objectToCompare;
+        return Objects.equals(implementationDescription, that.implementationDescription);
+    }
+
+
+
+    /**
+     * Return hash code based on properties.
+     *
+     * @return int
+     */
+    @Override
+    public int hashCode()
+    {
+        return Objects.hash(super.hashCode(), implementationDescription);
+    }
+}

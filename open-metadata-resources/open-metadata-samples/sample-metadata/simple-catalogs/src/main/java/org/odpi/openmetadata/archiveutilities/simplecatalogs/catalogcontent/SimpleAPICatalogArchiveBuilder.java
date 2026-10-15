@@ -1,0 +1,284 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Copyright Contributors to the ODPi Egeria project. */
+
+package org.odpi.openmetadata.archiveutilities.simplecatalogs.catalogcontent;
+
+
+import org.odpi.openmetadata.frameworks.openmetadata.enums.ActivityStatus;
+import org.odpi.openmetadata.frameworks.openmetadata.refdata.DeployedImplementationType;
+import org.odpi.openmetadata.frameworks.openmetadata.types.OpenMetadataType;
+import org.odpi.openmetadata.opentypes.OpenMetadataTypesArchive;
+import org.odpi.openmetadata.repositoryservices.archiveutilities.OMRSArchiveBuilder;
+import org.odpi.openmetadata.repositoryservices.connectors.stores.archivestore.properties.OpenMetadataArchive;
+import org.odpi.openmetadata.repositoryservices.connectors.stores.archivestore.properties.OpenMetadataArchiveType;
+import org.odpi.openmetadata.repositoryservices.connectors.stores.metadatacollectionstore.properties.instances.InstanceProvenanceType;
+import org.odpi.openmetadata.samples.archiveutilities.SimpleCatalogArchiveHelper;
+
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+
+
+/**
+ * SimpleAPICatalogArchiveBuilder provides API metadata.
+ */
+public class SimpleAPICatalogArchiveBuilder
+{
+    /*
+     * This is the header information for the archive.
+     */
+    private static final String                  archiveGUID        = "9e594f24-2494-4000-ac20-59f374eaa0e6";
+    private static final String                  archiveLicense     = "Apache-2.0";
+    private static final String                  archiveDescription = "Sample metadata showing API assets and their payloads.";
+    private static final OpenMetadataArchiveType archiveType        = OpenMetadataArchiveType.REPOSITORY_BACKUP;
+    private static final String                  originatorName     = "Egeria";
+    private static final Date                    creationDate       = new Date(1632046251579L);
+
+    /*
+     * Additional AssetTypes for basic file connector
+     */
+    private static final String apiAssetTypeName       = OpenMetadataType.DEPLOYED_API.typeName;
+    private static final String apiSchemaTypeTypeName  = OpenMetadataType.API_SCHEMA_TYPE.typeName;
+    private static final String apiSchemaAttributeTypeName  = OpenMetadataType.API_PARAMETER.typeName;
+
+    private static final String categoryName  = "Customer Domain";
+
+    /*
+     * Names for API definitions
+     */
+    static final String customerQualifiedName = apiAssetTypeName + "::" + "global-api-gateway/CustomerDomain/APIs/Customer";
+    private static final String customerResourceName  = "global-api-gateway/CustomerDomain/APIs/Customer";
+    private static final String customerPathName      = "global-api-gateway/CustomerDomain/APIs";
+    private static final String customerDisplayName   = "Customer API";
+    private static final String customerDescription   = "API for interacting with customer master.";
+
+    static final String getCustomerQualifiedName  = OpenMetadataType.API_OPERATION.typeName + "::" + "global-api-gateway/CustomerDomain/APIs/Customer/getCustomer";
+    private static final String getCustomerPathName       = "global-api-gateway/CustomerDomain/APIs/Customer";
+    private static final String getCustomerDisplayName    = "Get Customer Operation";
+    private static final String getCustomerDescription    = "API operation to retrieved details about the customer.";
+    private static final String getCustomerPath           = "global-api-gateway/CustomerDomain/APIs/Customer/getCustomer";
+    private static final String getCustomerCommand        = "GET";
+
+    static final String customerNoRequestQualifiedName  = apiSchemaAttributeTypeName + "::" + "global-api-gateway/CustomerDomain/APIs/Customer/getCustomer/request/customerNo";
+    static final String customerNoResponseQualifiedName = apiSchemaAttributeTypeName + "::" + "global-api-gateway/CustomerDomain/APIs/Customer/getCustomer/response/customerNo";
+    private static final String customerNoRequestPathName  = "global-api-gateway/CustomerDomain/APIs/Customer/getCustomer/request";
+    private static final String customerNoResponsePathName = "global-api-gateway/CustomerDomain/APIs/Customer/getCustomer/response";
+    private static final String customerNoDisplayName      = "customerNo";
+    private static final String customerNoDescription      = "The unique identifier assigned internally for a customer.";
+    private static final String customerNoDataType         = "string";
+    private static final int    customerNoLength           = 12;
+
+    static final String customerNameQualifiedName = "global-api-gateway/CustomerDomain/APIs/Customer/getCustomer/response/customerName";
+    private static final String customerNamePathName      = "global-api-gateway/CustomerDomain/APIs/Customer/getCustomer/response";
+    private static final String customerNameDisplayName   = "customerName";
+    private static final String customerNameDescription   = "The name for a customer - as supplied by the customer.";
+    private static final String customerNameDataType      = "string";
+    private static final int    customerNameLength        = 40;
+
+    static final String customerCardIdQualifiedName = "global-api-gateway/CustomerDomain/APIs/Customer/getCustomer/responses/customerCardId";
+    private static final String customerCardIdPathName      = "global-api-gateway/CustomerDomain/APIs/Customer/getCustomer/responses";
+    private static final String customerCardIdDisplayName   = "customerCardId";
+    private static final String customerCardIdDescription   = "The store card number for the customer.  Null if not issued.";
+    private static final String customerCardIdDataType      = "string";
+    private static final int    customerCardIdLength        = 10;
+
+
+    /*
+     * Specific values for initializing TypeDefs
+     */
+    private static final long   versionNumber = 1L;
+    private static final String versionName   = "1.0";
+
+    private final OMRSArchiveBuilder         archiveBuilder;
+    private final SimpleCatalogArchiveHelper archiveHelper;
+
+    /**
+     * Constructor pushes all archive header values to the superclass
+     *
+     * @param archiveName name of the open metadata archive metadata collection.
+     * @param archiveRootName non-spaced root name of the open metadata GUID map.
+     */
+    public SimpleAPICatalogArchiveBuilder(String archiveName,
+                                          String archiveRootName)
+    {
+        List<OpenMetadataArchive> dependentOpenMetadataArchives = new ArrayList<>();
+
+        /*
+         * This value allows the archive to be based on the existing open metadata types
+         */
+        dependentOpenMetadataArchives.add(new OpenMetadataTypesArchive().getOpenMetadataArchive());
+
+        this.archiveBuilder = new OMRSArchiveBuilder(archiveGUID,
+                                                     archiveName,
+                                                     archiveDescription,
+                                                     archiveType,
+                                                     originatorName,
+                                                     archiveLicense,
+                                                     creationDate,
+                                                     dependentOpenMetadataArchives);
+
+        this.archiveHelper = new SimpleCatalogArchiveHelper(archiveBuilder,
+                                                            archiveGUID,
+                                                            archiveName,
+                                                            archiveDescription,
+                                                            archiveRootName,
+                                                            originatorName,
+                                                            creationDate,
+                                                            versionNumber,
+                                                            versionName,
+                                                            InstanceProvenanceType.LOCAL_COHORT,
+                                                            null);
+    }
+
+
+    /**
+     * Construct the builder using a shared archive builder and helper.  Used to create a
+     * combination archive.
+     *
+     * @param archiveBuilder archive builder
+     * @param archiveHelper archive helper
+     */
+    public SimpleAPICatalogArchiveBuilder(OMRSArchiveBuilder         archiveBuilder,
+                                          SimpleCatalogArchiveHelper archiveHelper)
+    {
+        this.archiveBuilder = archiveBuilder;
+        this.archiveHelper = archiveHelper;
+    }
+
+
+    /**
+     * Fills the archive builder with all the elements for this catalog.
+     */
+    public void fillBuilder()
+    {
+        String assetGUID = archiveHelper.addProcessAsset(apiAssetTypeName,
+                                                         customerQualifiedName,
+                                                         customerDisplayName,
+                                                         customerResourceName,
+                                                         customerPathName,
+                                                         categoryName,
+                                                         DeployedImplementationType.REST_API.getDeployedImplementationType(),
+                                                         versionName,
+                                                         customerDescription,
+                                                         null,
+                                                         null,
+                                                         ActivityStatus.APPROVED,
+                                                         null,
+                                                         null,
+                                                         null);
+
+        String apiSchemaTypeGUID = archiveHelper.addTopLevelSchemaType(assetGUID,
+                                                                       apiAssetTypeName,
+                                                                       apiSchemaTypeTypeName,
+                                                                       customerQualifiedName + "_api_schema_type",
+                                                                       customerDisplayName + " API Schema Type",
+                                                                       null,
+                                                                       null);
+
+        String apiOperationGUID = archiveHelper.addAPIOperation(assetGUID,
+                                                                apiAssetTypeName,
+                                                                apiSchemaTypeGUID,
+                                                                getCustomerQualifiedName,
+                                                                getCustomerDisplayName,
+                                                                getCustomerPathName,
+                                                                getCustomerDescription,
+                                                                getCustomerPath,
+                                                                getCustomerCommand,
+                                                                null);
+
+        String requestGUID = archiveHelper.addAPIParameterList(assetGUID,
+                                                               apiAssetTypeName,
+                                                               apiOperationGUID,
+                                                               OpenMetadataType.API_REQUEST_RELATIONSHIP.typeName,
+                                                               getCustomerQualifiedName + "_request",
+                                                               getCustomerDisplayName + " Request Parameter List",
+                                                               null,
+                                                               true,
+                                                               null);
+
+        String parameterGUID = archiveHelper.addSchemaAttribute(assetGUID,
+                                                                apiAssetTypeName,
+                                                                apiSchemaAttributeTypeName,
+                                                                null,
+                                                                customerNoRequestQualifiedName,
+                                                                customerNoDisplayName,
+                                                                customerNoRequestPathName,
+                                                                customerNoDescription,
+                                                                customerNoDataType,
+                                                                customerNoLength,
+                                                                null,
+                                                                null);
+
+        archiveHelper.addAttributeForSchemaType(requestGUID, 1, 1, 1, parameterGUID);
+
+        String responseGUID = archiveHelper.addAPIParameterList(assetGUID,
+                                                                apiAssetTypeName,
+                                                                apiOperationGUID,
+                                                                OpenMetadataType.API_RESPONSE_RELATIONSHIP.typeName,
+                                                                getCustomerQualifiedName + "_response",
+                                                                getCustomerDisplayName + " Response Parameter List",
+                                                                null,
+                                                                true,
+                                                                null);
+
+        parameterGUID = archiveHelper.addSchemaAttribute(assetGUID,
+                                                         apiAssetTypeName,
+                                                         apiSchemaAttributeTypeName,
+                                                         null,
+                                                         customerNoResponseQualifiedName,
+                                                         customerNoDisplayName,
+                                                         customerNoResponsePathName,
+                                                         customerNoDescription,
+                                                         customerNoDataType,
+                                                         customerNoLength,
+                                                         null,
+                                                         null);
+
+        archiveHelper.addAttributeForSchemaType(responseGUID, 2, 1, 1, parameterGUID);
+
+        parameterGUID = archiveHelper.addSchemaAttribute(assetGUID,
+                                                         apiAssetTypeName,
+                                                         apiSchemaAttributeTypeName,
+                                                         null,
+                                                         customerNameQualifiedName,
+                                                         customerNameDisplayName,
+                                                         customerNamePathName,
+                                                         customerNameDescription,
+                                                         customerNameDataType,
+                                                         customerNameLength,
+                                                         null,
+                                                         null);
+
+        archiveHelper.addAttributeForSchemaType(responseGUID, 3, 1, 1, parameterGUID);
+
+        parameterGUID = archiveHelper.addSchemaAttribute(assetGUID,
+                                                         apiAssetTypeName,
+                                                         apiSchemaAttributeTypeName,
+                                                         null,
+                                                         customerCardIdQualifiedName,
+                                                         customerCardIdDisplayName,
+                                                         customerCardIdPathName,
+                                                         customerCardIdDescription,
+                                                         customerCardIdDataType,
+                                                         customerCardIdLength,
+                                                         null,
+                                                         null);
+
+        archiveHelper.addAttributeForSchemaType(responseGUID, 4, 1, 1, parameterGUID);
+
+        archiveHelper.saveGUIDs();
+    }
+
+
+    /**
+     * Returns the open metadata type archive containing all the for this catalog.
+     *
+     * @return populated open metadata archive object
+     */
+    public OpenMetadataArchive getOpenMetadataArchive()
+    {
+        fillBuilder();
+
+        return archiveBuilder.getOpenMetadataArchive();
+    }
+}

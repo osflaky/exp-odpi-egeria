@@ -1,0 +1,751 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Copyright Contributors to the ODPi Egeria project. */
+package org.odpi.openmetadata.governanceservers.integrationdaemonservices.server;
+
+import org.odpi.openmetadata.adminservices.configuration.registration.GovernanceServicesDescription;
+import org.odpi.openmetadata.commonservices.ffdc.RESTCallLogger;
+import org.odpi.openmetadata.commonservices.ffdc.RESTCallToken;
+import org.odpi.openmetadata.commonservices.ffdc.RESTExceptionHandler;
+import org.odpi.openmetadata.commonservices.ffdc.properties.ConnectorReport;
+import org.odpi.openmetadata.commonservices.ffdc.rest.*;
+import org.odpi.openmetadata.frameworks.auditlog.AuditLog;
+import org.odpi.openmetadata.frameworks.connectors.properties.beans.Connection;
+import org.odpi.openmetadata.frameworks.integration.connectors.IntegrationConnector;
+import org.odpi.openmetadata.frameworks.integration.contextmanager.IntegrationContextManager;
+import org.odpi.openmetadata.governanceservers.integrationdaemonservices.properties.IntegrationDaemonStatus;
+import org.odpi.openmetadata.governanceservers.integrationdaemonservices.rest.ConnectorConfigPropertiesRequestBody;
+import org.odpi.openmetadata.governanceservers.integrationdaemonservices.rest.IntegrationDaemonStatusResponse;
+import org.odpi.openmetadata.governanceservers.integrationdaemonservices.rest.IntegrationGroupSummariesResponse;
+import org.odpi.openmetadata.governanceservers.integrationdaemonservices.rest.IntegrationGroupSummaryResponse;
+import org.odpi.openmetadata.tokencontroller.TokenController;
+import org.slf4j.LoggerFactory;
+
+import java.util.List;
+
+
+/**
+ * IntegrationDaemonRESTServices provides the external service implementation for an integration service
+ * and integration group.
+ * The IntegrationDaemonRESTServices locates the correct integration service/group instance within the correct
+ * integration daemon instance and delegates the request.
+ */
+public class IntegrationDaemonRESTServices extends TokenController
+{
+    private final static IntegrationDaemonInstanceHandler instanceHandler = new IntegrationDaemonInstanceHandler();
+
+    private final static RESTCallLogger restCallLogger = new RESTCallLogger(LoggerFactory.getLogger(IntegrationDaemonRESTServices.class),
+                                                                      instanceHandler.getServiceName());
+    private final RESTExceptionHandler restExceptionHandler = new RESTExceptionHandler();
+
+
+
+
+    /**
+     * Validate the connector and return its connector type.
+     *
+     * @param serverName integration daemon server name
+     * @param connectorProviderClassName name of a specific connector or null for all connectors
+     * @param delegatingUserId external userId making request
+     *
+     * @return connector report or
+     *  InvalidParameterException the connector provider class name is not a valid connector fo this service
+     *  UserNotAuthorizedException the user is not authorized to issue this request
+     *  PropertyServerException there was a problem detected by the integration service
+     */
+    public ConnectorReportResponse validateConnector(String serverName,
+                                                     String delegatingUserId,
+                                                     String connectorProviderClassName)
+    {
+        final String methodName = "validateConnector";
+
+        RESTCallToken token = restCallLogger.logRESTCall(serverName, methodName);
+
+        ConnectorReportResponse response = new ConnectorReportResponse();
+        AuditLog                auditLog = null;
+
+        try
+        {
+            String userId = super.getUser(instanceHandler.getServiceName(), methodName);
+
+            restCallLogger.setUserId(token, userId);
+
+            auditLog = instanceHandler.getAuditLog(userId, delegatingUserId, serverName, methodName);
+
+            ConnectorReport connectorReport = instanceHandler.validateConnector(connectorProviderClassName,
+                                                                                IntegrationConnector.class,
+                                                                                GovernanceServicesDescription.INTEGRATION_DAEMON_SERVICES.getServiceName());
+            if (connectorReport != null)
+            {
+                response.setConnectorReport(connectorReport);
+            }
+        }
+        catch (Throwable error)
+        {
+            restExceptionHandler.captureRuntimeExceptions(response, error, methodName, auditLog);
+        }
+
+        restCallLogger.logRESTCallReturn(token, response);
+
+        return response;
+    }
+
+
+    /**
+     * Pass an Open Data Contract Standard (ODCS) data contract to the integration daemon.  It will pass it on to the integration
+     * connectors that have registered a listener for Bitol documents.
+     *
+     * @param serverName integration daemon server name
+     * @param delegatingUserId external userId making request
+     * @param document data contract (YAML or JSON) to publish.
+     * @return void or exception
+     */
+    public VoidResponse publishDataContract(String serverName,
+                                            String delegatingUserId,
+                                            String document)
+    {
+        final String methodName = "publishDataContract";
+
+        RESTCallToken token = restCallLogger.logRESTCall(serverName, methodName);
+
+        VoidResponse response = new VoidResponse();
+        AuditLog     auditLog = null;
+
+        try
+        {
+            String userId = super.getUser(instanceHandler.getServiceName(), methodName);
+
+            restCallLogger.setUserId(token, userId);
+
+            auditLog = instanceHandler.getAuditLog(userId, delegatingUserId, serverName, methodName);
+
+            List<IntegrationContextManager> contextManagers = instanceHandler.getIntegrationGroupContextManagers(userId,
+                                                                                                                 serverName,
+                                                                                                                 methodName);
+
+            if (contextManagers != null)
+            {
+                for (IntegrationContextManager contextManager : contextManagers)
+                {
+                    if (contextManager != null)
+                    {
+                        contextManager.publishDataContract(document);
+                    }
+                }
+            }
+        }
+        catch (Throwable error)
+        {
+            restExceptionHandler.captureRuntimeExceptions(response, error, methodName, auditLog);
+        }
+
+        restCallLogger.logRESTCallReturn(token, response);
+
+        return response;
+    }
+
+
+    /**
+     * Pass an Open Data Product Standard (ODPS) data product to the integration daemon.  It will pass it on to the integration
+     * connectors that have registered a listener for Bitol documents.
+     *
+     * @param serverName integration daemon server name
+     * @param delegatingUserId external userId making request
+     * @param document data product (YAML or JSON) to publish.
+     * @return void or exception
+     */
+    public VoidResponse publishDataProduct(String serverName,
+                                           String delegatingUserId,
+                                           String document)
+    {
+        final String methodName = "publishDataProduct";
+
+        RESTCallToken token = restCallLogger.logRESTCall(serverName, methodName);
+
+        VoidResponse response = new VoidResponse();
+        AuditLog     auditLog = null;
+
+        try
+        {
+            String userId = super.getUser(instanceHandler.getServiceName(), methodName);
+
+            restCallLogger.setUserId(token, userId);
+
+            auditLog = instanceHandler.getAuditLog(userId, delegatingUserId, serverName, methodName);
+
+            List<IntegrationContextManager> contextManagers = instanceHandler.getIntegrationGroupContextManagers(userId,
+                                                                                                                 serverName,
+                                                                                                                 methodName);
+
+            if (contextManagers != null)
+            {
+                for (IntegrationContextManager contextManager : contextManagers)
+                {
+                    if (contextManager != null)
+                    {
+                        contextManager.publishDataProduct(document);
+                    }
+                }
+            }
+        }
+        catch (Throwable error)
+        {
+            restExceptionHandler.captureRuntimeExceptions(response, error, methodName, auditLog);
+        }
+
+        restCallLogger.logRESTCallReturn(token, response);
+
+        return response;
+    }
+
+
+    /**
+     * Pass an open lineage event to the integration service.  It will pass it on to the integration connectors that have registered a
+     * listener for open lineage events.
+     *
+     * @param serverName integration daemon server name
+     * @param delegatingUserId external userId making request
+     * @param event open lineage event to publish.
+     */
+    public VoidResponse publishOpenLineageEvent(String serverName,
+                                                String delegatingUserId,
+                                                String event)
+    {
+        final String methodName = "publishOpenLineageEvent";
+
+        RESTCallToken token = restCallLogger.logRESTCall(serverName, methodName);
+
+        VoidResponse response = new VoidResponse();
+        AuditLog     auditLog = null;
+
+        try
+        {
+            String userId = super.getUser(instanceHandler.getServiceName(), methodName);
+
+            restCallLogger.setUserId(token, userId);
+
+            auditLog = instanceHandler.getAuditLog(userId, delegatingUserId, serverName, methodName);
+
+            List<IntegrationContextManager> contextManagers = instanceHandler.getIntegrationGroupContextManagers(userId,
+                                                                                                                 serverName,
+                                                                                                                 methodName);
+
+            if (contextManagers != null)
+            {
+                for (IntegrationContextManager contextManager : contextManagers)
+                {
+                    if (contextManager != null)
+                    {
+                        contextManager.publishOpenLineageRunEvent(event);
+                    }
+                }
+            }
+        }
+        catch (Throwable error)
+        {
+            restExceptionHandler.captureRuntimeExceptions(response, error, methodName, auditLog);
+        }
+
+        restCallLogger.logRESTCallReturn(token, response);
+
+        return response;
+    }
+
+
+    /**
+     * Retrieve the configuration properties of the named connector.
+     *
+     * @param serverName integration daemon server name
+     * @param delegatingUserId external userId making request
+     * @param connectorName name of a specific connector
+     *
+     * @return properties map or
+     *  InvalidParameterException one of the parameters is null or invalid or
+     *  UserNotAuthorizedException the user is not authorized to issue this request or
+     *  PropertyServerException there was a problem detected by the integration service.
+     */
+    public PropertiesResponse getConfigurationProperties(String serverName,
+                                                         String delegatingUserId,
+                                                         String connectorName)
+    {
+        final String methodName = "getConfigurationProperties";
+
+        RESTCallToken token = restCallLogger.logRESTCall(serverName, methodName);
+
+        PropertiesResponse response = new PropertiesResponse();
+        AuditLog           auditLog = null;
+
+        try
+        {
+            String userId = super.getUser(instanceHandler.getServiceName(), methodName);
+
+            restCallLogger.setUserId(token, userId);
+
+            auditLog = instanceHandler.getAuditLog(userId, delegatingUserId, serverName, methodName);
+
+            response.setProperties(instanceHandler.getConfigurationProperties(userId,
+                                                                              serverName,
+                                                                              methodName,
+                                                                              connectorName));
+        }
+        catch (Throwable error)
+        {
+            restExceptionHandler.captureRuntimeExceptions(response, error, methodName, auditLog);
+        }
+
+        restCallLogger.logRESTCallReturn(token, response);
+
+        return response;
+    }
+
+
+    /**
+     * Update the configuration properties of the connectors, or specific connector if a connector name is supplied.
+     *
+     * @param serverName integration daemon server name
+     * @param delegatingUserId external userId making request
+     * @param requestBody name of a specific connector or null for all connectors and the properties to change
+     *
+     * @return void or
+     *  InvalidParameterException one of the parameters is null or invalid or
+     *  UserNotAuthorizedException the user is not authorized to issue this request or
+     *  PropertyServerException there was a problem detected by the integration service.
+     */
+    public  VoidResponse updateConfigurationProperties(String                               serverName,
+                                                       String                               delegatingUserId,
+                                                       ConnectorConfigPropertiesRequestBody requestBody)
+    {
+        final String methodName = "updateConfigurationProperties";
+
+        RESTCallToken token = restCallLogger.logRESTCall(serverName, methodName);
+
+        VoidResponse response = new VoidResponse();
+        AuditLog     auditLog = null;
+
+        try
+        {
+            String userId = super.getUser(instanceHandler.getServiceName(), methodName);
+
+            restCallLogger.setUserId(token, userId);
+
+            auditLog = instanceHandler.getAuditLog(userId, delegatingUserId, serverName, methodName);
+
+            if (requestBody != null)
+            {
+                instanceHandler.updateConfigurationProperties(userId,
+                                                              serverName,
+                                                              methodName,
+                                                              requestBody.getConnectorName(),
+                                                              requestBody.getMergeUpdate(),
+                                                              requestBody.getConfigurationProperties());
+            }
+            else
+            {
+                restExceptionHandler.handleNoRequestBody(userId, methodName, serverName);
+            }
+        }
+        catch (Throwable error)
+        {
+            restExceptionHandler.captureRuntimeExceptions(response, error, methodName, auditLog);
+        }
+
+        restCallLogger.logRESTCallReturn(token, response);
+
+        return response;
+    }
+
+
+    /**
+     * Update the endpoint network address for a specific integration connector.
+     *
+     * @param serverName integration daemon server name
+     * @param delegatingUserId external userId making request
+     * @param connectorName name of a specific connector
+     * @param requestBody name of a specific connector or null for all connectors and the properties to change
+     *
+     * @return void or
+     *  InvalidParameterException one of the parameters is null or invalid or
+     *  UserNotAuthorizedException the user is not authorized to issue this request or
+     *  PropertyServerException there was a problem detected by the integration service.
+     */
+
+    public  VoidResponse updateEndpointNetworkAddress(String            serverName,
+                                                      String            delegatingUserId,
+                                                      String            connectorName,
+                                                      StringRequestBody requestBody)
+    {
+        final String methodName = "updateEndpointNetworkAddress";
+
+        RESTCallToken token = restCallLogger.logRESTCall(serverName, methodName);
+
+        VoidResponse response = new VoidResponse();
+        AuditLog     auditLog = null;
+
+        try
+        {
+            String userId = super.getUser(instanceHandler.getServiceName(), methodName);
+
+            restCallLogger.setUserId(token, userId);
+
+            auditLog = instanceHandler.getAuditLog(userId, delegatingUserId, serverName, methodName);
+
+            if (requestBody != null)
+            {
+                instanceHandler.updateEndpointNetworkAddress(userId,
+                                                             serverName,
+                                                             methodName,
+                                                             connectorName,
+                                                             requestBody.getString());
+            }
+            else
+            {
+                restExceptionHandler.handleNoRequestBody(userId, methodName, serverName);
+            }
+        }
+        catch (Throwable error)
+        {
+            restExceptionHandler.captureRuntimeExceptions(response, error, methodName, auditLog);
+        }
+
+        restCallLogger.logRESTCallReturn(token, response);
+
+        return response;
+    }
+
+
+    /**
+     * Update the connection for a specific integration connector.
+     *
+     * @param serverName integration daemon server name
+     * @param delegatingUserId external userId making request
+     * @param connectorName name of a specific connector
+     * @param requestBody new connection object
+     *
+     * @return void or
+     *  InvalidParameterException one of the parameters is null or invalid or
+     *  UserNotAuthorizedException the user is not authorized to issue this request or
+     *  PropertyServerException there was a problem detected by the integration service.
+     */
+
+    public  VoidResponse updateConnectorConnection(String     serverName,
+                                                   String     delegatingUserId,
+                                                   String     connectorName,
+                                                   Connection requestBody)
+    {
+        final String methodName = "updateConnectorConnection";
+
+        RESTCallToken token = restCallLogger.logRESTCall(serverName, methodName);
+
+        VoidResponse response = new VoidResponse();
+        AuditLog     auditLog = null;
+
+        try
+        {
+            String userId = super.getUser(instanceHandler.getServiceName(), methodName);
+
+            restCallLogger.setUserId(token, userId);
+
+            auditLog = instanceHandler.getAuditLog(userId, delegatingUserId, serverName, methodName);
+
+            if (requestBody != null)
+            {
+                instanceHandler.updateConnectorConnection(userId,
+                                                          serverName,
+                                                          methodName,
+                                                          connectorName,
+                                                          requestBody);
+            }
+            else
+            {
+                restExceptionHandler.handleNoRequestBody(userId, methodName, serverName);
+            }
+        }
+        catch (Throwable error)
+        {
+            restExceptionHandler.captureRuntimeExceptions(response, error, methodName, auditLog);
+        }
+
+        restCallLogger.logRESTCallReturn(token, response);
+
+        return response;
+    }
+
+
+    /**
+     * Request that the integration daemon refresh all the connectors in all the integration services and groups
+     *
+     * @param serverName name of the integration daemon
+     * @param delegatingUserId external userId making request
+     * @param requestBody null request body
+     *
+     * @return void or
+     *  InvalidParameterException one of the parameters is null or invalid or
+     *  UserNotAuthorizedException the user is not authorized to issue this request or
+     *  PropertyServerException there was a problem detected by the integration service.
+     */
+    public  VoidResponse refreshConnectors(String          serverName,
+                                           String          delegatingUserId,
+                                           NameRequestBody requestBody)
+    {
+        final String methodName = "refreshConnectors";
+
+        RESTCallToken token = restCallLogger.logRESTCall(serverName, methodName);
+
+        VoidResponse response = new VoidResponse();
+        AuditLog     auditLog = null;
+
+        try
+        {
+            String userId = super.getUser(instanceHandler.getServiceName(), methodName);
+
+            restCallLogger.setUserId(token, userId);
+
+            auditLog = instanceHandler.getAuditLog(userId, delegatingUserId, serverName, methodName);
+
+            String connectorName = null;
+
+            if (requestBody != null)
+            {
+                connectorName = requestBody.getName();
+            }
+
+            instanceHandler.refreshConnector(userId, serverName, methodName, connectorName);
+        }
+        catch (Throwable error)
+        {
+            restExceptionHandler.captureRuntimeExceptions(response, error, methodName, auditLog);
+        }
+
+        restCallLogger.logRESTCallReturn(token, response);
+
+        return response;
+    }
+
+
+    /**
+     * Request that the integration daemon restart all the connectors in all the integration services and groups
+     *
+     * @param serverName name of the integration daemon
+     * @param delegatingUserId external userId making request
+     * @param requestBody null request body
+     *
+     * @return void or
+     *  InvalidParameterException one of the parameters is null or invalid or
+     *  UserNotAuthorizedException the user is not authorized to issue this request or
+     *  PropertyServerException there was a problem detected by the integration service.
+     */
+    public  VoidResponse restartConnectors(String          serverName,
+                                           String          delegatingUserId,
+                                           NameRequestBody requestBody)
+    {
+        final String methodName = "restartConnectors";
+
+        RESTCallToken token = restCallLogger.logRESTCall(serverName, methodName);
+
+        VoidResponse response = new VoidResponse();
+        AuditLog     auditLog = null;
+
+        try
+        {
+            String userId = super.getUser(instanceHandler.getServiceName(), methodName);
+
+            restCallLogger.setUserId(token, userId);
+
+            auditLog = instanceHandler.getAuditLog(userId, delegatingUserId, serverName, methodName);
+
+            String connectorName = null;
+
+            if (requestBody != null)
+            {
+                connectorName = requestBody.getName();
+            }
+
+            instanceHandler.restartConnector(userId, serverName, methodName, connectorName);
+        }
+        catch (Throwable error)
+        {
+            restExceptionHandler.captureRuntimeExceptions(response, error, methodName, auditLog);
+        }
+
+        restCallLogger.logRESTCallReturn(token, response);
+
+        return response;
+    }
+
+
+    /**
+     * Return a summary of each of the integration services' and integration groups' status.
+     *
+     * @param serverName integration daemon name
+     * @param delegatingUserId external userId making request
+     * @return list of statuses - on for each assigned integration services or group
+     *  InvalidParameterException one of the parameters is null or invalid or
+     *  UserNotAuthorizedException the user is not authorized to issue this request or
+     *  PropertyServerException there was a problem detected by the integration daemon.
+     */
+    public IntegrationDaemonStatusResponse getIntegrationDaemonStatus(String serverName,
+                                                                      String delegatingUserId)
+    {
+        final String methodName = "getIntegrationDaemonStatus";
+
+        RESTCallToken token = restCallLogger.logRESTCall(serverName, methodName);
+
+        IntegrationDaemonStatusResponse response = new IntegrationDaemonStatusResponse();
+        AuditLog                        auditLog = null;
+
+        try
+        {
+            String userId = super.getUser(instanceHandler.getServiceName(), methodName);
+
+            restCallLogger.setUserId(token, userId);
+
+            auditLog = instanceHandler.getAuditLog(userId, delegatingUserId, serverName, methodName);
+
+            IntegrationDaemonStatus integrationDaemonStatus = new IntegrationDaemonStatus();
+
+            integrationDaemonStatus.setIntegrationGroupSummaries(instanceHandler.getIntegrationGroupSummaries(userId, serverName, methodName));
+
+            integrationDaemonStatus.setIntegrationConnectorReports(instanceHandler.getIntegrationConnectors(userId, serverName, methodName));
+
+            response.setIntegrationDaemonStatus(integrationDaemonStatus);
+        }
+        catch (Throwable error)
+        {
+            restExceptionHandler.captureRuntimeExceptions(response, error, methodName, auditLog);
+        }
+
+        restCallLogger.logRESTCallReturn(token, response);
+
+        return response;
+    }
+
+
+    /**
+     * Request that the integration group refresh its configuration by calling the metadata server.
+     * This request is useful if the metadata server has an outage, particularly while the
+     * governance server is initializing.  This request just ensures that the latest configuration
+     * is in use.
+     *
+     * @param serverName name of the governance server.
+     * @param delegatingUserId external userId making request
+     * @param integrationGroupName unique name of the integration group.
+     *
+     * @return void or
+     *  InvalidParameterException one of the parameters is null or invalid or
+     *  UserNotAuthorizedException the user is not authorized to issue this request or
+     *  IntegrationGroupException there was a problem detected by the integration group.
+     */
+    public  VoidResponse refreshIntegrationGroupConfig(String serverName,
+                                                       String delegatingUserId,
+                                                       String integrationGroupName)
+    {
+        final String        methodName = "refreshIntegrationGroupConfig";
+
+        RESTCallToken token = restCallLogger.logRESTCall(serverName, methodName);
+
+        VoidResponse response = new VoidResponse();
+        AuditLog     auditLog = null;
+
+        try
+        {
+            String userId = super.getUser(instanceHandler.getServiceName(), methodName);
+
+            restCallLogger.setUserId(token, userId);
+
+            auditLog = instanceHandler.getAuditLog(userId, delegatingUserId, serverName, methodName);
+
+            instanceHandler.refreshIntegrationGroupConfig(userId, serverName, integrationGroupName, methodName);
+        }
+        catch (Throwable error)
+        {
+            restExceptionHandler.captureRuntimeExceptions(response, error, methodName, auditLog);
+        }
+
+        restCallLogger.logRESTCallReturn(token, response);
+
+        return response;
+    }
+
+
+    /**
+     * Return a summary of the requested engine's status.
+     *
+     * @param serverName name of the server tied to the request
+     * @param delegatingUserId external userId making request
+     * @param integrationGroupName qualifiedName of the requested integration group
+     *
+     * @return list of integration group summaries or
+     *  InvalidParameterException no available instance for the requested server
+     *  UserNotAuthorizedException user does not have access to the requested server
+     *  PropertyServerException the service name is not known - indicating a logic error
+     */
+    public IntegrationGroupSummaryResponse getIntegrationGroupSummary(String serverName,
+                                                                      String delegatingUserId,
+                                                                      String integrationGroupName)
+    {
+        final String methodName = "getIntegrationGroupSummary";
+
+        RESTCallToken token = restCallLogger.logRESTCall(serverName, methodName);
+
+        IntegrationGroupSummaryResponse response = new IntegrationGroupSummaryResponse();
+        AuditLog                        auditLog = null;
+
+        try
+        {
+            String userId = super.getUser(instanceHandler.getServiceName(), methodName);
+
+            restCallLogger.setUserId(token, userId);
+
+            auditLog = instanceHandler.getAuditLog(userId, delegatingUserId, serverName, methodName);
+
+            response.setIntegrationGroupSummary(instanceHandler.getIntegrationGroupSummary(userId, serverName, integrationGroupName, methodName));
+        }
+        catch (Throwable error)
+        {
+            restExceptionHandler.captureRuntimeExceptions(response, error, methodName, auditLog);
+        }
+
+        restCallLogger.logRESTCallReturn(token, response);
+
+        return response;
+    }
+
+
+    /**
+     * Return a summary of each of the integration groups' status for all running engine services.
+     *
+     * @param serverName integration daemon server name
+     * @param delegatingUserId external userId making request
+     * @return list of statuses - on for each assigned integration groups or
+     *  InvalidParameterException one of the parameters is null or invalid or
+     *  UserNotAuthorizedException the user is not authorized to issue this request or
+     */
+    public IntegrationGroupSummariesResponse getIntegrationGroupSummaries(String serverName,
+                                                                          String delegatingUserId)
+    {
+        final String methodName = "getIntegrationGroupSummaries";
+
+        RESTCallToken token = restCallLogger.logRESTCall(serverName, methodName);
+
+        IntegrationGroupSummariesResponse response = new IntegrationGroupSummariesResponse();
+        AuditLog                          auditLog = null;
+
+        try
+        {
+            String userId = super.getUser(instanceHandler.getServiceName(), methodName);
+
+            restCallLogger.setUserId(token, userId);
+
+            auditLog = instanceHandler.getAuditLog(userId, delegatingUserId, serverName, methodName);
+
+            response.setIntegrationGroupSummaries(instanceHandler.getIntegrationGroupSummaries(userId, serverName, methodName));
+        }
+        catch (Throwable error)
+        {
+            restExceptionHandler.captureRuntimeExceptions(response, error, methodName, auditLog);
+        }
+
+        restCallLogger.logRESTCallReturn(token, response);
+
+        return response;
+    }
+}

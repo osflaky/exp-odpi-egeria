@@ -1,0 +1,188 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Copyright Contributors to the ODPi Egeria project. */
+package org.odpi.openmetadata.conformance.server;
+
+import org.odpi.openmetadata.adminservices.configuration.properties.ConformanceSuiteConfig;
+import org.odpi.openmetadata.adminservices.ffdc.exception.OMAGConfigurationErrorException;
+import org.odpi.openmetadata.conformance.workbenches.repository.connectorconsumer.ConformanceSuiteConnectorConsumer;
+import org.odpi.openmetadata.conformance.workbenches.OpenMetadataConformanceWorkbench;
+import org.odpi.openmetadata.conformance.beans.OpenMetadataConformanceWorkbenchWorkPad;
+import org.odpi.openmetadata.conformance.beans.TechnologyUnderTestWorkPad;
+import org.odpi.openmetadata.conformance.ffdc.ConformanceSuiteErrorCode;
+import org.odpi.openmetadata.conformance.workbenches.repository.listener.ConformanceSuiteOMRSTopicListener;
+import org.odpi.openmetadata.conformance.workbenches.platform.PlatformConformanceWorkPad;
+import org.odpi.openmetadata.conformance.workbenches.platform.PlatformConformanceWorkbench;
+import org.odpi.openmetadata.conformance.workbenches.repository.RepositoryConformanceWorkPad;
+import org.odpi.openmetadata.conformance.workbenches.repository.RepositoryConformanceWorkbench;
+import org.odpi.openmetadata.frameworks.auditlog.AuditLog;
+import org.odpi.openmetadata.repositoryservices.connectors.omrstopic.OMRSTopicConnector;
+import org.odpi.openmetadata.repositoryservices.enterprise.connectormanager.OMRSEnterpriseConnectorManager;
+
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * ConformanceSuiteOperationalServices provides the server side control for the Open Metadata Conformance Suite.
+ */
+public class ConformanceSuiteOperationalServices
+{
+    private final ConformanceServicesInstanceMap instanceMap = new ConformanceServicesInstanceMap();
+
+    private final String localServerName;                  /* Initialized in constructor */
+    private final String localServerUserId;                /* Initialized in constructor */
+    private final String localServerSecretStoreProvider;   /* Initialized in constructor */
+    private final String localServerSecretStoreLocation;   /* Initialized in constructor */
+    private final String localServerSecretStoreCollection; /* Initialized in constructor */
+    private final int    maxPageSize;                      /* Initialized in constructor */
+
+
+    /**
+     * Constructor used at server startup.
+     *
+     * @param localServerName   name of the local server
+     * @param localServerUserId user id for this server to use if processing inbound messages.
+     * @param localServerSecretsStoreProvider secrets store connector for bearer token
+     * @param localServerSecretsStoreLocation secrets store location for bearer token
+     * @param localServerSecretsStoreCollection secrets store collection for bearer token
+     * @param maxPageSize       maximum records that can be requested on the pageSize parameter
+     */
+    public ConformanceSuiteOperationalServices(String localServerName,
+                                               String localServerUserId,
+                                               String localServerSecretsStoreProvider,
+                                               String localServerSecretsStoreLocation,
+                                               String localServerSecretsStoreCollection,
+                                               int    maxPageSize)
+    {
+        this.localServerName = localServerName;
+        this.localServerUserId = localServerUserId;
+        this.localServerSecretStoreProvider   = localServerSecretsStoreProvider;
+        this.localServerSecretStoreLocation   = localServerSecretsStoreLocation;
+        this.localServerSecretStoreCollection = localServerSecretsStoreCollection;
+        this.maxPageSize = maxPageSize;
+    }
+
+
+    /**
+     * Initialize the service.
+     *
+     * @param conformanceSuiteConfig configuration for the conformance suite.
+     * @param enterpriseTopicConnector connector that receives all events from the cohorts that this server is
+     *                                 registered with.
+     * @param enterpriseConnectorManager manager of the list of connectors to the remote members of the cohorts.
+     * @param auditLog logging destination
+     * @throws OMAGConfigurationErrorException the server is not configured correctly for the conformance suite.
+     */
+    public void initialize(ConformanceSuiteConfig         conformanceSuiteConfig,
+                           OMRSTopicConnector             enterpriseTopicConnector,
+                           OMRSEnterpriseConnectorManager enterpriseConnectorManager,
+                           AuditLog                       auditLog) throws OMAGConfigurationErrorException
+    {
+        final String  methodName = "initialize";
+
+        if (enterpriseTopicConnector == null)
+        {
+            throw new OMAGConfigurationErrorException(ConformanceSuiteErrorCode.NO_ENTERPRISE_TOPIC.getMessageDefinition(localServerName),
+                                                      this.getClass().getName(),
+                                                      methodName);
+        }
+
+        if (enterpriseConnectorManager == null)
+        {
+            throw new OMAGConfigurationErrorException(ConformanceSuiteErrorCode.NO_ENTERPRISE_CONNECTOR_MANAGER.getMessageDefinition(localServerName),
+                                                      this.getClass().getName(),
+                                                      methodName);
+        }
+        else if (! enterpriseConnectorManager.isEnterpriseAccessEnabled())
+        {
+            throw new OMAGConfigurationErrorException(ConformanceSuiteErrorCode.NO_ENTERPRISE_ACCESS.getMessageDefinition(localServerName),
+                                                      this.getClass().getName(),
+                                                      methodName);
+        }
+
+        /*
+         * Now start up the workbenches based on the configuration
+         */
+        List<OpenMetadataConformanceWorkbenchWorkPad> workbenchWorkPads = new ArrayList<>();
+        List<OpenMetadataConformanceWorkbench>        runningWorkbenches = new ArrayList<>();
+
+        if (conformanceSuiteConfig.getPlatformWorkbenchConfig() != null)
+        {
+            PlatformConformanceWorkPad   platformConformanceWorkPad = new PlatformConformanceWorkPad(localServerUserId,
+                                                                                                     localServerSecretStoreProvider,
+                                                                                                     localServerSecretStoreLocation,
+                                                                                                     localServerSecretStoreCollection,
+                                                                                                     maxPageSize,
+                                                                                                     auditLog,
+                                                                                                     conformanceSuiteConfig.getPlatformWorkbenchConfig());
+            workbenchWorkPads.add(platformConformanceWorkPad);
+
+            PlatformConformanceWorkbench   platformConformanceWorkbench = new PlatformConformanceWorkbench(platformConformanceWorkPad);
+            runningWorkbenches.add(platformConformanceWorkbench);
+
+            Thread  platformWorkbenchThread = new Thread(platformConformanceWorkbench, "Platform Conformance Workbench");
+            platformWorkbenchThread.start();
+        }
+
+
+        if (conformanceSuiteConfig.getRepositoryWorkbenchConfig() != null)
+        {
+            final String workBenchName = "Repository Conformance Workbench";
+            RepositoryConformanceWorkPad   repositoryConformanceWorkPad = new RepositoryConformanceWorkPad(localServerUserId,
+                                                                                                           localServerSecretStoreProvider,
+                                                                                                           localServerSecretStoreLocation,
+                                                                                                           localServerSecretStoreCollection,
+                                                                                                           maxPageSize,
+                                                                                                           auditLog,
+                                                                                                           conformanceSuiteConfig.getRepositoryWorkbenchConfig());
+            workbenchWorkPads.add(repositoryConformanceWorkPad);
+
+            RepositoryConformanceWorkbench repositoryConformanceWorkbench = new RepositoryConformanceWorkbench(repositoryConformanceWorkPad);
+            runningWorkbenches.add(repositoryConformanceWorkbench);
+
+            Thread repositoryWorkbenchThread = new Thread(repositoryConformanceWorkbench, workBenchName);
+            repositoryWorkbenchThread.start();
+
+            ConformanceSuiteConnectorConsumer connectorConsumer = new ConformanceSuiteConnectorConsumer(repositoryConformanceWorkPad);
+            enterpriseConnectorManager.registerConnectorConsumer(connectorConsumer);
+
+            ConformanceSuiteOMRSTopicListener omrsTopicListener = new ConformanceSuiteOMRSTopicListener(repositoryConformanceWorkPad);
+
+            enterpriseTopicConnector.registerListener(omrsTopicListener, workBenchName);
+        }
+
+
+        instanceMap.setNewInstance(localServerName, new ConformanceServicesInstance(new TechnologyUnderTestWorkPad(workbenchWorkPads),
+                                                                                    runningWorkbenches,
+                                                                                    auditLog,
+                                                                                    conformanceSuiteConfig));
+    }
+
+
+    /**
+     * Shutdown the service.
+     *
+     * @param permanent is the service going away?
+     */
+    public void terminate(boolean permanent)
+    {
+        ConformanceServicesInstance instance = instanceMap.getInstance(this.localServerName);
+
+        if (instance != null)
+        {
+            List<OpenMetadataConformanceWorkbench> runningWorkbenches = instance.getWorkbenches();
+
+            if (runningWorkbenches != null)
+            {
+                for (OpenMetadataConformanceWorkbench workbench : runningWorkbenches)
+                {
+                    if (workbench != null)
+                    {
+                        workbench.stopRunning();
+                    }
+                }
+            }
+
+            instanceMap.removeInstance(this.localServerName);
+        }
+    }
+}

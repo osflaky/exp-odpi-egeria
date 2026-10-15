@@ -1,0 +1,1275 @@
+# Egeria-api-glossary-manager
+# https://egeria-project.org/concepts/glossary
+
+@baseURL=https://localhost:7443
+@viewServer=view-server
+
+###
+# =====================================================================================================================
+# Manage the authentication token.  Run this request to create/refresh the token.
+
+# @name Token (RequestBody)
+POST {{baseURL}}/api/token
+Content-Type: application/json
+
+{
+  "userId" : "peterprofile",
+  "password" : "secret"
+}
+
+> {% client.global.set("token", response.body); %}
+
+
+###
+
+
+###========================================================
+# The glossary is the root object for a glossary.  It is created through the Collection Manager API.
+# The following classifications are used to describe the purpose of the glossary.
+#
+
+@glossaryGUID=add guid here
+
+###
+# @name setGlossaryAsTaxonomy
+# Classify the glossary to indicate that it can be used as a taxonomy.
+# This means each term is attached to one, and only one folder and the folders are organized as a hierarchy
+# with a single root folder.
+# Taxonomies are used as a way of organizing assets and other related metadata.  The terms in the taxonomy
+# are linked to the assets etc. and as such they are logically categorized by the linked folder.
+#
+# @param serverName name of the server to route the request to
+# @param glossaryGUID unique identifier of the metadata element to remove
+# @param requestBody properties to help with the mapping of the elements in the external asset manager and open metadata
+#
+# @return  void or
+# InvalidParameterException  one of the parameters is invalid
+# UserNotAuthorizedException the user is not authorized to issue this request
+# PropertyServerException    a problem reported in the open metadata server(s)
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/glossary-manager/glossaries/{{glossaryGUID}}/is-taxonomy
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "NewClassificationRequestBody",
+   "properties" : {
+       "class" : "TaxonomyProperties",
+       "organizingPrinciple" : "Add value here"
+   },
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+###
+# @name clearGlossaryAsTaxonomy
+# Remove the taxonomy designation from the glossary.
+#
+# @param serverName name of the server to route the request to
+# @param glossaryGUID unique identifier of the metadata element to remove
+# @param requestBody correlation properties for the external asset manager
+#
+# @return  void or
+# InvalidParameterException  one of the parameters is invalid
+# UserNotAuthorizedException the user is not authorized to issue this request
+# PropertyServerException    a problem reported in the open metadata server(s)
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/glossary-manager/glossaries/{glossaryGUID}/is-taxonomy/remove
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "DeleteClassificationRequestBody",
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+# @name setGlossaryAsCanonical
+# Classify a glossary to declare that it has no two GlossaryTerm definitions with
+# the same name.  This means there is only one definition for each term.  Typically, the terms are also of a similar
+# level of granularity and are limited to a specific scope of use.
+# Canonical vocabularies are used to semantically classify assets in an unambiguous way.
+#
+# @param serverName name of the server to route the request to
+# @param glossaryGUID unique identifier of the metadata element to remove
+# @param requestBody description of the situations where this glossary is relevant.
+#
+# @return  void or
+# InvalidParameterException  one of the parameters is invalid
+# UserNotAuthorizedException the user is not authorized to issue this request
+# PropertyServerException    a problem reported in the open metadata server(s)
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/glossary-manager/glossaries/{glossaryGUID}/is-canonical-vocabulary
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+ {
+   "class" : "NewClassificationRequestBody",
+   "properties" : {
+       "class" : "CanonicalProperties",
+       "scope" : "Add value here"
+   },
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+# @name clearGlossaryAsCanonical
+# Remove the canonical vocabulary designation from the glossary.
+#
+# @param serverName name of the server to route the request to
+# @param glossaryGUID unique identifier of the metadata element to remove
+# @param requestBody correlation properties for the external asset manager
+#
+# @return  void or
+# InvalidParameterException  one of the parameters is invalid
+# UserNotAuthorizedException the user is not authorized to issue this request
+# PropertyServerException    a problem reported in the open metadata server(s)
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/glossary-manager/glossaries/{glossaryGUID}/is-canonical-vocabulary/remove
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "DeleteClassificationRequestBody",
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+###
+# @name setGlossaryAsNamingStandardsVocabulary
+# Classify a glossary to declare that it describes the terms used in naming standards.
+# The terms in this type of glossary are the name parts that are combined to form names
+# that follow the organization's naming standards.
+#
+# @param serverName name of the server to route the request to
+# @param glossaryGUID unique identifier of the metadata element to classify
+# @param requestBody properties for the classification
+#
+# @return  void or
+# InvalidParameterException  one of the parameters is invalid
+# UserNotAuthorizedException the user is not authorized to issue this request
+# PropertyServerException    a problem reported in the open metadata server(s)
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/glossary-manager/glossaries/{glossaryGUID}/is-naming-standards-vocabulary
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "NewClassificationRequestBody",
+   "properties" : {
+       "class" : "NamingStandardsVocabularyProperties"
+   },
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+# @name clearGlossaryAsNamingStandardsVocabulary
+# Remove the naming standards vocabulary designation from the glossary.
+#
+# @param serverName name of the server to route the request to
+# @param glossaryGUID unique identifier of the metadata element to update
+# @param requestBody correlation properties for the external asset manager
+#
+# @return  void or
+# InvalidParameterException  one of the parameters is invalid
+# UserNotAuthorizedException the user is not authorized to issue this request
+# PropertyServerException    a problem reported in the open metadata server(s)
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/glossary-manager/glossaries/{glossaryGUID}/is-naming-standards-vocabulary/remove
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "DeleteClassificationRequestBody",
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+###
+#===============================================================================
+# A glossary typically contains many glossary terms, linked with relationships.
+# https://egeria-project.org/concepts/glossary-term
+
+###
+# @name getGlossaryTermStatuses
+# Return the list of glossary term status enum values.
+# These are of type ContentStatus and are added to the *contentStatus* attribute of GlossaryTerm.
+#
+# @param serverName name of the server to route the request to
+# @return list of enum values
+#
+GET {{baseURL}}/servers/{{viewServer}}/api/open-metadata/glossary-manager/glossaries/terms/status-list
+Authorization: Bearer {{token}}
+
+
+###
+# @name getGlossaryTermRelationshipStatuses
+# Return the list of glossary term relationship status enum values.
+#
+# @param serverName name of the server to route the request to
+# @return list of enum values
+#
+GET {{baseURL}}/servers/{{viewServer}}/api/open-metadata/glossary-manager/glossaries/terms/relationships/status-list
+Authorization: Bearer {{token}}
+
+
+###
+# @name getGlossaryTermActivityTypes
+# Return the list of glossary term activity types enum values.
+#
+# @param serverName name of the server to route the request to
+# @return list of enum values
+#
+GET {{baseURL}}/servers/{{viewServer}}/api/open-metadata/glossary-manager/glossaries/terms/activity-types
+Authorization: Bearer {{token}}
+
+###
+
+@glossaryTermGUID=add value here
+
+###
+# Create a new metadata element to represent a glossary term.
+#
+# @param serverName name of the server to route the request to
+# @param requestBody properties that override the template
+#
+# @return unique identifier of the new metadata element for the glossary term or
+# InvalidParameterException  one of the parameters is invalid
+# UserNotAuthorizedException the user is not authorized to issue this request
+# PropertyServerException    a problem reported in the open metadata server(s)
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/glossary-manager/glossaries/terms
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewElementRequestBody",
+  "anchorGUID" : "anchor GUID, if set then isOwnAnchor=false",
+  "isOwnAnchor" : false,
+  "anchorScopeGUIDs" : ["optional GUID of search scope"],
+  "parentGUID" : "parent GUID, if set, set all parameters beginning 'parent'",
+  "parentRelationshipTypeName" : "open metadata type name",
+  "parentAtEnd1": true,
+  "properties": {
+    "class" : "GlossaryTermProperties",
+    "qualifiedName": "Must provide a unique name here",
+    "identifier" : "Add value here",
+    "legal" : "Add copyright or license statement here",
+    "displayName" : "Add display name here",
+    "versionIdentifier" : "Add value here",
+    "description" : "Add description of the collection here",
+    "category": "Add appropriate valid value for type",
+    "url" : "Add value here",
+    "authors" : ["author1", "author2"],
+    "contentStatus" : "DRAFT",
+    "userDefinedStatus" : "Add value here",
+    "aliases" : ["alias1", "alias2"],
+    "summary" : "Add value here",
+    "examples" : "Add value here",
+    "abbreviation" : "Add value here",
+    "usage" : "Add value here",
+    "additionalProperties" : {
+       "property1" : "Add value here",
+       "property2" : "Add value here"
+    }
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+
+@templateGUID=add value here
+
+###
+# @name createGlossaryTermFromTemplate
+# Create a new metadata element to represent a glossary term using an existing metadata element as a template.
+#
+# @param serverName name of the server to route the request to
+# @param templateGUID unique identifier of the metadata element to copy
+# @param requestBody properties that override the template
+#
+# @return unique identifier of the new metadata element for the glossary term or
+# InvalidParameterException  one of the parameters is invalid
+# UserNotAuthorizedException the user is not authorized to issue this request
+# PropertyServerException    a problem reported in the open metadata server(s)
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/glossary-manager/glossaries/terms/from-template/{{templateGUID}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class": "TemplateRequestBody",
+  "anchorGUID": "anchor GUID, if set then isOwnAnchor=false",
+  "isOwnAnchor": false,
+  "anchorScopeGUIDs" : ["optional GUID of search scope"],
+  "parentGUID": "parent GUID, if set, set all parameters beginning 'parent'",
+  "parentRelationshipTypeName": "open metadata type name",
+  "parentAtEnd1": true,
+  "templateGUID": "template GUID",
+  "replacementProperties": {
+    "class": "EntityElementProperties",
+    "propertyValueMap" : {
+      "propertyName" : {
+        "class": "PrimitiveTypePropertyValue",
+        "typeName": "string",
+        "primitiveTypeCategory" : "OM_PRIMITIVE_TYPE_STRING",
+        "primitiveValue" : "value of property"
+      }
+    }
+  },
+  "placeholderPropertyValues" : {
+    "placeholderProperty1Name" : "property1Value",
+    "placeholderProperty2Name" : "property2Value"
+  }
+}
+
+
+###
+# @name updateGlossaryTerm
+# Update the metadata element representing a glossary term.
+#
+# @param serverName name of the server to route the request to
+# @param glossaryTermGUID unique identifier of the glossary term to update
+# @param requestBody new properties for the glossary term
+#
+# @return  boolean or
+# InvalidParameterException  one of the parameters is invalid
+# UserNotAuthorizedException the user is not authorized to issue this request
+# PropertyServerException    a problem reported in the open metadata server(s)
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/glossary-manager/glossaries/terms/{{glossaryTermGUID}}/update
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "UpdateElementRequestBody",
+  "mergeUpdate": true,
+  "properties": {
+    "class" : "GlossaryTermProperties",
+    "qualifiedName": "Must provide a unique name here",
+    "identifier" : "Add value here",
+    "displayName" : "Add display name here",
+    "versionIdentifier" : "Add value here",
+    "description" : "Add description of the collection here",
+    "category": "Add appropriate valid value for type",
+    "url" : "Add value here",
+    "authors" : ["author1", "author2"],
+    "contentStatus" : "DRAFT",
+    "userDefinedStatus" : "Add value here",
+    "aliases" : ["alias1", "alias2"],
+    "summary" : "Add value here",
+    "examples" : "Add value here",
+    "abbreviation" : "Add value here",
+    "usage" : "Add value here",
+    "additionalProperties" : {
+       "property1" : "Add value here",
+       "property2" : "Add value here"
+    }
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name updateGlossaryTermFromTemplate
+# Update the glossary term using the properties and classifications from the parentGUID stored in the request body.
+#
+# @param serverName name of the server to route the request to
+# @param glossaryTermGUID unique identifier of the glossary term to update
+# @param templateGUID template to use
+# @param requestBody status and correlation properties
+#
+# @return  void or
+# InvalidParameterException  one of the parameters is invalid
+# UserNotAuthorizedException the user is not authorized to issue this request
+# PropertyServerException    a problem reported in the open metadata server(s)
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/glossary-manager/glossaries/terms/{{glossaryTermGUID}}/update/from-template/{{templateGUID}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "UpdateWithTemplateRequestBody",
+  "mergeUpdate": true,
+  "mergeClassifications": true,
+  "properties": {
+    "class" : "GlossaryTermProperties",
+    "qualifiedName": "Must provide a unique name here",
+    "identifier" : "Add value here",
+    "displayName" : "Add display name here",
+    "versionIdentifier" : "Add value here",
+    "description" : "Add description of the collection here",
+    "category": "Add appropriate valid value for type",
+    "url" : "Add value here",
+    "authors" : ["author1", "author2"],
+    "contentStatus" : "DRAFT",
+    "userDefinedStatus" : "Add value here",
+    "aliases" : ["alias1", "alias2"],
+    "summary" : "Add value here",
+    "examples" : "Add value here",
+    "abbreviation" : "Add value here",
+    "usage" : "Add value here",
+    "additionalProperties" : {
+       "property1" : "Add value here",
+       "property2" : "Add value here"
+    }
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+
+###
+# @name moveGlossaryTerm
+# Move the glossary term from one glossary to another.
+#
+# @param serverName name of the server to route the request to
+# @param glossaryTermGUID unique identifier of the glossary term to update
+# @param glossaryGUID unique identifier of the destination glossary
+# @param requestBody status and correlation properties
+#
+# @return  void or
+# InvalidParameterException  one of the parameters is invalid
+# UserNotAuthorizedException the user is not authorized to issue this request
+# PropertyServerException    a problem reported in the open metadata server(s)
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/glossary-manager/glossaries/terms/{{glossaryTermGUID}}/move-to/{{glossaryGUID}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteRelationshipRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name getTermRelationshipTypeNames
+# Return the list of term-to-term relationship names.
+#
+# @param serverName name of the server instance to connect to
+# @return list of type names that are subtypes of asset or
+# throws InvalidParameterException full path or userId is null or
+# throws PropertyServerException problem accessing property server or
+# throws UserNotAuthorizedException security access problem.
+#
+GET {{baseURL}}/servers/{{viewServer}}/api/open-metadata/glossary-manager/glossaries/terms/relationships/type-names
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+###
+
+@glossaryTermOneGUID=add value here
+@glossaryTermTwoGUID=add value here
+@relationshipTypeName=add value here
+
+
+###
+# @name setupTermRelationship
+# Link two terms together using a specialist relationship.
+#
+# @param serverName name of the server to route the request to
+# @param relationshipTypeName name of the type of relationship to create
+# @param glossaryTermOneGUID unique identifier of the glossary term at end 1
+# @param glossaryTermTwoGUID unique identifier of the glossary term at end 2
+# @param requestBody properties for the relationship - use properties object for the relaitonship type
+#
+# @return  void or
+# InvalidParameterException  one of the parameters is invalid
+# UserNotAuthorizedException the user is not authorized to issue this request
+# PropertyServerException    a problem reported in the open metadata server(s)
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/glossary-manager/glossaries/terms/{{glossaryTermOneGUID}}/relationships/{{relationshipTypeName}}/terms/{{glossaryTermTwoGUID}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewRelationshipRequestBody",
+  "properties": {
+    "class": "GlossaryTermRelationshipProperties",
+    "expression": "add value here",
+    "confidence": 100,
+    "description": "add value here",
+    "status": "ACTIVE",
+    "steward": "add value here",
+    "source": "add value here",
+    "effectiveFrom": "{{$isoTimestamp}}",
+    "effectiveTo": "{{$isoTimestamp}}"
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+
+###
+# @name updateTermRelationship
+# Update the relationship properties for the two terms.
+#
+# @param serverName name of the server to route the request to
+# @param relationshipTypeName name of the type of relationship to create
+# @param glossaryTermOneGUID unique identifier of the glossary term at end 1
+# @param glossaryTermTwoGUID unique identifier of the glossary term at end 2
+# @param requestBody properties for the relationship
+#
+# @return  void or
+# InvalidParameterException  one of the parameters is invalid
+# UserNotAuthorizedException the user is not authorized to issue this request
+# PropertyServerException    a problem reported in the open metadata server(s)
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/glossary-manager/glossaries/terms/{{glossaryTermOneGUID}}/relationships/{{relationshipTypeName}}/terms/{{glossaryTermTwoGUID}}/update
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "UpdateRelationshipRequestBody",
+  "mergeUpdate": true,
+  "properties": {
+    "class": "GlossaryTermRelationshipProperties",
+    "expression": "add value here",
+    "confidence": 100,
+    "description": "add value here",
+    "status": "ACTIVE",
+    "steward": "add value here",
+    "source": "add value here",
+    "effectiveFrom": "{{$isoTimestamp}}",
+    "effectiveTo": "{{$isoTimestamp}}"
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name clearTermRelationship
+# Remove the relationship between two terms.
+#
+# @param serverName name of the server to route the request to
+# @param relationshipTypeName name of the type of relationship to create
+# @param glossaryTermOneGUID unique identifier of the glossary term at end 1
+# @param glossaryTermTwoGUID unique identifier of the glossary term at end 2
+# @param requestBody properties of the relationship
+#
+# @return  void or
+# InvalidParameterException  one of the parameters is invalid
+# UserNotAuthorizedException the user is not authorized to issue this request
+# PropertyServerException    a problem reported in the open metadata server(s)
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/glossary-manager/glossaries/terms/{{glossaryTermOneGUID}}/relationships/{{relationshipTypeName}}/terms/{{glossaryTermTwoGUID}}/remove
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteRelationshipRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name setTermAsAbstractConcept
+# Classify the glossary term to indicate that it describes an abstract concept.
+#
+# @param serverName name of the server to route the request to
+# @param glossaryTermGUID unique identifier of the metadata element to update
+# @param requestBody properties to help with the mapping of the elements in the external asset manager and open metadata
+#
+# @return  void or
+# InvalidParameterException  one of the parameters is invalid
+# UserNotAuthorizedException the user is not authorized to issue this request
+# PropertyServerException    a problem reported in the open metadata server(s)
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/glossary-manager/glossaries/terms/{{glossaryTermGUID}}/is-abstract-concept
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "NewClassificationRequestBody",
+   "properties" : {
+       "class" : "AbstractConceptProperties"
+   },
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+# @name clearTermAsAbstractConcept
+# Remove the abstract concept designation from the glossary term.
+#
+# @param serverName name of the server to route the request to
+# @param glossaryTermGUID unique identifier of the metadata element to update
+# @param requestBody properties to help with the mapping of the elements in the external asset manager and open metadata
+#
+# @return  void or
+# InvalidParameterException  one of the parameters is invalid
+# UserNotAuthorizedException the user is not authorized to issue this request
+# PropertyServerException    a problem reported in the open metadata server(s)
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/glossary-manager/glossaries/terms/{{glossaryTermGUID}}/is-abstract-concept/delete
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteElementRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+
+###
+# @name setTermAsPrimeWord
+# Classify the glossary term to indicate that it describes a prime word.
+#
+# @param serverName name of the server to route the request to
+# @param glossaryTermGUID unique identifier of the metadata element to update
+# @param requestBody properties to help with the mapping of the elements in the external asset manager and open metadata
+#
+# @return  void or
+# InvalidParameterException  one of the parameters is invalid
+# UserNotAuthorizedException the user is not authorized to issue this request
+# PropertyServerException    a problem reported in the open metadata server(s)
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/glossary-manager/glossaries/terms/{{glossaryTermGUID}}/is-prime-word
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "NewClassificationRequestBody",
+   "properties" : {
+       "class" : "PrimeWordProperties"
+   },
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+# @name clearTermAsPrimeWord
+# Remove the prime word designation from the glossary term.
+#
+# @param serverName name of the server to route the request to
+# @param glossaryTermGUID unique identifier of the metadata element to update
+# @param requestBody properties to help with the mapping of the elements in the external asset manager and open metadata
+#
+# @return  void or
+# InvalidParameterException  one of the parameters is invalid
+# UserNotAuthorizedException the user is not authorized to issue this request
+# PropertyServerException    a problem reported in the open metadata server(s)
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/glossary-manager/glossaries/terms/{{glossaryTermGUID}}/is-prime-word/delete
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteClassificationRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+
+###
+# @name setTermAsModifier
+# Classify the glossary term to indicate that it describes a modifier.
+#
+# @param serverName name of the server to route the request to
+# @param glossaryTermGUID unique identifier of the metadata element to update
+# @param requestBody properties to help with the mapping of the elements in the external asset manager and open metadata
+#
+# @return  void or
+# InvalidParameterException  one of the parameters is invalid
+# UserNotAuthorizedException the user is not authorized to issue this request
+# PropertyServerException    a problem reported in the open metadata server(s)
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/glossary-manager/glossaries/terms/{{glossaryTermGUID}}/is-modifier
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "NewClassificationRequestBody",
+   "properties" : {
+       "class" : "ModifierProperties"
+   },
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+# @name clearTermAsModifier
+# Remove the modifier designation from the glossary term.
+#
+# @param serverName name of the server to route the request to
+# @param glossaryTermGUID unique identifier of the metadata element to update
+# @param requestBody properties to help with the mapping of the elements in the external asset manager and open metadata
+#
+# @return  void or
+# InvalidParameterException  one of the parameters is invalid
+# UserNotAuthorizedException the user is not authorized to issue this request
+# PropertyServerException    a problem reported in the open metadata server(s)
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/glossary-manager/glossaries/terms/{{glossaryTermGUID}}/is-modifier/delete
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteClassificationRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+
+###
+# @name setTermAsClassWord
+# Classify the glossary term to indicate that it describes a class word.
+#
+# @param serverName name of the server to route the request to
+# @param glossaryTermGUID unique identifier of the metadata element to update
+# @param requestBody properties to help with the mapping of the elements in the external asset manager and open metadata
+#
+# @return  void or
+# InvalidParameterException  one of the parameters is invalid
+# UserNotAuthorizedException the user is not authorized to issue this request
+# PropertyServerException    a problem reported in the open metadata server(s)
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/glossary-manager/glossaries/terms/{{glossaryTermGUID}}/is-class-word
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "NewClassificationRequestBody",
+   "properties" : {
+       "class" : "ClassWordProperties"
+   },
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+###
+# @name clearTermAsClassWord
+# Remove the class word designation from the glossary term.
+#
+# @param serverName name of the server to route the request to
+# @param glossaryTermGUID unique identifier of the metadata element to update
+# @param requestBody properties to help with the mapping of the elements in the external asset manager and open metadata
+#
+# @return  void or
+# InvalidParameterException  one of the parameters is invalid
+# UserNotAuthorizedException the user is not authorized to issue this request
+# PropertyServerException    a problem reported in the open metadata server(s)
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/glossary-manager/glossaries/terms/{{glossaryTermGUID}}/is-class-word/delete
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteClassificationRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+
+###
+# @name setTermAsDataValue
+# Classify the glossary term to indicate that it describes a data value.
+#
+# @param serverName name of the server to route the request to
+# @param glossaryTermGUID unique identifier of the metadata element to update
+# @param requestBody properties to help with the mapping of the elements in the external asset manager and open metadata
+#
+# @return  void or
+# InvalidParameterException  one of the parameters is invalid
+# UserNotAuthorizedException the user is not authorized to issue this request
+# PropertyServerException    a problem reported in the open metadata server(s)
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/glossary-manager/glossaries/terms/{{glossaryTermGUID}}/is-data-value
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "NewClassificationRequestBody",
+   "properties" : {
+       "class" : "DataValueProperties"
+   },
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+###
+# @name clearTermAsDataValue
+# Remove the data value designation from the glossary term.
+#
+# @param serverName name of the server to route the request to
+# @param glossaryTermGUID unique identifier of the metadata element to update
+# @param requestBody properties to help with the mapping of the elements in the external asset manager and open metadata
+#
+# @return  void or
+# InvalidParameterException  one of the parameters is invalid
+# UserNotAuthorizedException the user is not authorized to issue this request
+# PropertyServerException    a problem reported in the open metadata server(s)
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/glossary-manager/glossaries/terms/{{glossaryTermGUID}}/is-data-value/remove
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "DeleteClassificationRequestBody",
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+
+
+###
+# @name setTermAsQuestion
+# Classify the glossary term to indicate that it describes a question.
+#
+# @param serverName name of the server to route the request to
+# @param glossaryTermGUID unique identifier of the metadata element to update
+# @param requestBody properties to help with the mapping of the elements in the external asset manager and open metadata
+#
+# @return  void or
+# InvalidParameterException  one of the parameters is invalid
+# UserNotAuthorizedException the user is not authorized to issue this request
+# PropertyServerException    a problem reported in the open metadata server(s)
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/glossary-manager/glossaries/terms/{{glossaryTermGUID}}/is-question
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "NewClassificationRequestBody",
+   "properties" : {
+       "class" : "QuestionProperties"
+   },
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+###
+# @name clearTermAsQuestion
+# Remove the question designation from the glossary term.
+#
+# @param serverName name of the server to route the request to
+# @param glossaryTermGUID unique identifier of the metadata element to update
+# @param requestBody properties to help with the mapping of the elements in the external asset manager and open metadata
+#
+# @return  void or
+# InvalidParameterException  one of the parameters is invalid
+# UserNotAuthorizedException the user is not authorized to issue this request
+# PropertyServerException    a problem reported in the open metadata server(s)
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/glossary-manager/glossaries/terms/{{glossaryTermGUID}}/is-question/remove
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "DeleteClassificationRequestBody",
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+###
+# @name setTermAsActivity
+# Classify the glossary term to indicate that it describes a data value.
+#
+# @param serverName name of the server to route the request to
+# @param glossaryTermGUID unique identifier of the metadata element to update
+# @param requestBody type of activity and correlators
+#
+# @return  void or
+# InvalidParameterException  one of the parameters is invalid
+# UserNotAuthorizedException the user is not authorized to issue this request
+# PropertyServerException    a problem reported in the open metadata server(s)
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/glossary-manager/glossaries/terms/{{glossaryTermGUID}}/is-activity
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "NewClassificationRequestBody",
+   "properties" : {
+       "class" : "ActivityDescriptionProperties",
+       "activityType" : "ACTION"
+   },
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+###
+# @name clearTermAsActivity
+# Remove the activity designation from the glossary term.
+#
+# @param serverName name of the server to route the request to
+# @param glossaryTermGUID unique identifier of the metadata element to update
+# @param requestBody properties to help with the mapping of the elements in the external asset manager and open metadata
+#
+# @return  void or
+# InvalidParameterException  one of the parameters is invalid
+# UserNotAuthorizedException the user is not authorized to issue this request
+# PropertyServerException    a problem reported in the open metadata server(s)
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/glossary-manager/glossaries/terms/{{glossaryTermGUID}}/is-activity/remove
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteRelationshipRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+
+###
+# @name setTermAsContext
+# Classify the glossary term to indicate that it describes a context.
+#
+# @param serverName name of the server to route the request to
+# @param glossaryTermGUID unique identifier of the metadata element to update
+# @param requestBody more details of the context
+#
+# @return  void or
+# InvalidParameterException  one of the parameters is invalid
+# UserNotAuthorizedException the user is not authorized to issue this request
+# PropertyServerException    a problem reported in the open metadata server(s)
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/glossary-manager/glossaries/terms/{{glossaryTermGUID}}/is-context-definition
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+   "class" : "NewClassificationRequestBody",
+   "properties" : {
+       "class" : "ContextDefinitionProperties",
+       "description" : "Add value here",
+       "scope" : "Add value here"
+   },
+   "externalSourceGUID": "Add guid here",
+   "externalSourceName": "Add qualified name here",
+   "forLineage": false,
+   "forDuplicateProcessing": false,
+   "effectiveTime" : "{{$isoTimestamp}}"
+}
+
+###
+# @name clearTermAsContext
+# Remove the context definition designation from the glossary term.
+#
+# @param serverName name of the server to route the request to
+# @param glossaryTermGUID unique identifier of the metadata element to update
+# @param requestBody properties to help with the mapping of the elements in the external asset manager and open metadata
+#
+# @return  void or
+# InvalidParameterException  one of the parameters is invalid
+# UserNotAuthorizedException the user is not authorized to issue this request
+# PropertyServerException    a problem reported in the open metadata server(s)
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/glossary-manager/glossaries/terms/{{glossaryTermGUID}}/is-context-definition/delete
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteRelationshipRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+
+###
+# @name deleteGlossaryTerm
+# Remove the metadata element representing a glossary term.
+#
+# @param serverName name of the server to route the request to
+# @param glossaryTermGUID unique identifier of the metadata element to remove
+# @param requestBody properties to help with the mapping of the elements in the external asset manager and open metadata
+#
+# @return  void or
+# InvalidParameterException  one of the parameters is invalid
+# UserNotAuthorizedException the user is not authorized to issue this request
+# PropertyServerException    a problem reported in the open metadata server(s)
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/glossary-manager/glossaries/terms/{{glossaryTermGUID}}/delete
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteElementRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name findGlossaryTerms
+# Retrieve the list of glossary term metadata elements that contain the search string.
+# The search string is treated as a regular expression.
+#
+# @param serverName name of the server to route the request to
+# @param requestBody query
+#
+# @return list of matching metadata elements or
+# InvalidParameterException  one of the parameters is invalid
+# UserNotAuthorizedException the user is not authorized to issue this request
+# PropertyServerException    a problem reported in the open metadata server(s)
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/glossary-manager/glossaries/terms/by-search-string
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "SearchStringRequestBody",
+  "searchString" : "Add search string here",
+  "startsWith" : false,
+  "endsWith" : false,
+  "ignoreCase" : true,
+  "startFrom" : 0,
+  "pageSize": 0,
+  "asOfTime" : "{{$isoTimestamp}}",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false,
+  "limitResultsByStatus" : ["ACTIVE"],
+  "sequencingOrder" : "PROPERTY_ASCENDING",
+  "sequencingProperty" : "qualifiedName"
+}
+
+###
+# @name getGlossaryTermsByName
+# Retrieve the list of glossary term metadata elements with a matching qualified or display name.
+# There are no wildcards supported on this request.
+#
+# @param serverName name of the server to route the request to
+# @param requestBody asset manager identifiers and name
+#
+# @return list of matching metadata elements or
+# InvalidParameterException  one of the parameters is invalid
+# UserNotAuthorizedException the user is not authorized to issue this request
+# PropertyServerException    a problem reported in the open metadata server(s)
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/glossary-manager/glossaries/terms/by-name
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "FilterRequestBody",
+  "filter" : "Add name here",
+  "startFrom" : 0,
+  "pageSize": 0,
+  "asOfTime" : "{{$isoTimestamp}}",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false,
+  "limitResultsByStatus" : ["ACTIVE"],
+  "sequencingOrder" : "PROPERTY_ASCENDING",
+  "sequencingProperty" : "qualifiedName"
+}
+
+###
+# @name getGlossaryTermByGUID
+# Retrieve the glossary term metadata element with the supplied unique identifier.
+#
+# @param serverName name of the server to route the request to
+# @param glossaryTermGUID unique identifier of the requested metadata element
+# @param requestBody asset manager identifiers
+#
+# @return matching metadata element or
+# InvalidParameterException  one of the parameters is invalid
+# UserNotAuthorizedException the user is not authorized to issue this request
+# PropertyServerException    a problem reported in the open metadata server(s)
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/glossary-manager/glossaries/terms/{{glossaryTermGUID}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "GetRequestBody",
+  "asOfTime" : "{{$isoTimestamp}}",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# =====================================================================================================================
+# Glossary term context relationships
+# https://egeria-project.org/concepts/glossary-term
+
+@contextElementGUID=add guid here
+
+###
+# @name linkUsedInContext
+# Attach a glossary term to an element that it is relevant to the context of.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/glossary-manager/glossary-terms/{{glossaryTermGUID}}/used-in-contexts/{{contextElementGUID}}/attach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewRelationshipRequestBody",
+  "properties": {
+    "class": "UsedInContextProperties",
+    "description": "add description here",
+    "expression": "add expression here",
+    "confidence": 100,
+    "steward": "add steward here",
+    "source": "add source here",
+    "termRelationshipStatus": "ACTIVE",
+    "effectiveFrom": "{{$isoTimestamp}}",
+    "effectiveTo": "{{$isoTimestamp}}"
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name detachUsedInContext
+# Detach a glossary term from an element that it was relevant to the context of.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/glossary-manager/glossary-terms/{{glossaryTermGUID}}/used-in-contexts/{{contextElementGUID}}/detach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteRelationshipRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# =====================================================================================================================
+# Glossary term supplement classification
+# https://egeria-project.org/concepts/glossary-term
+
+
+###
+# @name setTermAsElementSupplement
+# Classify a glossary term to say that it supplements the description of another element.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/glossary-manager/glossary-terms/{{glossaryTermGUID}}/element-supplement
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewClassificationRequestBody",
+  "properties": {
+    "class": "ElementSupplementProperties",
+    "effectiveFrom": "{{$isoTimestamp}}",
+    "effectiveTo": "{{$isoTimestamp}}"
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name clearTermAsElementSupplement
+# Remove the element supplement designation from a glossary term.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/glossary-manager/glossary-terms/{{glossaryTermGUID}}/element-supplement/remove
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteClassificationRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+

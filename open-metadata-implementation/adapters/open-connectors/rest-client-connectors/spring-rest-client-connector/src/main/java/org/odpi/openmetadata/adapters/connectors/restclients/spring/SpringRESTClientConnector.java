@@ -1,0 +1,1503 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Copyright Contributors to the ODPi Egeria project. */
+package org.odpi.openmetadata.adapters.connectors.restclients.spring;
+
+import org.odpi.openmetadata.adapters.connectors.restclients.RESTClientConnector;
+import org.odpi.openmetadata.adapters.connectors.restclients.ffdc.RESTClientConnectorErrorCode;
+import org.odpi.openmetadata.adapters.connectors.restclients.ffdc.exceptions.RESTServerException;
+import org.odpi.openmetadata.frameworks.auditlog.MessageFormatter;
+import org.odpi.openmetadata.frameworks.auditlog.messagesets.ExceptionMessageDefinition;
+import org.odpi.openmetadata.frameworks.auditlog.requestid.RequestId;
+import org.odpi.openmetadata.frameworks.auditlog.requestid.RequestIdService;
+import org.odpi.openmetadata.frameworks.connectors.SecretsStoreConnector;
+import org.odpi.openmetadata.frameworks.connectors.controls.SecretsStoreCollectionProperty;
+import org.odpi.openmetadata.frameworks.connectors.controls.SecretsStorePurpose;
+import org.odpi.openmetadata.frameworks.connectors.ffdc.ConnectorCheckedException;
+import org.odpi.openmetadata.frameworks.connectors.properties.beans.Endpoint;
+import org.odpi.openmetadata.frameworks.connectors.properties.users.UserAccount;
+import org.odpi.openmetadata.frameworks.openmetadata.ffdc.UserNotAuthorizedException;
+import org.odpi.openmetadata.tokenmanager.http.HTTPHeadersThreadLocal;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageConverter;
+import org.springframework.http.converter.StringHttpMessageConverter;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.web.util.DefaultUriBuilderFactory;
+
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
+import java.security.KeyManagementException;
+import java.security.NoSuchAlgorithmException;
+import java.util.Arrays;
+import java.util.Date;
+import java.lang.reflect.Array;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.Map;
+
+
+/**
+ * SpringRESTClientConnector is responsible for issuing calls to the server's REST APIs using Spring.
+ * It is supported through a connector because there are often changes in this integration, and it saves
+ * maintenance work if all Egeria clients use this connector.
+ */
+public class SpringRESTClientConnector extends RESTClientConnector
+{
+    private final RestTemplate restTemplate;
+
+    private String      serverName                 = null;
+    private String      serverPlatformURLRoot      = null;
+    private HttpHeaders authorizationHeader        = null;
+    private Date        authorizationHeaderTimeout = null;
+    private long        refreshTimeInterval         = 0L;
+    private final MessageFormatter messageFormatter = new MessageFormatter();
+
+    private static final Logger log = LoggerFactory.getLogger(SpringRESTClientConnector.class);
+
+    private static final RequestId requestId = new RequestId();
+
+    /**
+     * This constructor is work in progress as part of the upgrade of Egeria to use security.
+     *
+     * @throws NoSuchAlgorithmException new exception added as part of the security work - no description provided yet
+     * @throws KeyManagementException new exception added as part of the security work - no description provided yet
+     */
+    public SpringRESTClientConnector() throws NoSuchAlgorithmException, KeyManagementException
+    {
+        super();
+
+        /*
+         * Rather than creating a RestTemplate directly, the RestTemplateBuilder is used so that the
+         * uriTemplateHandler can be specified. The URI encoding is set to VALUES_ONLY so that the
+         * '+' character, which is used in queryParameters conveying searchCriteria, which can be a
+         * regex, is encoded as '+' and not converted to a space character.
+         * Prior to this change a regex containing a '+' character would be split into two space
+         * separated words. For example, the regex "name_0+7" (which would match name_07, name_007,
+         * name_0007, ...) would be sent to the server as "name_0 7".
+         */
+        DefaultUriBuilderFactory builderFactory = new DefaultUriBuilderFactory();
+        builderFactory.setEncodingMode(DefaultUriBuilderFactory.EncodingMode.VALUES_ONLY);
+
+        restTemplate = new RestTemplate();
+
+        restTemplate.setUriTemplateHandler(builderFactory);
+
+        /* Ensure that the REST template always uses UTF-8 */
+        List<HttpMessageConverter<?>> converters = restTemplate.getMessageConverters();
+        converters.removeIf(httpMessageConverter -> httpMessageConverter instanceof StringHttpMessageConverter);
+        converters.add(0, new StringHttpMessageConverter(StandardCharsets.UTF_8));
+    }
+
+
+    /**
+     * Indicates that the connector is completely configured and can begin processing.
+     *
+     * @throws ConnectorCheckedException the connector detected a problem.
+     * @throws UserNotAuthorizedException the connector was disconnected before/during start
+     */
+    @Override
+    public void start() throws ConnectorCheckedException, UserNotAuthorizedException
+    {
+        super.start();
+
+        Endpoint endpoint = connectionBean.getEndpoint();
+
+        if (endpoint != null)
+        {
+            this.serverPlatformURLRoot = endpoint.getNetworkAddress();
+            this.serverName = endpoint.getDisplayName();
+        }
+        else
+        {
+            log.error("No endpoint for connector.");
+
+            this.serverPlatformURLRoot = null;
+            this.serverName = null;
+        }
+
+        refreshAuthorizationToken();
+    }
+
+
+    /**
+     * Retrieve new values for the authorization header.
+     *
+     * @throws ConnectorCheckedException the connector detected a problem.
+     */
+    private void refreshAuthorizationToken() throws ConnectorCheckedException
+    {
+        String userId = connectionBean.getUserId();
+        String password = connectionBean.getClearPassword();
+
+        if ((secretsStoreConnectorMap != null) && (! secretsStoreConnectorMap.isEmpty()))
+        {
+            log.debug("Using secrets connector to call server {} on platform {} .", this.serverName, this.serverPlatformURLRoot);
+
+            for (String secretsStorePurpose : secretsStoreConnectorMap.keySet())
+            {
+                SecretsStoreConnector secretsStoreConnector = secretsStoreConnectorMap.get(secretsStorePurpose);
+
+                if (secretsStoreConnector != null)
+                {
+                    refreshTimeInterval = secretsStoreConnector.getRefreshTimeInterval();
+
+                    if (SecretsStorePurpose.REST_BEARER_TOKEN.getName().equals(secretsStorePurpose))
+                    {
+                        String token = secretsStoreConnector.getSecret(SecretsStoreCollectionProperty.TOKEN.getName());
+
+                        if (token != null)
+                        {
+                            authorizationHeader = this.createAuthorizationHeaders(token);
+                            break;
+                        }
+                    }
+                    else if (SecretsStorePurpose.REST_BASIC_AUTHENTICATION.getName().equals(secretsStorePurpose))
+                    {
+                        userId = secretsStoreConnector.getSecret(SecretsStoreCollectionProperty.USER_ID.getName());
+                        password = secretsStoreConnector.getSecret(SecretsStoreCollectionProperty.CLEAR_PASSWORD.getName());
+
+                        if ((userId != null) && (password != null))
+                        {
+                            authorizationHeader = this.createAuthorizationHeaders(userId, password);
+                            break;
+                        }
+                    }
+                    else if (SecretsStorePurpose.USER_DIRECTORY.getName().equals(secretsStorePurpose))
+                    {
+                        if (userId != null)
+                        {
+                            UserAccount userAccount = secretsStoreConnector.getUser(userId);
+
+                            if ((userAccount != null) && (userAccount.getSecrets() != null) && (userAccount.getSecrets().get(SecretsStoreCollectionProperty.CLEAR_PASSWORD.getName()) != null))
+                            {
+                                authorizationHeader = this.createAuthorizationHeaders(userId, userAccount.getSecrets().get(SecretsStoreCollectionProperty.CLEAR_PASSWORD.getName()));
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        else if ((userId != null) && (password != null))
+        {
+            log.debug("Using basic authentication to call server {} on platform {} .", this.serverName, this.serverPlatformURLRoot);
+
+            authorizationHeader = this.createAuthorizationHeaders(userId, password);
+        }
+        else
+        {
+            log.debug("Using no authentication to call server {} on platform {} .", this.serverName, this.serverPlatformURLRoot );
+        }
+
+        if (refreshTimeInterval != 0L)
+        {
+            long newRefreshTime = new Date().getTime() + (refreshTimeInterval * 60 * 1000);
+            authorizationHeaderTimeout = new Date(newRefreshTime);
+        }
+        else
+        {
+            authorizationHeaderTimeout = null;
+        }
+    }
+
+
+    /**
+     * Create the HTTP header for basic authorization.
+     *
+     * @param username userId of the caller
+     * @param password password of the caller
+     * @return HTTPHeaders object
+     */
+    private HttpHeaders createAuthorizationHeaders(String username, String password)
+    {
+        String authorizationString = username + ":" + password;
+        String authHeader = "Basic " + Base64.getEncoder().encodeToString(authorizationString.getBytes(StandardCharsets.US_ASCII));
+
+        HttpHeaders header = new HttpHeaders();
+
+        header.set( "Authorization", authHeader );
+
+        return header;
+    }
+
+
+    /**
+     * Create the HTTP header for token authorization.
+     *
+     * @param token bearer token
+     * @return HTTPHeaders object
+     */
+    private HttpHeaders createAuthorizationHeaders(String token)
+    {
+        String authHeader = "Bearer " + token;
+
+        HttpHeaders header = new HttpHeaders();
+
+        header.set( "Authorization", authHeader );
+
+        return header;
+    }
+
+
+    /**
+     * Return the request body in a form that keeps its type information when it is turned into JSON.
+     * <br>
+     * A collection whose entries are all the same class is handed over as an array of that class instead.
+     * Java erases a collection's element type, so Jackson serializes the contents of a plain {@code List}
+     * against a declared type of {@code Object} and writes no type discriminator for them.  Where the
+     * receiving endpoint declares the element type - {@code List<EngineConfig>}, {@code List<Connection>} and
+     * the like - it then refuses the request: "Could not resolve subtype of ...: missing type id property
+     * 'class'".  An array carries its component type, so the discriminator is written.  The same object sent
+     * on its own has always worked, because at the root Jackson uses its runtime type, which is why this
+     * showed up only on the calls that send a collection, and showed up as a 400 from the server rather than
+     * as anything visibly wrong here.
+     * <br>
+     * Substituting an array, rather than serializing the body here and passing the result on, is deliberate.
+     * The message converter that writes this request is configured by Spring - dates are written as ISO text
+     * rather than numbers, among other things - and an ObjectMapper built here would not match it.  Handing
+     * back an array leaves that converter doing the serialization exactly as it did before; the only thing
+     * that changes is that it now knows the component type.
+     * <br>
+     * Anything else is returned untouched, including a collection holding a mixture of classes, one holding a
+     * null, and an empty one: none of those has a single component type to declare.  A map is untouched too.
+     * The same erasure applies to a map's values, but no endpoint declares a map whose value type needs a
+     * discriminator, and there is no equivalent of an array to give one - if such an endpoint is ever added,
+     * this is where it would have to be handled.
+     *
+     * @param requestBody the caller's request body, may be null
+     * @return the object to send
+     */
+    private Object getSerializableRequestBody(Object requestBody)
+    {
+        if (requestBody instanceof Collection<?> collection)
+        {
+            Class<?> elementType = null;
+
+            for (Object element : collection)
+            {
+                if (element == null)
+                {
+                    return requestBody;
+                }
+
+                if (elementType == null)
+                {
+                    elementType = element.getClass();
+                }
+                else if (! elementType.equals(element.getClass()))
+                {
+                    return requestBody;
+                }
+            }
+
+            if (elementType != null)
+            {
+                return collection.toArray((Object[]) Array.newInstance(elementType, collection.size()));
+            }
+        }
+
+        return requestBody;
+    }
+
+
+    /**
+     * Creates the http headers for each request. It checks if there are headers saved in the thread local or
+     * any authorisation headers and adds them to the list.
+     *
+     * @return http headers
+     * @throws ConnectorCheckedException the connector detected a problem.
+     */
+    private HttpHeaders getHttpHeaders() throws ConnectorCheckedException
+    {
+        HttpHeaders headers = new HttpHeaders();
+
+        Map<String, String> threadLocalHeaders = HTTPHeadersThreadLocal.getHeadersThreadLocal().get();
+
+        if (threadLocalHeaders != null)
+        {
+            for (Map.Entry<String, String> entry : threadLocalHeaders.entrySet())
+            {
+                headers.set(entry.getKey(), entry.getValue());
+            }
+        }
+
+        if ((authorizationHeaderTimeout != null) && (new Date().after(authorizationHeaderTimeout)))
+        {
+            refreshAuthorizationToken();
+        }
+
+        if (authorizationHeader != null)
+        {
+            headers.addAll(authorizationHeader);
+        }
+
+        return headers;
+    }
+
+
+
+    /**
+     * Issue a GET REST call that returns a response object.
+     *
+     * @param <T> type of the return object
+     * @param methodName  name of the method being called.
+     * @param returnClass class of the response object.
+     * @param urlTemplate template of the URL for the REST API call with place-holders for the parameters.
+     *
+     * @return response object
+     * @throws RESTServerException something went wrong with the REST call stack.
+     */
+    @Override
+    public  <T> T callGetRESTCallNoParams(String    methodName,
+                                          Class<T>  returnClass,
+                                          String    urlTemplate) throws RESTServerException
+    {
+        try
+        {
+            log.debug("Calling {} with URL template {} and no parameters.",  methodName, urlTemplate);
+
+            T responseObject;
+
+            HttpHeaders headers = getHttpHeaders();
+
+            if (headers.isEmpty())
+            {
+                responseObject = restTemplate.getForObject(urlTemplate, returnClass);
+            }
+            else
+            {
+                HttpEntity<?> request = new HttpEntity<>(headers);
+
+                ResponseEntity<T> responseEntity = restTemplate.exchange(urlTemplate, HttpMethod.GET, request, returnClass);
+
+                responseObject = responseEntity.getBody();
+            }
+
+
+            if (responseObject != null)
+            {
+                log.debug("Returning from {} with response object {}", methodName, responseObject);
+            }
+            else
+            {
+                log.debug("Returning from {} with no response object.", methodName);
+            }
+
+            return responseObject;
+        }
+        catch (Exception error)
+        {
+            log.debug("Exception {} with message {} occurred during REST call for {}.",
+                      error.getClass().getName(),
+                      error.getMessage(),
+                      methodName);
+
+            RESTClientConnectorErrorCode errorCode = RESTClientConnectorErrorCode.CLIENT_SIDE_REST_API_ERROR;
+            ExceptionMessageDefinition   messageDefinition = errorCode.getMessageDefinition(error.getClass().getName(),
+                                                                                            methodName,
+                                                                                            urlTemplate,
+                                                                                            serverName,
+                                                                                            serverPlatformURLRoot,
+                                                                                            error.getMessage());
+            String errorMessage = messageFormatter.getFormattedMessage(messageDefinition);
+
+            throw new RESTServerException(messageDefinition.getHttpErrorCode(),
+                                          this.getClass().getName(),
+                                          methodName,
+                                          errorMessage,
+                                          messageDefinition.getSystemAction(),
+                                          messageDefinition.getUserAction(),
+                                          error);
+        }
+    }
+
+
+    /**
+     * Issue a GET REST call that returns a response object.
+     *
+     * @param <T> type of the return object
+     * @param methodName  name of the method being called.
+     * @param returnClass class of the response object.
+     * @param urlTemplate template of the URL for the REST API call with place-holders for the parameters.
+     * @param params      a list of parameters that are slotted into the url template.
+     *
+     * @return response object
+     * @throws RESTServerException something went wrong with the REST call stack.
+     */
+    @Override
+    public  <T> T callGetRESTCall(String    methodName,
+                                  Class<T>  returnClass,
+                                  String    urlTemplate,
+                                  Object... params) throws RESTServerException
+    {
+        try
+        {
+            if (log.isDebugEnabled())
+            {
+                //avoid calling Arrays.toString if not debug level
+                log.debug("Calling {} with URL template {} and parameters {}.",
+                          methodName,
+                          urlTemplate,
+                          Arrays.toString(params));
+            }
+
+            T  responseObject;
+
+            HttpHeaders headers = getHttpHeaders();
+
+            if (headers.isEmpty())
+            {
+                responseObject = restTemplate.getForObject(urlTemplate, returnClass, params);
+            }
+            else
+            {
+                HttpEntity<?> request = new HttpEntity<>(headers);
+
+                ResponseEntity<T> responseEntity = restTemplate.exchange(urlTemplate, HttpMethod.GET, request, returnClass, params);
+
+                responseObject = responseEntity.getBody();
+            }
+
+
+            if (responseObject != null)
+            {
+                log.debug("Returning from {} with response object {}", methodName, responseObject);
+            }
+            else
+            {
+                log.debug("Returning from {} with no response object.", methodName);
+            }
+
+
+            return responseObject;
+        }
+        catch (Exception error)
+        {
+            log.debug("Exception {} with message {} occurred during REST call for {}.",
+                      error.getClass().getName(),
+                      error.getMessage(),
+                      methodName);
+
+            RESTClientConnectorErrorCode errorCode = RESTClientConnectorErrorCode.CLIENT_SIDE_REST_API_ERROR;
+            ExceptionMessageDefinition messageDefinition = errorCode.getMessageDefinition(error.getClass().getName(),
+                                                                                          methodName,
+                                                                                          urlTemplate,
+                                                                                          serverName,
+                                                                                          serverPlatformURLRoot,
+                                                                                          error.getMessage());
+            String errorMessage = messageFormatter.getFormattedMessage(messageDefinition);
+
+            throw new RESTServerException(messageDefinition.getHttpErrorCode(),
+                                          this.getClass().getName(),
+                                          methodName,
+                                          errorMessage,
+                                          messageDefinition.getSystemAction(),
+                                          messageDefinition.getUserAction(),
+                                          error);
+        }
+    }
+
+
+    /**
+     * Issue a POST REST call that returns a response object.  This is typically a create, update, or find with
+     * complex parameters.
+     *
+     * @param <T> class of the return object
+     * @param methodName  name of the method being called.
+     * @param returnClass class of the response object.
+     * @param urlTemplate  template of the URL for the REST API call with place-holders for the parameters.
+     * @param requestBody request body for the request.
+     *
+     * @return Object
+     * @throws RESTServerException something went wrong with the REST call stack.
+     */
+    @Override
+    public  <T> T callPostRESTCallNoParams(String    methodName,
+                                           Class<T>  returnClass,
+                                           String    urlTemplate,
+                                           Object    requestBody) throws RESTServerException
+    {
+        try
+        {
+            log.debug("Calling {} with URL template {} and no parameters.",  methodName, urlTemplate);
+
+            if (requestBody instanceof RequestIdService requestIdService)
+            {
+                requestIdService.setRequestId(requestIdService.getRequestId());
+            }
+
+            T  responseObject;
+
+            HttpHeaders headers = getHttpHeaders();
+
+            if (headers.isEmpty())
+            {
+                responseObject = restTemplate.postForObject(urlTemplate, getSerializableRequestBody(requestBody), returnClass);
+            }
+            else
+            {
+                HttpEntity<?> request;
+
+                if (requestBody != null)
+                {
+                    request = new HttpEntity<>(getSerializableRequestBody(requestBody), headers);
+                }
+                else
+                {
+                    log.warn("Poorly formed POST call made by {}.", methodName);
+                    request = new HttpEntity<>(headers);
+                }
+
+                ResponseEntity<T>  responseEntity = restTemplate.exchange(urlTemplate, HttpMethod.POST, request, returnClass);
+
+                responseObject = responseEntity.getBody();
+            }
+
+
+            if (responseObject != null)
+            {
+                log.debug("Returning from {} with response object {}", methodName, responseObject);
+            }
+            else
+            {
+                log.debug("Returning from {} with no response object.", methodName);
+            }
+
+
+
+            return responseObject;
+        }
+        catch (Exception error)
+        {
+            log.debug("Exception {} with message {} occurred during REST call for {}.",
+                      error.getClass().getName(),
+                      error.getMessage(),
+                      methodName);
+
+            RESTClientConnectorErrorCode errorCode = RESTClientConnectorErrorCode.CLIENT_SIDE_REST_API_ERROR;
+            ExceptionMessageDefinition   messageDefinition = errorCode.getMessageDefinition(error.getClass().getName(),
+                                                                                            methodName,
+                                                                                            urlTemplate,
+                                                                                            serverName,
+                                                                                            serverPlatformURLRoot,
+                                                                                            error.getMessage());
+            String errorMessage = messageFormatter.getFormattedMessage(messageDefinition);
+
+            throw new RESTServerException(messageDefinition.getHttpErrorCode(),
+                                          this.getClass().getName(),
+                                          methodName,
+                                          errorMessage,
+                                          messageDefinition.getSystemAction(),
+                                          messageDefinition.getUserAction(),
+                                          error);
+        }
+    }
+
+
+    /**
+     * Issue a POST REST call that returns a response object.  This is typically a create, update, or find with
+     * complex parameters.
+     *
+     * @param <T> type of the return object
+     * @param methodName  name of the method being called.
+     * @param returnClass class of the response object.
+     * @param urlTemplate  template of the URL for the REST API call with place-holders for the parameters.
+     * @param requestBody request body for the request.
+     * @param params  a list of parameters that are slotted into the url template.
+     *
+     * @return Object
+     * @throws RESTServerException something went wrong with the REST call stack.
+     */
+    @Override
+    public  <T> T callPostRESTCall(String    methodName,
+                                   Class<T>  returnClass,
+                                   String    urlTemplate,
+                                   Object    requestBody,
+                                   Object... params) throws RESTServerException
+    {
+        try
+        {
+            if (log.isDebugEnabled())
+            {
+                //avoid calling Arrays.toString if not debug level
+                log.debug("Calling {} with URL template {} and parameters {}.",
+                          methodName,
+                          urlTemplate,
+                          Arrays.toString(params));
+            }
+
+            if (requestBody instanceof RequestIdService requestIdService)
+            {
+                requestIdService.setRequestId(requestId.getRequestId());
+            }
+
+            T  responseObject;
+
+            HttpHeaders headers = getHttpHeaders();
+
+            if (headers.isEmpty())
+            {
+                responseObject = restTemplate.postForObject(urlTemplate, getSerializableRequestBody(requestBody), returnClass, params);
+            }
+            else
+            {
+                HttpEntity<?> request;
+
+                if (requestBody != null)
+                {
+                    request = new HttpEntity<>(getSerializableRequestBody(requestBody), headers);
+                }
+                else
+                {
+                    log.warn("Poorly formed POST call made by {}.", methodName);
+                    request = new HttpEntity<>(headers);
+                }
+
+                ResponseEntity<T>  responseEntity = restTemplate.exchange(urlTemplate, HttpMethod.POST, request, returnClass, params);
+
+                responseObject = responseEntity.getBody();
+            }
+
+
+            if (responseObject != null)
+            {
+                log.debug("Returning from {} with response object {}", methodName, responseObject);
+            }
+            else
+            {
+                log.debug("Returning from {} with no response object.", methodName);
+            }
+
+            return responseObject;
+        }
+        catch (Exception error)
+        {
+            log.debug("Exception {} with message {} occurred during REST call for {}.",
+                      error.getClass().getName(),
+                      error.getMessage(),
+                      methodName);
+
+            RESTClientConnectorErrorCode errorCode = RESTClientConnectorErrorCode.CLIENT_SIDE_REST_API_ERROR;
+            ExceptionMessageDefinition   messageDefinition = errorCode.getMessageDefinition(error.getClass().getName(),
+                                                                                            methodName,
+                                                                                            urlTemplate,
+                                                                                            serverName,
+                                                                                            serverPlatformURLRoot,
+                                                                                            error.getMessage());
+            String errorMessage = messageFormatter.getFormattedMessage(messageDefinition);
+
+            throw new RESTServerException(messageDefinition.getHttpErrorCode(),
+                                          this.getClass().getName(),
+                                          methodName,
+                                          errorMessage,
+                                          messageDefinition.getSystemAction(),
+                                          messageDefinition.getUserAction(),
+                                          error);
+        }
+    }
+
+
+    /**
+     * Issue a PUT REST call that returns a response object. This is typically an update.
+     *
+     * @param <T> type of the return object
+     * @param methodName  name of the method being called.
+     * @param returnClass class of the response object.
+     * @param urlTemplate  template of the URL for the REST API call with place-holders for the parameters.
+     * @param requestBody request body for the request.
+     * @param params  a list of parameters that are slotted into the url template.
+     *
+     * @return Object
+     * @throws RESTServerException something went wrong with the REST call stack.
+     */
+    @Override
+    public  <T> T callPutRESTCall(String    methodName,
+                                  Class<T>  returnClass,
+                                  String    urlTemplate,
+                                  Object    requestBody,
+                                  Object... params) throws RESTServerException
+    {
+        try
+        {
+            if (log.isDebugEnabled())
+            {
+                log.debug("Calling {} with URL template {} and parameters {}.",
+                          methodName,
+                          urlTemplate,
+                          Arrays.toString(params));
+            }
+
+            if (requestBody instanceof RequestIdService requestIdService)
+            {
+                requestIdService.setRequestId(requestId.getRequestId());
+            }
+
+            HttpEntity<?> request;
+            HttpHeaders httpHeaders = getHttpHeaders();
+
+            if (httpHeaders == null)
+            {
+                request = new HttpEntity<>(getSerializableRequestBody(requestBody));
+            }
+            else
+            {
+                request = new HttpEntity<>(getSerializableRequestBody(requestBody), httpHeaders);
+            }
+
+            ResponseEntity<T> responseEntity = restTemplate.exchange(urlTemplate, HttpMethod.PUT, request, returnClass, params);
+            T responseObject = responseEntity.getBody();
+
+
+            if (responseObject != null)
+            {
+                log.debug("Returning from {} with response object {}", methodName, responseObject);
+            }
+            else
+            {
+                log.debug("Returning from {} with no response object.", methodName);
+            }
+
+            return responseObject;
+        }
+        catch (Exception error)
+        {
+            log.debug("Exception {} with message {} occurred during REST call for {}.",
+                      error.getClass().getName(),
+                      error.getMessage(),
+                      methodName);
+
+            RESTClientConnectorErrorCode errorCode = RESTClientConnectorErrorCode.CLIENT_SIDE_REST_API_ERROR;
+            ExceptionMessageDefinition   messageDefinition = errorCode.getMessageDefinition(error.getClass().getName(),
+                                                                                            methodName,
+                                                                                            urlTemplate,
+                                                                                            serverName,
+                                                                                            serverPlatformURLRoot,
+                                                                                            error.getMessage());
+            String errorMessage = messageFormatter.getFormattedMessage(messageDefinition);
+
+            throw new RESTServerException(messageDefinition.getHttpErrorCode(),
+                                          this.getClass().getName(),
+                                          methodName,
+                                          errorMessage,
+                                          messageDefinition.getSystemAction(),
+                                          messageDefinition.getUserAction(),
+                                          error);
+        }
+    }
+
+
+    /**
+     * Issue a PUT REST call that returns a response object. This is typically an update.
+     *
+     * @param <T> type of the return object
+     * @param methodName  name of the method being called.
+     * @param returnClass class of the response object.
+     * @param urlTemplate  template of the URL for the REST API call with place-holders for the parameters.
+     * @param requestBody request body for the request.
+     *
+     * @return Object
+     * @throws RESTServerException something went wrong with the REST call stack.
+     */
+    @Override
+    public  <T> T callPutRESTCallNoParams(String    methodName,
+                                          Class<T>  returnClass,
+                                          String    urlTemplate,
+                                          Object    requestBody) throws RESTServerException
+    {
+        try
+        {
+            if (requestBody instanceof RequestIdService requestIdService)
+            {
+                requestIdService.setRequestId(requestId.getRequestId());
+            }
+
+            HttpEntity<?> request;
+            HttpHeaders httpHeaders = getHttpHeaders();
+
+            if (httpHeaders == null)
+            {
+                request = new HttpEntity<>(getSerializableRequestBody(requestBody));
+            }
+            else
+            {
+                request = new HttpEntity<>(getSerializableRequestBody(requestBody), httpHeaders);
+            }
+
+            ResponseEntity<T> responseEntity = restTemplate.exchange(urlTemplate, HttpMethod.PUT, request, returnClass);
+            T responseObject = responseEntity.getBody();
+
+
+            if (responseObject != null)
+            {
+                log.debug("Returning from {} with response object {}", methodName, responseObject);
+            }
+            else
+            {
+                log.debug("Returning from {} with no response object.", methodName);
+            }
+
+            return responseObject;
+        }
+        catch (Exception error)
+        {
+            log.debug("Exception {} with message {} occurred during REST call for {}.",
+                      error.getClass().getName(),
+                      error.getMessage(),
+                      methodName);
+
+            RESTClientConnectorErrorCode errorCode = RESTClientConnectorErrorCode.CLIENT_SIDE_REST_API_ERROR;
+            ExceptionMessageDefinition   messageDefinition = errorCode.getMessageDefinition(error.getClass().getName(),
+                                                                                            methodName,
+                                                                                            urlTemplate,
+                                                                                            serverName,
+                                                                                            serverPlatformURLRoot,
+                                                                                            error.getMessage());
+            String errorMessage = messageFormatter.getFormattedMessage(messageDefinition);
+
+            throw new RESTServerException(messageDefinition.getHttpErrorCode(),
+                                          this.getClass().getName(),
+                                          methodName,
+                                          errorMessage,
+                                          messageDefinition.getSystemAction(),
+                                          messageDefinition.getUserAction(),
+                                          error);
+        }
+    }
+
+
+    /**
+     * Issue a DELETE REST call that returns a response object.
+     *
+     * @param <T> type of the return object
+     * @param methodName  name of the method being called.
+     * @param returnClass class of the response object.
+     * @param urlTemplate  template of the URL for the REST API call with place-holders for the parameters.
+     * @param requestBody request body for the request.
+     *
+     * @return Object
+     * @throws RESTServerException something went wrong with the REST call stack.
+     */
+    @Override
+    public  <T> T callDeleteRESTCallNoParams(String    methodName,
+                                             Class<T>  returnClass,
+                                             String    urlTemplate,
+                                             Object    requestBody) throws RESTServerException
+    {
+        try
+        {
+            log.debug("Calling {} with URL template {} and no parameters.",  methodName, urlTemplate);
+
+            if (requestBody instanceof RequestIdService requestIdService)
+            {
+                requestIdService.setRequestId(requestId.getRequestId());
+            }
+
+            T  responseObject = null;
+
+            HttpHeaders headers = getHttpHeaders();
+
+            if (headers.isEmpty())
+            {
+                restTemplate.delete(urlTemplate);
+            }
+            else
+            {
+                HttpEntity<?> request;
+
+                if (requestBody != null)
+                {
+                    request = new HttpEntity<>(getSerializableRequestBody(requestBody), headers);
+                }
+                else
+                {
+                    log.warn("Poorly formed POST call made by {}.", methodName);
+                    request = new HttpEntity<>(headers);
+                }
+
+                ResponseEntity<T>  responseEntity = restTemplate.exchange(urlTemplate, HttpMethod.DELETE, request, returnClass);
+
+                responseObject = responseEntity.getBody();
+            }
+
+
+            if (responseObject != null)
+            {
+                log.debug("Returning from {} with response object {}", methodName, responseObject);
+            }
+            else
+            {
+                log.debug("Returning from {} with no response object.", methodName);
+            }
+
+            return responseObject;
+        }
+        catch (Exception error)
+        {
+            log.debug("Exception {} with message {} occurred during REST call for {}.",
+                      error.getClass().getName(),
+                      error.getMessage(),
+                      methodName);
+
+            RESTClientConnectorErrorCode errorCode = RESTClientConnectorErrorCode.CLIENT_SIDE_REST_API_ERROR;
+            ExceptionMessageDefinition   messageDefinition = errorCode.getMessageDefinition(error.getClass().getName(),
+                                                                                            methodName,
+                                                                                            urlTemplate,
+                                                                                            serverName,
+                                                                                            serverPlatformURLRoot,
+                                                                                            error.getMessage());
+            String errorMessage = messageFormatter.getFormattedMessage(messageDefinition);
+
+            throw new RESTServerException(messageDefinition.getHttpErrorCode(),
+                                          this.getClass().getName(),
+                                          methodName,
+                                          errorMessage,
+                                          messageDefinition.getSystemAction(),
+                                          messageDefinition.getUserAction(),
+                                          error);
+        }
+    }
+
+
+
+    /**
+     * Issue a DELETE REST call that returns a response object.
+     *
+     * @param <T> type of the return object
+     * @param methodName  name of the method being called.
+     * @param returnClass class of the response object.
+     * @param urlTemplate  template of the URL for the REST API call with place-holders for the parameters.
+     * @param requestBody request body for the request.
+     * @param params  a list of parameters that are slotted into the url template.
+     *
+     * @return Object
+     * @throws RESTServerException something went wrong with the REST call stack.
+     */
+    @Override
+    public  <T> T callDeleteRESTCall(String    methodName,
+                                     Class<T>  returnClass,
+                                     String    urlTemplate,
+                                     Object    requestBody,
+                                     Object... params) throws RESTServerException
+    {
+        try
+        {
+            if (log.isDebugEnabled())
+            {
+                //avoid calling Arrays.toString if not debug level
+                log.debug("Calling {} with URL template {} and parameters {}.",
+                          methodName,
+                          urlTemplate,
+                          Arrays.toString(params));
+            }
+
+            if (requestBody instanceof RequestIdService requestIdService)
+            {
+                requestIdService.setRequestId(requestId.getRequestId());
+            }
+
+
+            HttpEntity<?> request;
+            HttpHeaders httpHeaders = getHttpHeaders();
+
+            if (httpHeaders == null)
+            {
+                request = new HttpEntity<>(getSerializableRequestBody(requestBody));
+            }
+            else
+            {
+                request = new HttpEntity<>(getSerializableRequestBody(requestBody), httpHeaders);
+            }
+
+            ResponseEntity<T>  responseEntity = restTemplate.exchange(urlTemplate, HttpMethod.DELETE, request, returnClass, params);
+            T  responseObject = responseEntity.getBody();
+
+            if (responseObject != null)
+            {
+                log.debug("Returning from {} with response object {}", methodName, responseObject);
+            }
+            else
+            {
+                log.debug("Returning from {} with no response object.", methodName);
+            }
+
+            return responseObject;
+        }
+        catch (Exception error)
+        {
+            log.error("Exception " + error.getClass().getName() + " with message " + error.getMessage() + " occurred during REST call for " + methodName + ".");
+
+            RESTClientConnectorErrorCode errorCode = RESTClientConnectorErrorCode.CLIENT_SIDE_REST_API_ERROR;
+            ExceptionMessageDefinition   messageDefinition = errorCode.getMessageDefinition(error.getClass().getName(),
+                                                                                            methodName,
+                                                                                            urlTemplate,
+                                                                                            serverName,
+                                                                                            serverPlatformURLRoot,
+                                                                                            error.getMessage());
+            String errorMessage = messageFormatter.getFormattedMessage(messageDefinition);
+
+            throw new RESTServerException(messageDefinition.getHttpErrorCode(),
+                                          this.getClass().getName(),
+                                          methodName,
+                                          errorMessage,
+                                          messageDefinition.getSystemAction(),
+                                          messageDefinition.getUserAction(),
+                                          error);
+        }
+    }
+
+
+    /**
+     * Issue a PATCH REST call that returns a response object.
+     *
+     * @param <T> type of the return object
+     * @param methodName  name of the method being called.
+     * @param returnClass class of the response object.
+     * @param urlTemplate  template of the URL for the REST API call with place-holders for the parameters.
+     * @param requestBody request body for the request.
+     * @param params  a list of parameters that are slotted into the url template.
+     *
+     * @return Object
+     * @throws RESTServerException something went wrong with the REST call stack.
+     */
+    public  <T> T callPatchRESTCall(String    methodName,
+                                    Class<T>  returnClass,
+                                    String    urlTemplate,
+                                    Object    requestBody,
+                                    Object... params) throws RESTServerException
+    {
+        try
+        {
+            if (log.isDebugEnabled())
+            {
+                //avoid calling Arrays.toString if not debug level
+                log.debug("Calling {} with URL template {} and parameters {}.",
+                          methodName,
+                          urlTemplate,
+                          Arrays.toString(params));
+            }
+
+            if (requestBody instanceof RequestIdService requestIdService)
+            {
+                requestIdService.setRequestId(requestId.getRequestId());
+            }
+
+            HttpEntity<?> request;
+            HttpHeaders httpHeaders = getHttpHeaders();
+
+            if (httpHeaders == null)
+            {
+                request = new HttpEntity<>(getSerializableRequestBody(requestBody));
+            }
+            else
+            {
+                request = new HttpEntity<>(getSerializableRequestBody(requestBody), httpHeaders);
+            }
+
+            ResponseEntity<T>  responseEntity = restTemplate.exchange(urlTemplate, HttpMethod.PATCH, request, returnClass, params);
+            T  responseObject = responseEntity.getBody();
+
+            if (responseObject != null)
+            {
+                log.debug("Returning from {} with response object {}", methodName, responseObject);
+            }
+            else
+            {
+                log.debug("Returning from {} with no response object.", methodName);
+            }
+
+            return responseObject;
+        }
+        catch (Exception error)
+        {
+            log.error("Exception " + error.getClass().getName() + " with message " + error.getMessage() + " occurred during REST call for " + methodName + ".");
+
+            RESTClientConnectorErrorCode errorCode = RESTClientConnectorErrorCode.CLIENT_SIDE_REST_API_ERROR;
+            ExceptionMessageDefinition   messageDefinition = errorCode.getMessageDefinition(error.getClass().getName(),
+                                                                                            methodName,
+                                                                                            urlTemplate,
+                                                                                            serverName,
+                                                                                            serverPlatformURLRoot,
+                                                                                            error.getMessage());
+            String errorMessage = messageFormatter.getFormattedMessage(messageDefinition);
+
+            throw new RESTServerException(messageDefinition.getHttpErrorCode(),
+                                          this.getClass().getName(),
+                                          methodName,
+                                          errorMessage,
+                                          messageDefinition.getSystemAction(),
+                                          messageDefinition.getUserAction(),
+                                          error);
+        }
+    }
+
+
+    /**
+     * Issue a POST REST call that returns a response object.  This is typically a create, update, or find with
+     * complex parameters.
+     *
+     * @param <T> type of the return object
+     * @param methodName  name of the method being called.
+     * @param responseType class of the response for generic object.
+     * @param urlTemplate  template of the URL for the REST API call with place-holders for the parameters.
+     * @param requestBody request body for the request.
+     * @param params  a list of parameters that are slotted into the url template.
+     *
+     * @return Object
+     * @throws RESTServerException something went wrong with the REST call stack.
+     */
+    public <T> T callPostRESTCall(String methodName,
+                                  ParameterizedTypeReference<T> responseType,
+                                  String urlTemplate,
+                                  Object requestBody,
+                                  Object... params) throws RESTServerException
+    {
+        try
+        {
+            if (log.isDebugEnabled())
+            {
+                //avoid calling Arrays.toString if not debug level
+                log.debug("Calling {} with URL template {} and parameters {}.",
+                          methodName,
+                          urlTemplate,
+                          Arrays.toString(params)
+                );
+            }
+
+            if (requestBody instanceof RequestIdService requestIdService)
+            {
+                requestIdService.setRequestId(requestId.getRequestId());
+            }
+
+            T responseObject;
+
+            HttpEntity<?> request;
+
+            HttpHeaders headers = getHttpHeaders();
+
+            if (headers.isEmpty())
+            {
+                request = new HttpEntity<>(getSerializableRequestBody(requestBody));
+            }
+            else
+            {
+                if (requestBody != null)
+                {
+                    request = new HttpEntity<>(getSerializableRequestBody(requestBody), headers);
+                }
+                else
+                {
+                    log.warn("Poorly formed POST call made by {}.", methodName);
+                    request = new HttpEntity<>(headers);
+                }
+            }
+            ResponseEntity<T> responseEntity = restTemplate.exchange(urlTemplate, HttpMethod.POST, request, responseType, params);
+
+            responseObject = responseEntity.getBody();
+
+
+            if (responseObject != null)
+            {
+                log.debug("Returning from {} with response object {}", methodName, responseObject);
+            }
+            else
+            {
+                log.debug("Returning from {} with no response object.", methodName);
+            }
+
+            return responseObject;
+        }
+        catch (Exception error)
+        {
+            log.debug("Exception {} with message {} occurred during REST call for {}.",
+                      error.getClass().getName(),
+                      error.getMessage(),
+                      methodName);
+
+            RESTClientConnectorErrorCode errorCode = RESTClientConnectorErrorCode.CLIENT_SIDE_REST_API_ERROR;
+            ExceptionMessageDefinition   messageDefinition = errorCode.getMessageDefinition(error.getClass().getName(),
+                                                                                            methodName,
+                                                                                            urlTemplate,
+                                                                                            serverName,
+                                                                                            serverPlatformURLRoot,
+                                                                                            error.getMessage());
+            String errorMessage = messageFormatter.getFormattedMessage(messageDefinition);
+
+            throw new RESTServerException(messageDefinition.getHttpErrorCode(),
+                                          this.getClass().getName(),
+                                          methodName,
+                                          errorMessage,
+                                          messageDefinition.getSystemAction(),
+                                          messageDefinition.getUserAction(),
+                                          error);
+        }
+    }
+
+
+    /**
+     * Issue a GET REST call that returns a response object.
+     *
+     * @param <T> type of the return object
+     * @param methodName  name of the method being called.
+     * @param responseType class of the response for generic object.
+     * @param urlTemplate template of the URL for the REST API call with place-holders for the parameters.
+     * @param params      a list of parameters that are slotted into the url template.
+     *
+     * @return response object
+     * @throws RESTServerException something went wrong with the REST call stack.
+     */
+    public <T> T callGetRESTCall(String methodName,
+                                 ParameterizedTypeReference<T> responseType,
+                                 String urlTemplate,
+                                 Object... params) throws RESTServerException
+    {
+        try
+        {
+            if(log.isDebugEnabled())
+            {
+                //avoid calling Arrays.toString if not debug level
+                log.debug("Calling {} with URL template {} and parameters {}.",
+                          methodName,
+                          urlTemplate,
+                          Arrays.toString(params)
+                );
+            }
+
+            T responseObject;
+
+            HttpEntity<?> request;
+
+            HttpHeaders headers = getHttpHeaders();
+
+            if (headers.isEmpty())
+            {
+                request = HttpEntity.EMPTY;
+            }
+            else
+            {
+                request = new HttpEntity<>(headers);
+            }
+
+            ResponseEntity<T> responseEntity = restTemplate.exchange(urlTemplate, HttpMethod.GET, request, responseType, params);
+
+            responseObject = responseEntity.getBody();
+
+            if (responseObject != null)
+            {
+                log.debug("Returning from {} with response object {}", methodName, responseObject);
+            }
+            else
+            {
+                log.debug("Returning from {} with no response object.", methodName);
+            }
+
+            return responseObject;
+        }
+        catch (Exception error)
+        {
+            log.debug("Exception {} with message {} occurred during REST call for {}.",
+                      error.getClass().getName(),
+                      error.getMessage(),
+                      methodName);
+
+            RESTClientConnectorErrorCode errorCode = RESTClientConnectorErrorCode.CLIENT_SIDE_REST_API_ERROR;
+            ExceptionMessageDefinition   messageDefinition = errorCode.getMessageDefinition(error.getClass().getName(),
+                                                                                            methodName,
+                                                                                            urlTemplate,
+                                                                                            serverName,
+                                                                                            serverPlatformURLRoot,
+                                                                                            error.getMessage());
+            String errorMessage = messageFormatter.getFormattedMessage(messageDefinition);
+
+            throw new RESTServerException(messageDefinition.getHttpErrorCode(),
+                                          this.getClass().getName(),
+                                          methodName,
+                                          errorMessage,
+                                          messageDefinition.getSystemAction(),
+                                          messageDefinition.getUserAction(),
+                                          error);
+        }
+    }
+
+
+    /**
+     * Issue a DELETE REST call that returns a response object.
+     *
+     * @param <T> type of the return object
+     * @param methodName  name of the method being called.
+     * @param responseType class of the response for generic object.
+     * @param urlTemplate  template of the URL for the REST API call with place-holders for the parameters.
+     * @param requestBody request body for the request.
+     * @param params  a list of parameters that are slotted into the url template.
+     *
+     * @return Object
+     * @throws RESTServerException something went wrong with the REST call stack.
+     */
+    public  <T> T callDeleteRESTCall(String    methodName,
+                                     ParameterizedTypeReference<T> responseType,
+                                     String    urlTemplate,
+                                     Object    requestBody,
+                                     Object... params) throws RESTServerException
+    {
+        try
+        {
+            if (log.isDebugEnabled())
+            {
+                //avoid calling Arrays.toString if not debug level
+                log.debug("Calling {} with URL template {} and parameters {}.",
+                          methodName,
+                          urlTemplate,
+                          Arrays.toString(params));
+            }
+
+            if (requestBody instanceof RequestIdService requestIdService)
+            {
+                requestIdService.setRequestId(requestId.getRequestId());
+            }
+
+
+            HttpEntity<?> request;
+            HttpHeaders httpHeaders = getHttpHeaders();
+
+            if (httpHeaders == null)
+            {
+                request = new HttpEntity<>(getSerializableRequestBody(requestBody));
+            }
+            else
+            {
+                request = new HttpEntity<>(getSerializableRequestBody(requestBody), httpHeaders);
+            }
+
+            ResponseEntity<T> responseEntity = restTemplate.exchange(urlTemplate, HttpMethod.DELETE, request, responseType, params);
+            T responseObject = responseEntity.getBody();
+
+            if (responseObject != null)
+            {
+                log.debug("Returning from {} with response object {}", methodName, responseObject);
+            }
+            else
+            {
+                log.debug("Returning from {} with no response object.", methodName);
+            }
+
+            return responseObject;
+        }
+        catch (Exception error)
+        {
+            log.error("Exception " + error.getClass().getName() + " with message " + error.getMessage() + " occurred during REST call for " + methodName + ".");
+
+            RESTClientConnectorErrorCode errorCode = RESTClientConnectorErrorCode.CLIENT_SIDE_REST_API_ERROR;
+            ExceptionMessageDefinition   messageDefinition = errorCode.getMessageDefinition(error.getClass().getName(),
+                                                                                            methodName,
+                                                                                            urlTemplate,
+                                                                                            serverName,
+                                                                                            serverPlatformURLRoot,
+                                                                                            error.getMessage());
+            String errorMessage = messageFormatter.getFormattedMessage(messageDefinition);
+
+            throw new RESTServerException(messageDefinition.getHttpErrorCode(),
+                                          this.getClass().getName(),
+                                          methodName,
+                                          errorMessage,
+                                          messageDefinition.getSystemAction(),
+                                          messageDefinition.getUserAction(),
+                                          error);
+        }
+    }
+
+
+    /**
+     * Issue a PUT REST call that returns a response object. This is typically an update.
+     *
+     * @param <T> type of the return object
+     * @param methodName  name of the method being called.
+     * @param responseType class of the response for generic object.
+     * @param urlTemplate  template of the URL for the REST API call with place-holders for the parameters.
+     * @param requestBody request body for the request.
+     * @param params  a list of parameters that are slotted into the url template.
+     *
+     * @return Object
+     * @throws RESTServerException something went wrong with the REST call stack.
+     */
+    public  <T> T callPutRESTCall(String    methodName,
+                                  ParameterizedTypeReference<T> responseType,
+                                  String    urlTemplate,
+                                  Object    requestBody,
+                                  Object... params) throws RESTServerException
+    {
+        try
+        {
+            if(log.isDebugEnabled())
+            {
+                //avoid calling Arrays.toString if not debug level
+                log.debug("Calling {} with URL template {} and parameters {}.",
+                          methodName,
+                          urlTemplate,
+                          Arrays.toString(params)
+                );
+            }
+
+            if (requestBody instanceof RequestIdService requestIdService)
+            {
+                requestIdService.setRequestId(requestId.getRequestId());
+            }
+
+
+            HttpEntity<?> request;
+            HttpHeaders httpHeaders = getHttpHeaders();
+
+            if (httpHeaders == null)
+            {
+                request = new HttpEntity<>(getSerializableRequestBody(requestBody));
+            }
+            else
+            {
+                request = new HttpEntity<>(getSerializableRequestBody(requestBody), httpHeaders);
+            }
+
+            ResponseEntity<T> responseEntity = restTemplate.exchange(urlTemplate, HttpMethod.PUT, request, responseType, params);
+            T responseObject = responseEntity.getBody();
+
+
+            if (responseObject != null)
+            {
+                log.debug("Returning from {} with response object {}", methodName, responseObject);
+            }
+            else
+            {
+                log.debug("Returning from {} with no response object.", methodName);
+            }
+
+            return responseObject;
+        }
+        catch (Exception error)
+        {
+            log.debug("Exception {} with message {} occurred during REST call for {}.",
+                      error.getClass().getName(),
+                      error.getMessage(),
+                      methodName);
+
+            RESTClientConnectorErrorCode errorCode = RESTClientConnectorErrorCode.CLIENT_SIDE_REST_API_ERROR;
+            ExceptionMessageDefinition   messageDefinition = errorCode.getMessageDefinition(error.getClass().getName(),
+                                                                                            methodName,
+                                                                                            urlTemplate,
+                                                                                            serverName,
+                                                                                            serverPlatformURLRoot,
+                                                                                            error.getMessage());
+            String errorMessage = messageFormatter.getFormattedMessage(messageDefinition);
+
+            throw new RESTServerException(messageDefinition.getHttpErrorCode(),
+                                          this.getClass().getName(),
+                                          methodName,
+                                          errorMessage,
+                                          messageDefinition.getSystemAction(),
+                                          messageDefinition.getUserAction(),
+                                          error);
+        }
+    }
+}

@@ -1,0 +1,149 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Copyright Contributors to the ODPi Egeria project. */
+package org.odpi.openmetadata.frameworks.openmetadata.properties;
+
+import com.fasterxml.jackson.annotation.JsonAutoDetect;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
+
+import java.util.List;
+import java.util.Objects;
+
+import static com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility.NONE;
+import static com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility.PUBLIC_ONLY;
+
+/**
+ * OpenMetadataEntityDef describes a type of entity in the metadata collection.  It is the simplest OpenMetadataTypeDef that adds
+ * no other properties beyond OpenMetadataTypeDef.
+ */
+@JsonAutoDetect(getterVisibility=PUBLIC_ONLY, setterVisibility=PUBLIC_ONLY, fieldVisibility=NONE)
+@JsonInclude(JsonInclude.Include.NON_NULL)
+@JsonIgnoreProperties(ignoreUnknown=true)
+public class OpenMetadataEntityDef extends OpenMetadataTypeDef
+{
+    private List<OpenMetadataRelationshipLink> relationshipAttributes = null;
+
+
+    /**
+     * Minimal constructor initializes the superclass as an Entity
+     */
+    public OpenMetadataEntityDef()
+    {
+        super(OpenMetadataTypeDefCategory.ENTITY_DEF);
+    }
+
+
+    /**
+     * Typical constructor is passed the properties of the typedef's super class being constructed.
+     *
+     * @param category    category of this OpenMetadataTypeDef
+     * @param guid        unique id for the OpenMetadataTypeDef
+     * @param name        unique name for the OpenMetadataTypeDef
+     * @param version     active version number for the OpenMetadataTypeDef
+     * @param versionName name for the active version of the OpenMetadataTypeDef
+     */
+    public OpenMetadataEntityDef(OpenMetadataTypeDefCategory category,
+                                 String          guid,
+                                 String          name,
+                                 long            version,
+                                 String          versionName)
+    {
+        super(category, guid, name, version, versionName);
+    }
+
+
+    /**
+     * Copy/clone constructor copies the values from the supplied template.
+     * <br><br>
+     * This used to take {@link OpenMetadataTypeDef}, the supertype, which is why it lost the relationship
+     * attributes: a constructor that cannot see them cannot copy them, and since {@link #cloneFromSubclass()}
+     * is this constructor, every clone lost them too.  Its siblings - the classification, relationship,
+     * collection and enum defs - all take their own class, and so does this one now.
+     *
+     * @param template OpenMetadataEntityDef
+     */
+    public OpenMetadataEntityDef(OpenMetadataEntityDef template)
+    {
+        super(template);
+
+        if (template != null)
+        {
+            this.relationshipAttributes = template.getRelationshipAttributes();
+        }
+    }
+
+
+    /**
+     * Delegate the process of cloning to the subclass.
+     *
+     * @return subclass of OpenMetadataTypeDef
+     */
+    public OpenMetadataTypeDef cloneFromSubclass()
+    {
+        return new OpenMetadataEntityDef(this);
+    }
+
+
+    /**
+     * Return the list of relationship attributes for this entity.
+     *
+     * @return list of relationship attributes
+     */
+    public List<OpenMetadataRelationshipLink> getRelationshipAttributes()
+    {
+        return relationshipAttributes;
+    }
+
+
+    /**
+     * Set up the list of relationship attributes for this entity.
+     *
+     * @param relationshipAttributes list of relationship attributes
+     */
+    public void setRelationshipAttributes(List<OpenMetadataRelationshipLink> relationshipAttributes)
+    {
+        this.relationshipAttributes = relationshipAttributes;
+    }
+
+
+    /**
+     * Standard toString method.
+     *
+     * @return JSON style description of variables.
+     */
+    @Override
+    public String toString()
+    {
+        return "OpenMetadataEntityDef{" +
+                "relationshipAttributes=" + relationshipAttributes +
+                "} " + super.toString();
+    }
+
+
+    /**
+     * Validate that an object is equal depending on their stored values.
+     *
+     * @param objectToCompare object
+     * @return boolean result
+     */
+    @Override
+    public boolean equals(Object objectToCompare)
+    {
+        if (objectToCompare == null || getClass() != objectToCompare.getClass()) return false;
+        if (!super.equals(objectToCompare)) return false;
+        OpenMetadataEntityDef that = (OpenMetadataEntityDef) objectToCompare;
+        return Objects.equals(relationshipAttributes, that.relationshipAttributes);
+    }
+
+
+    /**
+     * Return hash code for this object
+     *
+     * @return int hash code
+     */
+    @Override
+    public int hashCode()
+    {
+        return Objects.hash(super.hashCode(), relationshipAttributes);
+    }
+}

@@ -1,0 +1,581 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Copyright Contributors to the ODPi Egeria project. */
+
+package org.odpi.openmetadata.frameworks.opengovernance.handlers;
+
+import org.odpi.openmetadata.frameworks.auditlog.AuditLog;
+import org.odpi.openmetadata.frameworks.opengovernance.client.OpenGovernanceClient;
+import org.odpi.openmetadata.frameworks.opengovernance.ffdc.OGFAuditCode;
+import org.odpi.openmetadata.frameworks.openmetadata.client.OpenMetadataClient;
+import org.odpi.openmetadata.frameworks.openmetadata.enums.ActivityStatus;
+import org.odpi.openmetadata.frameworks.openmetadata.enums.ContentStatus;
+import org.odpi.openmetadata.frameworks.openmetadata.ffdc.InvalidParameterException;
+import org.odpi.openmetadata.frameworks.openmetadata.ffdc.OMFAuditCode;
+import org.odpi.openmetadata.frameworks.openmetadata.ffdc.PropertyServerException;
+import org.odpi.openmetadata.frameworks.openmetadata.ffdc.UserNotAuthorizedException;
+import org.odpi.openmetadata.frameworks.openmetadata.handlers.AssetHandler;
+import org.odpi.openmetadata.frameworks.openmetadata.handlers.GovernanceDefinitionHandler;
+import org.odpi.openmetadata.frameworks.openmetadata.metadataelements.ElementControlHeader;
+import org.odpi.openmetadata.frameworks.openmetadata.metadataelements.OpenMetadataRootElement;
+import org.odpi.openmetadata.frameworks.openmetadata.metadataelements.RelatedMetadataElementSummary;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.*;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.assets.processes.actions.NotificationProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.governance.NotificationSubscriberProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.governance.NotificationTypeProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.security.ZoneMembershipProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.refdata.AssignmentType;
+import org.odpi.openmetadata.frameworks.openmetadata.search.*;
+import org.odpi.openmetadata.frameworks.openmetadata.types.OpenMetadataProperty;
+import org.odpi.openmetadata.frameworks.openmetadata.types.OpenMetadataType;
+
+import java.util.*;
+
+
+/**
+ * NotificationHandler is the handler for managing notifications for notification types.
+ */
+public class NotificationHandler extends GovernanceDefinitionHandler
+{
+    private final OpenGovernanceClient              openGovernanceClient;
+    private final AssetHandler                      assetHandler;
+
+    /**
+     * Create a new handler.
+     *
+     * @param localServerName        name of this server (view server)
+     * @param auditLog               logging destination
+     * @param serviceName            local service name
+     * @param openMetadataClient     access to open metadata
+     */
+    public NotificationHandler(String               localServerName,
+                               AuditLog             auditLog,
+                               String               serviceName,
+                               OpenMetadataClient   openMetadataClient,
+                               OpenGovernanceClient openGovernanceClient)
+    {
+        super(localServerName, auditLog, serviceName, openMetadataClient, OpenMetadataType.NOTIFICATION_TYPE.typeName);
+
+        this.openGovernanceClient  = openGovernanceClient;
+        this.assetHandler          = new AssetHandler(localServerName, auditLog, serviceName, openMetadataClient);
+    }
+
+
+
+    /**
+     * Return the list of resources linked to the supplied notification type.
+     *
+     * @param userId                 userId of the user making the request.
+     * @param notificationTypeGUID unique identifier of the notification type
+     * @param queryOptions options to control the query
+     * @return list of resources to monitor
+     * @throws InvalidParameterException  one of the parameters is invalid
+     * @throws UserNotAuthorizedException the watchdog action service is not authorized to continue
+     * @throws PropertyServerException    a problem connecting to the metadata store
+     */
+    public List<OpenMetadataRootElement> getMonitoredResources(String       userId,
+                                                               String       notificationTypeGUID,
+                                                               QueryOptions queryOptions) throws InvalidParameterException,
+                                                                                                 PropertyServerException,
+                                                                                                 UserNotAuthorizedException
+    {
+        final String methodName        = "getMonitoredResources";
+        final String guidParameterName = "notificationTypeGUID";
+
+        return super.getRelatedRootElements(userId,
+                                            notificationTypeGUID,
+                                            guidParameterName,
+                                            1,
+                                            OpenMetadataType.MONITORED_RESOURCE_RELATIONSHIP.typeName,
+                                            OpenMetadataType.REFERENCEABLE.typeName,
+                                            queryOptions,
+                                            methodName);
+    }
+
+
+    /**
+     * Create a notification/action for the subscribers if the notificationType is eligible for delivering notifications.
+     * Each subscriber is considered in turn.  Each subscriber may be in a different state which affects whether it is notified and how.
+     * This method determines if the subscriber is eligible to receive the notification.  It also determines
+     * if this is the first notification for the subscriber, or later one, since it affects the notification properties.
+     * The notification type is updated if it is eligible for delivering notifications (even if it has no subscribers).
+     *
+     * @param externalSourceGUID               unique identifier of the external source - null means local
+     * @param externalSourceName               name of the external source
+     * @param userId                           caller's userId
+     * @param notificationTypeGUID             unique identifier of the cause for the action to be raised
+     * @param initialClassifications           classification to add to the action
+     * @param firstNotificationProperties      properties for the first notification sent to this subscriber by this service
+     * @param subsequentNotificationProperties properties for a follow-on notification sent to this subscriber by this service
+     * @param lastNotificationProperties       properties for the last notification sent to this subscriber by this service
+     * @param requestParameters                properties to pass to the next governance service
+     * @param actionRequesterGUID              unique identifier of the source of the action
+     * @param actionTargets                    the list of elements that should be acted upon
+     * @param requester                        name of the service making the request
+     * @throws InvalidParameterException  one of the parameters is invalid
+     * @throws UserNotAuthorizedException the watchdog action service is not authorized to continue
+     * @throws PropertyServerException    a problem connecting to the metadata store
+     */
+    public void notifySubscribers(String                                externalSourceGUID,
+                                  String                                externalSourceName,
+                                  String                                userId,
+                                  Map<String, ClassificationProperties> initialClassifications,
+                                  NotificationProperties                firstNotificationProperties,
+                                  NotificationProperties                subsequentNotificationProperties,
+                                  NotificationProperties                lastNotificationProperties,
+                                  String                                notificationTypeGUID,
+                                  Map<String, String>                   requestParameters,
+                                  String                                actionRequesterGUID,
+                                  List<NewActionTarget>                 actionTargets,
+                                  String                                requester) throws InvalidParameterException,
+                                                                                          UserNotAuthorizedException,
+                                                                                          PropertyServerException
+    {
+        final String methodName                                    = "notifySubscribers";
+        final String notificationTypeGUIDParameterName             = "notificationTypeGUID";
+        final String firstNotificationPropertiesParameterName      = "firstNotificationProperties";
+        final String subsequentNotificationPropertiesParameterName = "subsequentNotificationProperties";
+        final String lastNotificationPropertiesParameterName       = "lastNotificationProperties";
+
+        propertyHelper.validateObject(firstNotificationProperties, firstNotificationPropertiesParameterName, methodName);
+        propertyHelper.validateObject(subsequentNotificationProperties, subsequentNotificationPropertiesParameterName, methodName);
+        propertyHelper.validateObject(lastNotificationProperties, lastNotificationPropertiesParameterName, methodName);
+
+        /*
+         * Only the subscribers are asked for.  A notification type is also linked to every notification ever
+         * sent to its subscribers, which grows without bound and is of no use in deciding who to notify next.
+         */
+        QueryOptions queryOptions = this.getQueryOptions(0, 0);
+
+        queryOptions.setIncludeOnlyRelationships(List.of(OpenMetadataType.NOTIFICATION_SUBSCRIBER_RELATIONSHIP.typeName));
+
+        OpenMetadataRootElement notificationType = this.getRootElementByGUID(userId,
+                                                                             notificationTypeGUID,
+                                                                             queryOptions,
+                                                                             methodName);
+
+        if ((notificationType != null) &&
+                (notificationType.getProperties() instanceof NotificationTypeProperties notificationTypeProperties) &&
+                (notificationPermitted(requester, notificationTypeProperties)))
+        {
+            ActivityStatus newSubscriberStatus = ActivityStatus.COMPLETED;
+
+            if (notificationTypeProperties.getMultipleNotificationsPermitted())
+            {
+                newSubscriberStatus = ActivityStatus.IN_PROGRESS;
+            }
+
+            if (notificationType.getSubscribers() != null)
+            {
+                for (RelatedMetadataElementSummary subscriber : notificationType.getSubscribers())
+                {
+                    if ((subscriber != null) &&
+                        (subscriber.getRelationshipProperties() instanceof NotificationSubscriberProperties notificationSubscriberProperties))
+                    {
+                        /*
+                         * Determine which message to use.
+                         */
+                        if ((notificationTypeProperties.getPlannedCompletionDate() != null) && (new Date().after(notificationTypeProperties.getPlannedCompletionDate())))
+                        {
+                            notifySubscriber(userId,
+                                             subscriber.getRelatedElement().getElementHeader().getGUID(),
+                                             subscriber.getRelatedElement().getElementHeader(),
+                                             subscriber.getRelationshipHeader().getGUID(),
+                                             notificationSubscriberProperties,
+                                             notificationTypeProperties.getNotificationCount() + 1,
+                                             initialClassifications,
+                                             lastNotificationProperties,
+                                             notificationTypeGUID,
+                                             requestParameters,
+                                             actionRequesterGUID,
+                                             actionTargets,
+                                             notificationTypeProperties.getMinimumNotificationInterval(),
+                                             newSubscriberStatus);
+                        }
+                        else if (notificationSubscriberProperties.getLastNotification() == null)
+                        {
+                            notifySubscriber(userId,
+                                             subscriber.getRelatedElement().getElementHeader().getGUID(),
+                                             subscriber.getRelatedElement().getElementHeader(),
+                                             subscriber.getRelationshipHeader().getGUID(),
+                                             notificationSubscriberProperties,
+                                             notificationTypeProperties.getNotificationCount() + 1,
+                                             initialClassifications,
+                                             firstNotificationProperties,
+                                             notificationTypeGUID,
+                                             requestParameters,
+                                             actionRequesterGUID,
+                                             actionTargets,
+                                             notificationTypeProperties.getMinimumNotificationInterval(),
+                                             newSubscriberStatus);
+                        }
+                        else if (notificationTypeProperties.getMultipleNotificationsPermitted())
+                        {
+                            /*
+                             * A subscriber that has already been notified hears again only from a notification
+                             * type that permits more than one notification.  A one-time notification type's
+                             * subscriber has had its one notification - the first - and is left alone, however
+                             * short the minimum interval.
+                             */
+                            notifySubscriber(userId,
+                                             subscriber.getRelatedElement().getElementHeader().getGUID(),
+                                             subscriber.getRelatedElement().getElementHeader(),
+                                             subscriber.getRelationshipHeader().getGUID(),
+                                             notificationSubscriberProperties,
+                                             notificationTypeProperties.getNotificationCount() + 1,
+                                             initialClassifications,
+                                             subsequentNotificationProperties,
+                                             notificationTypeGUID,
+                                             requestParameters,
+                                             actionRequesterGUID,
+                                             actionTargets,
+                                             notificationTypeProperties.getMinimumNotificationInterval(),
+                                             newSubscriberStatus);
+                        }
+                    }
+                }
+            }
+
+            NotificationTypeProperties updatedNotificationTypeProperties = new NotificationTypeProperties(notificationTypeProperties);
+
+            if ((notificationTypeProperties.getPlannedCompletionDate() != null) && (new Date().after(notificationTypeProperties.getPlannedCompletionDate())))
+            {
+                auditLog.logMessage(methodName,
+                                    OMFAuditCode.NOTIFICATION_TYPE_COMPLETED.getMessageDefinition(requester,
+                                                                                                  notificationTypeProperties.getDisplayName(),
+                                                                                                  notificationTypeProperties.getPlannedCompletionDate().toString()));
+                updatedNotificationTypeProperties.setContentStatus(ContentStatus.OBSOLETE);
+            }
+
+            updatedNotificationTypeProperties.setNotificationCount(notificationTypeProperties.getNotificationCount() + 1);
+            updatedNotificationTypeProperties.setLastNotification(new Date());
+            if (notificationTypeProperties.getMinimumNotificationInterval() > 0)
+            {
+                updatedNotificationTypeProperties.setNextScheduledNotification(new Date(System.currentTimeMillis() + toMilliseconds(notificationTypeProperties.getMinimumNotificationInterval())));
+            }
+
+            UpdateOptions updateOptions = new UpdateOptions();
+
+            updateOptions.setExternalSourceGUID(externalSourceGUID);
+            updateOptions.setExternalSourceName(externalSourceName);
+            updateOptions.setMergeUpdate(true);
+
+            this.updateElement(userId,
+                               notificationTypeGUID,
+                               notificationTypeGUIDParameterName,
+                               updateOptions,
+                               updatedNotificationTypeProperties,
+                               methodName);
+        }
+    }
+
+
+    /**
+     * Only notify subscribers if the notification type properties allow.
+     *
+     * @param notificationTypeProperties notification type properties
+     * @return true if the subscribers should be notified
+     */
+    /**
+     * Convert a notification interval to milliseconds.  A notification type's minimumNotificationInterval is
+     * in minutes - that is how {@link NotificationTypeProperties} documents it and how the notification types
+     * are defined - while the arithmetic here is against {@code System.currentTimeMillis()}.  Comparing the two
+     * directly made a ten-minute interval ten milliseconds, so every periodic notification type notified its
+     * subscribers on every pass.
+     *
+     * @param minutes interval in minutes
+     * @return interval in milliseconds
+     */
+    private static long toMilliseconds(long minutes)
+    {
+        return minutes * 60L * 1000L;
+    }
+
+
+    private boolean notificationPermitted(String                     requester,
+                                          NotificationTypeProperties notificationTypeProperties)
+    {
+        final String methodName = "notificationPermitted";
+
+        if (notificationTypeProperties.getContentStatus() != ContentStatus.ACTIVE)
+        {
+            return false;
+        }
+
+        /*
+         * Only process notification types that have started
+         */
+        if ((notificationTypeProperties.getPlannedStartDate() != null) && (! new Date().after(notificationTypeProperties.getPlannedStartDate())))
+        {
+            auditLog.logMessage(methodName,
+                                OMFAuditCode.NOTIFICATION_TYPE_NOT_STARTED.getMessageDefinition(requester,
+                                                                                                notificationTypeProperties.getDisplayName(),
+                                                                                                notificationTypeProperties.getPlannedStartDate().toString()));
+        }
+
+        if (notificationTypeProperties.getLastNotification() == null)
+        {
+            return true;
+        }
+
+        if (notificationTypeProperties.getMinimumNotificationInterval() <= 0)
+        {
+            return true;
+        }
+
+        return System.currentTimeMillis() > notificationTypeProperties.getLastNotification().getTime() + toMilliseconds(notificationTypeProperties.getMinimumNotificationInterval());
+    }
+
+
+    /**
+     * Create a notification/action for the supplied subscriber, providing it is in the IN_PROGRESS state and the
+     * subscriber is of the appropriate type.
+     *
+     * @param userId               caller's userId
+     * @param subscriberGUID unique identifier of subscriber
+     * @param subscriberHeader           header of the subscriber
+     * @param outboundNotificationProperties           properties of the action
+     * @param initialClassifications initial classifications to add to the action
+     * @param notificationTypeGUID unique identifier of the cause for the action to be raised
+     * @param requestParameters    properties to pass to any governance action subscriber
+     * @param actionRequesterGUID  unique identifier of the source of the action
+     * @param actionTargets        the list of elements that should be acted upon
+     * @param minimumNotificationInterval    minimum time between notifications
+     * @param newSubscriberStatus    set the subscriber relationship to this value after a successful notification; null means leave it alone
+     * @return unique identifier of the action
+     * @throws InvalidParameterException  one of the parameters is invalid
+     * @throws UserNotAuthorizedException the user is not authorized to continue
+     * @throws PropertyServerException    a problem connecting to the metadata store
+     */
+    private String notifySubscriber(String                                userId,
+                                    String                                subscriberGUID,
+                                    ElementControlHeader                  subscriberHeader,
+                                    String                                notificationSubscriberGUID,
+                                    NotificationSubscriberProperties      notificationSubscriberProperties,
+                                    long                                  notificationCount,
+                                    Map<String, ClassificationProperties> initialClassifications,
+                                    NotificationProperties                outboundNotificationProperties,
+                                    String                                notificationTypeGUID,
+                                    Map<String, String>                   requestParameters,
+                                    String                                actionRequesterGUID,
+                                    List<NewActionTarget>                 actionTargets,
+                                    long                                  minimumNotificationInterval,
+                                    ActivityStatus                        newSubscriberStatus) throws InvalidParameterException,
+                                                                                                      UserNotAuthorizedException,
+                                                                                                      PropertyServerException
+    {
+        final String methodName = "notifySubscriber";
+
+        /*
+        * Check the conditions for sending a notification.  The notification is sent if the subscriber is in the
+        * IN_PROGRESS state, and there has been enough time since the last notification.
+         */
+        if ((notificationSubscriberProperties != null) &&
+                ((notificationSubscriberProperties.getActivityStatus() == null) ||
+                 (List.of(ActivityStatus.IN_PROGRESS,
+                          ActivityStatus.REQUESTED,
+                          ActivityStatus.APPROVED,
+                          ActivityStatus.WAITING,
+                          ActivityStatus.ACTIVATING).contains(notificationSubscriberProperties.getActivityStatus()))))
+        {
+            /*
+             * Subscriber is in a good state.  If it never has had a notification, or if it has been long enough
+             * since the last notification, then send the notification.
+             */
+            if ((notificationSubscriberProperties.getLastNotification() == null) ||
+                    ((System.currentTimeMillis() > notificationSubscriberProperties.getLastNotification().getTime() + toMilliseconds(minimumNotificationInterval))))
+            {
+                NotificationProperties subscriberNotificationProperties = new NotificationProperties(outboundNotificationProperties);
+
+                subscriberNotificationProperties.setQualifiedName(outboundNotificationProperties.getQualifiedName() + "::" + notificationSubscriberGUID);
+
+                /*
+                 * Subscribers are called if the status is IN_PROGRESS (or less).  This is the default value.
+                 * Zone membership controls the visibility of the notification.
+                 */
+                List<String>   zoneMembership = null;
+
+                if (notificationSubscriberProperties.getZoneMembership() != null)
+                {
+                    zoneMembership = notificationSubscriberProperties.getZoneMembership();
+                }
+
+                /*
+                 * Combine the supplied classifications with the zone membership classification (if any).
+                 */
+                Map<String, ClassificationProperties> combinedClassifications = initialClassifications;
+
+                if (zoneMembership != null)
+                {
+                    if (combinedClassifications == null)
+                    {
+                        combinedClassifications = new HashMap<>();
+                    }
+
+                    ZoneMembershipProperties zoneMembershipProperties = new ZoneMembershipProperties();
+                    zoneMembershipProperties.setZoneMembership(zoneMembership);
+
+                    combinedClassifications.put(OpenMetadataType.ZONE_MEMBERSHIP_CLASSIFICATION.typeName, zoneMembershipProperties);
+                }
+
+                auditLog.logMessage(methodName, OGFAuditCode.ISSUING_NOTIFICATION.getMessageDefinition(localServiceName,
+                                                                                                       subscriberGUID,
+                                                                                                       subscriberHeader.getType().getTypeName(),
+                                                                                                       notificationTypeGUID,
+                                                                                                       Long.toString(notificationCount)));
+
+                /*
+                 * Issue notification.  This depends on the type of subscriber.
+                 *
+                 * The notification's identifier is kept rather than returned from inside each branch, so that
+                 * every kind of subscriber reaches the recording of its lastNotification time below.  Returning
+                 * from the branch skipped that step for actors, note logs and governance actions alike - which is
+                 * every kind of subscriber there is - so no subscriber ever had a lastNotification, and each one
+                 * was treated as new, and welcomed, on every pass.
+                 */
+                String actionGUID = null;
+
+                if (propertyHelper.isTypeOf(subscriberHeader, OpenMetadataType.ACTOR.typeName))
+                {
+                    actionGUID = assetHandler.createActorAction(userId,
+                                                                initialClassifications,
+                                                                subscriberNotificationProperties,
+                                                                actionRequesterGUID,
+                                                                notificationSubscriberProperties.getISCQualifiedName(),
+                                                                Collections.singletonList(notificationTypeGUID),
+                                                                subscriberGUID,
+                                                                AssignmentType.REVIEWER,
+                                                                actionTargets);
+                }
+                else if (propertyHelper.isTypeOf(subscriberHeader, OpenMetadataType.NOTE_LOG.typeName))
+                {
+                    actionGUID = assetHandler.createNoteLogEntry(userId,
+                                                                 initialClassifications,
+                                                                 subscriberNotificationProperties,
+                                                                 actionRequesterGUID,
+                                                                 notificationSubscriberProperties.getISCQualifiedName(),
+                                                                 Collections.singletonList(notificationTypeGUID),
+                                                                 subscriberGUID,
+                                                                 actionTargets);
+                }
+                else if (propertyHelper.isTypeOf(subscriberHeader, OpenMetadataType.GOVERNANCE_ACTION.typeName))
+                {
+                    if (propertyHelper.isTypeOf(subscriberHeader, OpenMetadataType.GOVERNANCE_ACTION_PROCESS.typeName))
+                    {
+                        OpenMetadataElement process = openMetadataClient.getMetadataElementByGUID(userId, subscriberGUID, null);
+
+                        if (process != null)
+                        {
+                            String processQualifiedName = propertyHelper.getStringProperty(localServiceName,
+                                                                                           OpenMetadataProperty.QUALIFIED_NAME.name,
+                                                                                           process.getElementProperties(),
+                                                                                           methodName);
+                            if (processQualifiedName != null)
+                            {
+                                actionGUID = openGovernanceClient.initiateGovernanceActionProcess(userId,
+                                                                                                  processQualifiedName,
+                                                                                                  Collections.singletonList(actionRequesterGUID),
+                                                                                                  Collections.singletonList(notificationTypeGUID),
+                                                                                                  actionTargets,
+                                                                                                  null,
+                                                                                                  requestParameters,
+                                                                                                  localServiceName,
+                                                                                                  null,
+                                                                                                  notificationSubscriberProperties.getISCQualifiedName());
+                            }
+                        }
+                    }
+                    else if (propertyHelper.isTypeOf(subscriberHeader, OpenMetadataType.GOVERNANCE_ACTION_TYPE.typeName))
+                    {
+                        actionGUID = openGovernanceClient.initiateGovernanceActionType(userId,
+                                                                                       subscriberNotificationProperties.getQualifiedName(),
+                                                                                       Collections.singletonList(actionRequesterGUID),
+                                                                                       Collections.singletonList(notificationTypeGUID),
+                                                                                       actionTargets,
+                                                                                       null,
+                                                                                       requestParameters,
+                                                                                       localServiceName,
+                                                                                       null,
+                                                                                       notificationSubscriberProperties.getISCQualifiedName());
+                    }
+                }
+                else
+                {
+                    /*
+                     * The subscriber is not supported by the notification manager, so set its status to INVALID.
+                     */
+                    auditLog.logMessage(methodName, OGFAuditCode.WRONG_TYPE_OF_SUBSCRIBER.getMessageDefinition(subscriberGUID,
+                                                                                                               notificationTypeGUID,
+                                                                                                               subscriberHeader.getType().getTypeName(),
+                                                                                                               localServiceName,
+                                                                                                               List.of(OpenMetadataType.ACTOR.typeName,
+                                                                                                                       OpenMetadataType.NOTE_LOG.typeName,
+                                                                                                                       OpenMetadataType.GOVERNANCE_ACTION.typeName).toString()));
+                    newSubscriberStatus = ActivityStatus.INVALID;
+                }
+
+
+                /*
+                 * Record the lastNotification time.
+                 * If the caller requests that the subscriber status be updated, also make the change.
+                 */
+                ElementProperties elementProperties = propertyHelper.addDateProperty(null,
+                                                                                     OpenMetadataProperty.LAST_NOTIFICATION.name,
+                                                                                     new Date());
+                if (newSubscriberStatus != null)
+                {
+                    /*
+                     * Added to the lastNotification property, not in place of it: a subscriber whose
+                     * lastNotification is never recorded looks new on every pass and is welcomed - and
+                     * provisioned - again each time.
+                     */
+                    elementProperties = propertyHelper.addEnumProperty(elementProperties,
+                                                                       OpenMetadataProperty.ACTIVITY_STATUS.name,
+                                                                       ActivityStatus.getOpenTypeName(),
+                                                                       newSubscriberStatus.name());
+                }
+
+                UpdateOptions updateOptions = new UpdateOptions();
+                updateOptions.setMergeUpdate(true);
+                openMetadataClient.updateRelationshipInStore(userId,
+                                                             notificationSubscriberGUID,
+                                                             updateOptions,
+                                                             elementProperties);
+
+                return actionGUID;
+            }
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Return the list of subscribers linked to the supplied notification type.
+     *
+     * @param userId                 userId of the user making the request.
+     * @param notificationTypeGUID unique identifier of the notification type
+     * @param queryOptions options to control the query
+     * @return list of resources to monitor
+     * @throws InvalidParameterException  one of the parameters is null or invalid.
+     * @throws PropertyServerException    a problem retrieving information from the property server(s).
+     * @throws UserNotAuthorizedException the requesting user is not authorized to issue this request.
+     */
+    public List<OpenMetadataRootElement> getNotificationSubscribers(String       userId,
+                                                                    String       notificationTypeGUID,
+                                                                    QueryOptions queryOptions) throws InvalidParameterException,
+                                                                                                      PropertyServerException,
+                                                                                                      UserNotAuthorizedException
+    {
+        final String methodName        = "getNotificationSubscribers";
+        final String guidParameterName = "notificationTypeGUID";
+
+        return super.getRelatedRootElements(userId,
+                                            notificationTypeGUID,
+                                            guidParameterName,
+                                            1,
+                                            OpenMetadataType.NOTIFICATION_SUBSCRIBER_RELATIONSHIP.typeName,
+                                            OpenMetadataType.REFERENCEABLE.typeName,
+                                            queryOptions,
+                                            methodName);
+    }
+}

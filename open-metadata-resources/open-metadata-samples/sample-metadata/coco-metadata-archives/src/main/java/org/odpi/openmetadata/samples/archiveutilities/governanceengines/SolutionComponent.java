@@ -1,0 +1,589 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Copyright Contributors to the ODPi Egeria project. */
+
+package org.odpi.openmetadata.samples.archiveutilities.governanceengines;
+
+import org.odpi.openmetadata.contentpacks.core.RequestTypeDefinition;
+import org.odpi.openmetadata.frameworks.openmetadata.definitions.CollectionDefinition;
+import org.odpi.openmetadata.frameworks.openmetadata.definitions.InformationSupplyChainDefinition;
+import org.odpi.openmetadata.frameworks.openmetadata.definitions.SolutionComponentDefinition;
+import org.odpi.openmetadata.frameworks.openmetadata.refdata.SolutionComponentType;
+import org.odpi.openmetadata.samples.governanceactions.clinicaltrials.metadata.ClinicalTrialSolutionComponent;
+
+import java.util.Arrays;
+import java.util.List;
+
+/**
+ * A description of the predefined solution components.
+ */
+public enum SolutionComponent implements SolutionComponentDefinition
+{
+    HOSPITAL("ee2bb773-e630-4cf9-bdf1-7c2dd64fe4ec",
+             SolutionComponentType.THIRD_PARTY_PROCESS.getSolutionComponentType(),
+             "External Organization Processes",
+             "Hospital Processes",
+             "Processes running in the hospital that negotiate data sharing agreements, recruit patients, train staff and deliver data.",
+             "Hospital-Processes",
+             "V1.0",
+             null,
+             new InformationSupplyChain[]{InformationSupplyChain.CLINICAL_TRIAL_TREATMENT_VALIDATION_TEMPLATE, InformationSupplyChain.CLINICAL_TRIAL_SUBJECT_ONBOARDING_TEMPLATE},
+             null),
+
+    HOSPITAL_LANDING_AREA_FOLDER(ClinicalTrialSolutionComponent.HOSPITAL_LANDING_AREA_FOLDER.getGUID(),
+                                 SolutionComponentType.DATA_STORAGE.getSolutionComponentType(),
+                                 "File Directory",
+                                 "Hospital Landing Area Folder",
+                                 "Destination for incoming files from a particular hospital.",
+                                 "Hospital-Landing-Area-Folder",
+                                 "V1.0",
+                                 null,
+                                 new InformationSupplyChain[]{InformationSupplyChain.CLINICAL_TRIAL_TREATMENT_VALIDATION_TEMPLATE},
+                                 null),
+
+    LANDING_FOLDER_CATALOGUER(ClinicalTrialSolutionComponent.LANDING_FOLDER_CATALOGUER.getGUID(),
+                              SolutionComponentType.AUTOMATED_ACTION.getSolutionComponentType(),
+                              "Integration Connector",
+                              "Landing Folder Cataloguer",
+                              "Integration connector that is cataloguing files arriving in the hospital landing area folders and invoking the onboarding pipeline.",
+                              "Landing-Folder-Cataloguer",
+                              "V1.0",
+                              null,
+                              new InformationSupplyChain[]{
+                                      InformationSupplyChain.CLINICAL_TRIAL_TREATMENT_VALIDATION_TEMPLATE},
+                              null),
+
+    MOVE_FILE_TO_DATA_LAKE("18931474-d170-4394-97a9-0e627e2212ac",
+                           SolutionComponentType.AUTOMATED_ACTION.getSolutionComponentType(),
+                           "Governance Action Process Step",
+                           "Move File To Data Lake",
+                           "Move landing area files to data lake, catalog files in data lake with lineage from the landing area and validate/certify that the data contains valid values.  The cataloguing includes lineage, retention, origin, governance zones.  The quality validation survey will add a certification to the file asset if the data contains valid values.",
+                           "Move-File-To-Data-Lake",
+                           "V1.0",
+                           null,
+                           null,
+                           RequestTypeDefinition.MOVE_FILE.getGovernanceActionTypeGUID()),
+
+    CHECK_QUALITY_OF_DATA("2a5763d0-c540-4a59-8268-db7c88342269",
+                          SolutionComponentType.AUTOMATED_ACTION.getSolutionComponentType(),
+                          "Governance Action Process Step",
+                          "Check Quality of Data",
+                          "Validate that the data contains valid values. The quality validation survey will add a certification to the file asset if the data contains valid values.",
+                          "Check-Quality-of-Data",
+                          "V1.0",
+                          null,
+                          null,
+                          CocoRequestTypeDefinition.CHECK_DATA.getGovernanceActionTypeGUID()),
+
+    REPORT_QUALITY_ISSUES("b1fd8336-45ca-4e2e-bd79-ce6601c0b68f",
+                          SolutionComponentType.AUTOMATED_ACTION.getSolutionComponentType(),
+                          "Governance Action Process Step",
+                          "Report Quality Issues",
+                          "Create alerts to interested parties if quality issues are detected.",
+                          "Report-Quality-Issues",
+                          "V1.0",
+                          null,
+                          null,
+                          RequestTypeDefinition.EVALUATE_ANNOTATIONS.getGovernanceActionTypeGUID()),
+
+    DETERMINE_ORIGIN_OF_DATA("7bcf573b-0ad8-4ca8-82c0-8d8f50fac4cd",
+                             SolutionComponentType.AUTOMATED_ACTION.getSolutionComponentType(),
+                             "Governance Action Process Step",
+                             "Determine Origin of Data",
+                             "Add details of the originating hospital.",
+                             "Determine-Origin-of-Data",
+                             "V1.0",
+                             null,
+                             null,
+                             RequestTypeDefinition.SEEK_ORIGIN.getGovernanceActionTypeGUID()),
+
+    SET_RETENTION_PERIOD("bed0ec86-45ce-4350-8c68-9596299c843a",
+                         SolutionComponentType.AUTOMATED_ACTION.getSolutionComponentType(),
+                         "Governance Action Process Step",
+                         "Set Retention Period",
+                         "Define when this file can be archived and then deleted.",
+                         "Set-Retention-Period",
+                         "V1.0",
+                         null,
+                         null,
+                         RequestTypeDefinition.RETENTION_PERIOD.getGovernanceActionTypeGUID()),
+
+    PUBLISH_ASSET("22e35eff-fcc8-4baa-804e-8363989cf6f1",
+                  SolutionComponentType.AUTOMATED_ACTION.getSolutionComponentType(),
+                  "Governance Action Process Step",
+                  "Publish Asset",
+                  "Make the new file visible in the data lake catalog.",
+                  "Publish-Asset",
+                  "V1.0",
+                  null,
+                  null,
+                  RequestTypeDefinition.ZONE_MEMBER.getGovernanceActionTypeGUID()),
+
+    WEEKLY_MEASUREMENTS_ONBOARDING_PIPELINE(ClinicalTrialSolutionComponent.WEEKLY_MEASUREMENTS_ONBOARDING_PIPELINE.getGUID(),
+                                            SolutionComponentType.AUTOMATED_ACTION.getSolutionComponentType(),
+                                            "Governance Action Process",
+                                            "Weekly Measurements Onboarding Pipeline",
+                                            "Move landing area files to data lake, catalog files in data lake with lineage from the landing area and validate/certify that the data contains valid values.  The cataloguing includes lineage, retention, origin, governance zones.  The quality validation survey will add a certification to the file asset if the data contains valid values.",
+                                            "Weekly-Measurements-Onboarding-Pipeline",
+                                            "V1.0",
+                                            new SolutionComponent[]{
+                                                    MOVE_FILE_TO_DATA_LAKE,
+                                                    CHECK_QUALITY_OF_DATA,
+                                                    REPORT_QUALITY_ISSUES,
+                                                    DETERMINE_ORIGIN_OF_DATA,
+                                                    SET_RETENTION_PERIOD,
+                                                    PUBLISH_ASSET},
+                                            new InformationSupplyChain[]{InformationSupplyChain.CLINICAL_TRIAL_TREATMENT_VALIDATION_TEMPLATE},
+                                            null),
+
+    WEEKLY_MEASUREMENTS_DATA_LAKE_FOLDER(ClinicalTrialSolutionComponent.WEEKLY_MEASUREMENTS_DATA_LAKE_FOLDER.getGUID(),
+                                         SolutionComponentType.DATA_STORAGE.getSolutionComponentType(),
+                                         "Unity Catalog Volume (File Directory)",
+                                         "Weekly Measurements Data Lake Folder",
+                                         "The directory where the files from the hospitals are assembled for sharing.",
+                                         "Weekly-Measurements-Data-Lake-Folder",
+                                         "V1.0",
+                                         null,
+                                         new InformationSupplyChain[]{InformationSupplyChain.CLINICAL_TRIAL_TREATMENT_VALIDATION_TEMPLATE},
+                                         null),
+
+    POPULATE_SANDBOX(ClinicalTrialSolutionComponent.POPULATE_SANDBOX.getGUID(),
+                     SolutionComponentType.AUTOMATED_ACTION.getSolutionComponentType(),
+                     "Airflow DAG",
+                     "Populate Sandbox",
+                     "A process that copies certified files from the hospitals into the research team's sandbox for processing.",
+                     "Populate-Sandbox",
+                     "V1.0",
+                     null,
+                     new InformationSupplyChain[]{InformationSupplyChain.CLINICAL_TRIAL_TREATMENT_VALIDATION_TEMPLATE},
+                     null),
+
+    TREATMENT_VALIDATION_SANDBOX(ClinicalTrialSolutionComponent.TREATMENT_VALIDATION_SANDBOX.getGUID(),
+                                 SolutionComponentType.DATA_STORAGE.getSolutionComponentType(),
+                                 "PostgreSQL Database",
+                                 "Treatment Validation Sandbox",
+                                 "A postgreSQL database schema for assembling data needed to validate the clinical trial.",
+                                 "Treatment-Validation-Sandbox",
+                                 "V1.0",
+                                 null,
+                                 new InformationSupplyChain[]{InformationSupplyChain.CLINICAL_TRIAL_TREATMENT_VALIDATION_TEMPLATE},
+                                 null),
+
+    ANALYSE_PATIENT_DATA("b5c8da4c-f925-4cf1-8294-e43cd2c1a584",
+                         SolutionComponentType.INSIGHT_MODEL.getSolutionComponentType(),
+                         "AI Workflow",
+                         "Analyse Patient Data",
+                         "ML Flow based analytics pipeline to run the variety of models over the patient data.",
+                         "Analyse-Patient-Data",
+                         "V1.0",
+                         null,
+                         new InformationSupplyChain[]{InformationSupplyChain.CLINICAL_TRIAL_TREATMENT_VALIDATION_TEMPLATE},
+                         null),
+
+    TREATMENT_EFFICACY_EVIDENCE("48bc201e-3d4e-4beb-bdb2-0fd9d134f6d5",
+                                SolutionComponentType.DATA_STORAGE.getSolutionComponentType(),
+                                "Content Manager",
+                                "Treatment Efficacy Evidence",
+                                "Assembly of the data required by the regulator.",
+                                "Treatment-Efficacy-Evidence",
+                                "V1.0",
+                                null,
+                                new InformationSupplyChain[]{InformationSupplyChain.CLINICAL_TRIAL_TREATMENT_VALIDATION_TEMPLATE},
+                                null),
+
+    ASSEMBLE_REPORT("72a86eec-9734-4bc0-babb-4fec0aa7c9ff",
+                    SolutionComponentType.MANUAL_PROCESS.getSolutionComponentType(),
+                    "Manual Process",
+                    "Assemble Treatment Assessment Report",
+                    "A process of creating a filing report for the regulators detailing the findings from the clinical trial.",
+                    "Assemble-Treatment-Assessment-Report",
+                    "V1.0",
+                    null,
+                    new InformationSupplyChain[]{InformationSupplyChain.CLINICAL_TRIAL_TREATMENT_VALIDATION_TEMPLATE},
+                    null),
+
+    REPORT_VALIDATION_AND_DELIVERY("0bf2547c-937c-41b6-814f-6284849271a1",
+                                   SolutionComponentType.DOCUMENT_PUBLISHING.getSolutionComponentType(),
+                                   "Manual Process",
+                                   "Treatment Assessment Report Validation and Delivery",
+                                   "An expert review, presentation, discussions relating to the results of the clinical trial.",
+                                   "Treatment-Assessment-Report-Validation-and-Delivery",
+                                   "V1.0",
+                                   null,
+                                   new InformationSupplyChain[]{InformationSupplyChain.CLINICAL_TRIAL_TREATMENT_VALIDATION_TEMPLATE},
+                                   null),
+
+    NOMINATE_HOSPITAL(ClinicalTrialSolutionComponent.NOMINATE_HOSPITAL.getGUID(),
+                      SolutionComponentType.AUTOMATED_ACTION.getSolutionComponentType(),
+                      "Governance Action Process",
+                      "Nominate Hospital",
+                      "Add details of a hospital as a candidate for participation in the clinical trials.",
+                      "Nominate-Hospital",
+                      "V1.0",
+                      null,
+                      null,
+                      CocoRequestTypeDefinition.NOMINATE_HOSPITAL.getGovernanceActionTypeGUID()),
+
+    CERTIFY_HOSPITAL(ClinicalTrialSolutionComponent.CERTIFY_HOSPITAL.getGUID(),
+                     SolutionComponentType.AUTOMATED_ACTION.getSolutionComponentType(),
+                     "Governance Action Process",
+                     "Certify Hospital",
+                     "Confirm that a hospital has met all of the criteria to participate in the clinical trial.",
+                     "Certify-Hospital",
+                     "V1.0",
+                     null,
+                     null,
+                     CocoRequestTypeDefinition.CERTIFY_HOSPITAL.getGovernanceActionTypeGUID()),
+
+    ONBOARD_HOSPITAL(ClinicalTrialSolutionComponent.ONBOARD_HOSPITAL.getGUID(),
+                     SolutionComponentType.AUTOMATED_ACTION.getSolutionComponentType(),
+                     "Governance Action Process",
+                     "Onboard Hospital",
+                     "Set up the onboarding pipeline for a participating hospital.  This fails if the hospital is not certified.",
+                     "Onboard-Hospital",
+                     "V1.0",
+                     null,
+                     null,
+                     CocoRequestTypeDefinition.ONBOARD_HOSPITAL.getGovernanceActionTypeGUID()),
+
+    SET_UP_DATA_LAKE(ClinicalTrialSolutionComponent.SET_UP_DATA_LAKE.getGUID(),
+                     SolutionComponentType.AUTOMATED_ACTION.getSolutionComponentType(),
+                     "Governance Action Process",
+                     "Set up Data Lake",
+                     "Set up the data stores for receiving data from the hospitals - this includes the file system directory and Unity Catalog Volume for incoming patient measurements, along with the data set collection for certified measurement files.",
+                     "Set-up-Data-Lake",
+                     "V1.0",
+                     new SolutionComponent[]{
+                                    WEEKLY_MEASUREMENTS_DATA_LAKE_FOLDER
+                            },
+                     null,
+                     CocoRequestTypeDefinition.SET_UP_DATA_LAKE.getGovernanceActionTypeGUID()),
+
+    SET_UP_CLINICAL_TRIAL("849b0b42-f465-452b-813c-477d6398e082",
+                          SolutionComponentType.AUTOMATED_ACTION.getSolutionComponentType(),
+                          "Governance Action Process",
+                          "Set up clinical trial",
+                          "Generates the project, and governance action processes needed to drive a clinical trial.",
+                          "V2.0",
+                          "Set-up-clinical-trial",
+                          null,
+                          null,
+                          CocoRequestTypeDefinition.SET_UP_CLINICAL_TRIAL.getGovernanceActionTypeGUID()),
+
+    SUSTAINABILITY_ODS("fc55ef2d-a88d-44ee-94cb-3fca9b9af8b4",
+                       SolutionComponentType.AUTOMATED_ACTION.getSolutionComponentType(),
+                       "PostgreSQL Database",
+                       "Sustainability Operational Data Store (ODS)",
+                       "A store for both the raw data needed for the sustainability calculations and the results.",
+                       "Sustainability-ODS",
+                       "V1.0",
+                       null,
+                       new InformationSupplyChain[]{
+                               InformationSupplyChain.SUSTAINABILITY_REPORTING},
+                       null),
+
+    EGERIA("83346c39-115f-4033-9f3e-98caea678cf5",
+                       SolutionComponentType.SOFTWARE_SERVICE.getSolutionComponentType(),
+                       "OMAG Server Platform",
+                       "Egeria Open Metadata and Governance",
+                       "A metadata and context capture, management and distribution service.",
+                       "EGERIA",
+                       "V1.0",
+                       null,
+                       new InformationSupplyChain[]{
+                               InformationSupplyChain.SUSTAINABILITY_REPORTING},
+                       null),
+
+    SUSTAINABILITY_CALCULATORS("06edd666-06fd-43ef-b7bd-22e2651c334f",
+                               SolutionComponentType.AUTOMATED_ACTION.getSolutionComponentType(),
+                               "Analytics Application",
+                               "Sustainability Calculators",
+                               "Algorithms that calculate the impact of Coco Pharmaceuticals operation and the changes that are making a difference.",
+                               "Sustainability-Calculators",
+                               "V1.0",
+                               null,
+                               new InformationSupplyChain[]{
+                                       InformationSupplyChain.SUSTAINABILITY_REPORTING},
+                               null),
+
+    SUSTAINABILITY_DASHBOARDS("d50a6f1f-49d2-47c3-a55e-5844464bd26f",
+                               SolutionComponentType.AUTOMATED_ACTION.getSolutionComponentType(),
+                               "SuperSet Application",
+                               "Sustainability Dashboards",
+                               "Dashboards that illustrate Coco Pharmaceuticals sustainability position.",
+                              "SuperSet-Application",
+                              "V1.0",
+                               null,
+                               new InformationSupplyChain[]{
+                                       InformationSupplyChain.SUSTAINABILITY_REPORTING},
+                              null),
+
+    EMPLOYEE_EXPENSE_TOOL("02cdce9a-7630-479a-90de-fd7698d098f1",
+                          SolutionComponentType.AUTOMATED_ACTION.getSolutionComponentType(),
+                          "Cloud Application",
+                          "Employee Expense Tool",
+                          "Application for recording and categorizing employee expenses, and authorizing the repayment.",
+                          "Employee-Expense-Tool",
+                          "V1.0",
+                          null,
+                          new InformationSupplyChain[]{
+                                  InformationSupplyChain.SUSTAINABILITY_REPORTING},
+                          null),
+
+    HAZMAT_INVENTORY("25fd5be7-692d-4752-9dc7-30068a7d665e",
+                     SolutionComponentType.AUTOMATED_ACTION.getSolutionComponentType(),
+                     "COTS Application",
+                     "Hazardous Materials (HazMat) Inventory",
+                     "Application for recording and tracing hazardous materials.  This includes greenhouse gasses such as CO2 and Hydro-fluorocarbons.",
+                     "HazMat-Inventory",
+                     "V1.0",
+                     null,
+                     new InformationSupplyChain[]{
+                             InformationSupplyChain.SUSTAINABILITY_REPORTING},
+                     null),
+
+    ACCOUNTING_LEDGER("2c0f5a4e-bb02-4081-a80e-3072ca99a1aa",
+                      SolutionComponentType.AUTOMATED_ACTION.getSolutionComponentType(),
+                      "Cloud Application",
+                      "Accounting ledgers",
+                      "Application for recording and tracing the income and spending of Coco Pharmaceuticals.  This can help to identify how much the company is spending on particular materials and activities.",
+                      "Accounting-ledgers",
+                      "V1.0",
+                      null,
+                      new InformationSupplyChain[]{
+                              InformationSupplyChain.SUSTAINABILITY_REPORTING},
+                      null),
+
+    GOODS_INVENTORY("50768e61-43b6-4241-96a3-4c413582ec1f",
+                    SolutionComponentType.AUTOMATED_ACTION.getSolutionComponentType(),
+                    "COTS Application",
+                    "Goods Inventory",
+                    "Application for recording and tracing physical materials as they are acquired, stored, distributed and used.",
+                    "Goods-Inventory",
+                    "V1.0",
+                    null,
+                    new InformationSupplyChain[]{
+                            InformationSupplyChain.SUSTAINABILITY_REPORTING},
+                    null),
+
+    SUSTAINABILITY_COMMUNITY("777611b8-3bc8-4b47-8abf-f1d1e5325d23",
+                    SolutionComponentType.MANUAL_PROCESS.getSolutionComponentType(),
+                    "Community",
+                    "Sustainability Community",
+                    "Community to support sustainability initiatives.",
+                    "SUS-Community",
+                    "V1.0",
+                    null,
+                    new InformationSupplyChain[]{
+                            InformationSupplyChain.SUSTAINABILITY_REPORTING},
+                    null),
+
+
+    ;
+
+
+    private final String                          guid;
+    private final String                          componentType;
+    private final String                          implementationType;
+    private final String                          displayName;
+    private final String                          description;
+    private final String                          identifier;
+    private final String                          versionIdentifier ;
+    private final SolutionComponent[]             subComponents;
+    private final InformationSupplyChain[]        linkedFromSegment;
+    private final String                          implementationResource;
+
+
+    /**
+     * Construct an enum instance.
+     *
+     * @param guid unique identifier
+     * @param componentType   type of solution component - eg automated process
+     * @param implementationType   type of software component - for example, is it a process, of file or database.
+     * @param displayName the display name of the solution component
+     * @param description the description of the solution component
+     * @param identifier unique identifier of the solution component
+     * @param versionIdentifier version identifier of the solution component
+     * @param subComponents optional subcomponents of the solution
+     * @param linkedFromSegment array of segments that are implemented by this component
+     * @param implementationResource components useful when creating implementations
+     */
+    SolutionComponent(String                   guid,
+                      String                   componentType,
+                      String                   implementationType,
+                      String                   displayName,
+                      String                   description,
+                      String                   identifier,
+                      String                   versionIdentifier,
+                      SolutionComponent[]      subComponents,
+                      InformationSupplyChain[] linkedFromSegment,
+                      String                   implementationResource)
+    {
+        this.guid                   = guid;
+        this.componentType          = componentType;
+        this.implementationType     = implementationType;
+        this.displayName            = displayName;
+        this.description            = description;
+        this.identifier             = identifier;
+        this.versionIdentifier      = versionIdentifier;
+        this.subComponents          = subComponents;
+        this.linkedFromSegment      = linkedFromSegment;
+        this.implementationResource = implementationResource;
+    }
+
+
+    /**
+     * Return the GUID for the element.
+     *
+     * @return string
+     */
+    @Override
+    public String getGUID()
+    {
+        return guid;
+    }
+
+
+    /**
+     * Return the type of solution component - for example, is it a process, of file or database.
+     *
+     * @return string
+     */
+    @Override
+    public String getComponentType()
+    {
+        return componentType;
+    }
+
+
+    /**
+     * Return which type of software component is likely to be deployed to implement this solution component.
+     *
+     * @return string
+     */
+    @Override
+    public String getImplementationType()
+    {
+        return implementationType;
+    }
+
+
+    /**
+     * Return the display name of the solution blueprint.
+     *
+     * @return string
+     */
+    @Override
+    public String getDisplayName()
+    {
+        return displayName;
+    }
+
+
+    /**
+     * Return the description of the solution blueprint
+     *
+     * @return string
+     */
+    @Override
+    public String getDescription()
+    {
+        return description;
+    }
+
+
+    /**
+     * Return the version identifier of the solution blueprint.
+     *
+     * @return string
+     */
+    @Override
+    public String getIdentifier()
+    {
+        return identifier;
+    }
+
+
+    /**
+     * Return the optional collection that this element is a part of.
+     *
+     * @return collection definition
+     */
+    @Override
+    public CollectionDefinition getParentCollection()
+    {
+        return SolutionComponentDefinition.super.getParentCollection();
+    }
+
+    /**
+     * Return whether this is a template or not.
+     *
+     * @return boolean
+     */
+    @Override
+    public boolean isTemplate()
+    {
+        return SolutionComponentDefinition.super.isTemplate();
+    }
+
+
+    /**
+     * Return the version identifier of the solution blueprint.
+     *
+     * @return string
+     */
+    @Override
+    public String getVersionIdentifier()
+    {
+        return versionIdentifier;
+    }
+
+
+    /**
+     * Return the optional list of subcomponents.
+     *
+     * @return null or list
+     */
+    @Override
+    public List<SolutionComponentDefinition> getSubComponents()
+    {
+        if (subComponents == null)
+        {
+            return null;
+        }
+
+        return Arrays.asList(subComponents);
+    }
+
+
+    /**
+     * Return the GUID of the implementation element (or null)
+     *
+     * @return guid
+     */
+    public String getImplementationResource()
+    {
+        return implementationResource;
+    }
+
+    /**
+     * Return the unique name of the solution blueprint.
+     *
+     * @return string
+     */
+    public String getQualifiedName()
+    {
+        return "SolutionComponent::" + displayName + "::" + versionIdentifier;
+    }
+
+
+    /**
+     * Output of this enum class and main value.
+     *
+     * @return string showing enum value
+     */
+    @Override
+    public String toString()
+    {
+        return "SolutionComponent{" + displayName + '}';
+    }
+}

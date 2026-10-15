@@ -1,0 +1,292 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Copyright Contributors to the ODPi Egeria project. */
+package org.odpi.openmetadata.frameworks.openmetadata.search;
+
+import com.fasterxml.jackson.annotation.JsonAutoDetect;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
+
+import java.util.Date;
+import java.util.List;
+import java.util.Objects;
+
+import static com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility.NONE;
+import static com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility.PUBLIC_ONLY;
+
+/**
+ * GetOptions carries the date/time for a query along with other common search parameters.
+ */
+@JsonAutoDetect(getterVisibility=PUBLIC_ONLY, setterVisibility=PUBLIC_ONLY, fieldVisibility=NONE)
+@JsonInclude(JsonInclude.Include.NON_NULL)
+@JsonIgnoreProperties(ignoreUnknown=true)
+public class GetOptions extends BasicOptions
+{
+    private Date         asOfTime                      = null;
+    private String       metadataElementTypeName       = null;
+    private List<String> skipRelationships             = null;
+    private List<String> includeOnlyRelationships      = null;
+    private int          relationshipsPageSize         = 0;
+    private int          graphQueryDepth               = 5;
+    private int          maxMermaidNodeCount           = 5;
+
+    /**
+     * Default constructor
+     */
+    public GetOptions()
+    {
+        super();
+    }
+
+
+    /**
+     * Copy/clone constructor
+     *
+     * @param template object to copy
+     */
+    public GetOptions(GetOptions template)
+    {
+        super(template);
+
+        if (template != null)
+        {
+            asOfTime                      = template.getAsOfTime();
+            metadataElementTypeName       = template.getMetadataElementTypeName();
+            skipRelationships             = template.getSkipRelationships();
+            includeOnlyRelationships      = template.getIncludeOnlyRelationships();
+            relationshipsPageSize         = template.getRelationshipsPageSize();
+            graphQueryDepth               = template.getGraphQueryDepth();
+            maxMermaidNodeCount           = template.getMaxMermaidNodeCount();
+        }
+    }
+
+
+    /**
+     * Copy/clone constructor
+     *
+     * @param template object to copy
+     */
+    public GetOptions(BasicOptions template)
+    {
+        super(template);
+    }
+
+
+    /**
+     * Return the repository time that should be used when retrieving metadata.
+     *
+     * @return date/time (default null which means now)
+     */
+    public Date getAsOfTime()
+    {
+        return asOfTime;
+    }
+
+
+    /**
+     * Set up the repository time that should be used when retrieving metadata.
+     *
+     * @param asOfTime date/time (default null which means now)
+     */
+    public void setAsOfTime(Date asOfTime)
+    {
+        this.asOfTime = asOfTime;
+    }
+
+
+    /**
+     * Return the type of metadata element that the caller is searching for.
+     *
+     * @return open metadata type name
+     */
+    public String getMetadataElementTypeName()
+    {
+        return metadataElementTypeName;
+    }
+
+
+    /**
+     * Set up the type of metadata element that the caller is searching for.
+     *
+     * @param metadataElementTypeName open metadata type name
+     */
+    public void setMetadataElementTypeName(String metadataElementTypeName)
+    {
+        this.metadataElementTypeName = metadataElementTypeName;
+    }
+
+
+    /**
+     * Return the list of relationships that the query should skip (not return).
+     * Typically, egeria queries return all related element when an element is retrieved.
+     * Some elements have many linked elements.  This option allows you to prune specific
+     * relationships from the response.
+     *
+     * @return list of relationship type names or null
+     */
+    public List<String> getSkipRelationships()
+    {
+        return skipRelationships;
+    }
+
+
+    /**
+     * Set up the list of relationships that the query should skip (not return). Default is null.
+     *
+     * @param skipRelationships  list of relationship type names or null
+     */
+    public void setSkipRelationships(List<String> skipRelationships)
+    {
+        this.skipRelationships = skipRelationships;
+    }
+
+
+    /**
+     * Return the list of relationship type names that restrict which types of relationships
+     * can be returned from the query.
+     *
+     * @return list of relationship type names or null
+     */
+    public List<String> getIncludeOnlyRelationships()
+    {
+        return includeOnlyRelationships;
+    }
+
+
+    /**
+     * Set up the list of relationship type names that restrict which types of relationships
+     * can be returned from the query.
+     *
+     * @param includeOnlyRelationships list of relationship type names or null
+     */
+    public void setIncludeOnlyRelationships(List<String> includeOnlyRelationships)
+    {
+        this.includeOnlyRelationships = includeOnlyRelationships;
+    }
+
+
+    /**
+     * Return the maximum relationships of a particular kind that can be returned with this element.
+     * Zero (0) means that all relationships are returned up to the maximum page size allowed by the server.
+     *
+     * @return int
+     */
+    public int getRelationshipsPageSize()
+    {
+        return relationshipsPageSize;
+    }
+
+
+    /**
+     * Set up the maximum relationships of a particular kind that can be returned with this element.
+     * Zero (0) means that all relationships are returned up to the maximum page size allowed by the server.
+     *
+     * @param relationshipsPageSize int
+     */
+    public void setRelationshipsPageSize(int relationshipsPageSize)
+    {
+        this.relationshipsPageSize = relationshipsPageSize;
+    }
+
+
+    /**
+     * Return the maximum relationships away from the starting element that a graph query can traverse.
+     * If this value is 0, then no relationships are retrieved.
+     *
+     * @return int (default is 5)
+     */
+    public int getGraphQueryDepth()
+    {
+        return graphQueryDepth;
+    }
+
+
+    /**
+     * Set up the maximum relationships away from the starting element that a graph query can traverse.
+     *
+     * @param graphQueryDepth int (default is 5)
+     */
+    public void setGraphQueryDepth(int graphQueryDepth)
+    {
+        this.graphQueryDepth = graphQueryDepth;
+    }
+
+
+    /**
+     * Return the maximum nodes linked by a particular relationship to an element to include in the graph.
+     * If this value is 0, then no mermaid graph is generated.
+     *
+     * @return int (default is 5)
+     */
+    public int getMaxMermaidNodeCount()
+    {
+        return maxMermaidNodeCount;
+    }
+
+    /**
+     * Set up the maximum nodes linked by a particular relationship to an element to include in the graph.
+     * If this value is 0, then no mermaid graph is generated.
+     *
+     * @param maxMermaidNodeCount int (default is 5)
+     */
+    public void setMaxMermaidNodeCount(int maxMermaidNodeCount)
+    {
+        this.maxMermaidNodeCount = maxMermaidNodeCount;
+    }
+
+
+    /**
+     * JSON-style toString
+     *
+     * @return return string containing the property names and values
+     */
+    @Override
+    public String toString()
+    {
+        return "GetOptions{" +
+                "asOfTime=" + asOfTime +
+                ", metadataElementTypeName='" + metadataElementTypeName + '\'' +
+                ", skipRelationships=" + skipRelationships +
+                ", includeOnlyRelationships=" + includeOnlyRelationships +
+                ", relationshipsPageSize=" + relationshipsPageSize +
+                ", graphQueryDepth=" + graphQueryDepth +
+                ", maxMermaidNodeCount=" + maxMermaidNodeCount +
+                "} " + super.toString();
+    }
+
+
+
+    /**
+     * Return comparison result based on the content of the properties.
+     *
+     * @param objectToCompare test object
+     * @return result of comparison
+     */
+    @Override
+    public boolean equals(Object objectToCompare)
+    {
+        if (this == objectToCompare) return true;
+        if (objectToCompare == null || getClass() != objectToCompare.getClass()) return false;
+        if (!super.equals(objectToCompare)) return false;
+        GetOptions that = (GetOptions) objectToCompare;
+        return graphQueryDepth == that.graphQueryDepth &&
+                maxMermaidNodeCount == that.maxMermaidNodeCount &&
+                Objects.equals(asOfTime, that.asOfTime) &&
+                Objects.equals(metadataElementTypeName, that.metadataElementTypeName) &&
+                Objects.equals(skipRelationships, that.skipRelationships) &&
+                Objects.equals(includeOnlyRelationships, that.includeOnlyRelationships) &&
+                Objects.equals(relationshipsPageSize, that.relationshipsPageSize);
+    }
+
+    /**
+     * Return hash code for this object
+     *
+     * @return int hash code
+     */
+    @Override
+    public int hashCode()
+    {
+        return Objects.hash(super.hashCode(), asOfTime, metadataElementTypeName,
+                            skipRelationships, includeOnlyRelationships, relationshipsPageSize,
+                            graphQueryDepth, maxMermaidNodeCount);
+    }
+}

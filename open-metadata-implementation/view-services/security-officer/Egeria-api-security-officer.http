@@ -1,0 +1,501 @@
+# Egeria-security-officer-api
+
+@baseURL=https://localhost:7443
+@viewServer=view-server
+
+###
+# =====================================================================================================================
+# Manage the authentication token.  Run this request to create/refresh the token.
+
+# @name Token (RequestBody)
+POST {{baseURL}}/api/token
+Content-Type: application/json
+
+{
+  "userId" : "ivorpadlock",
+  "password" : "secret"
+}
+
+> {% client.global.set("token", response.body); %}
+
+###
+# =====================================================================================================================
+# Set up new users in the user directory
+# https://egeria-project.org/concepts/secrets-store-connector/
+
+@platformGUID=add guid here
+@accountUserId=add userId here
+
+
+###
+# @name: setUserAccount
+# Set up or update a user account in the platform metadata security connector
+# The user requires operator permission for the platform.
+#
+# @param serverName  name of called server
+# @param platformGUID unique identifier of the platform
+# @param requestBody requestBody used to create and configure the connector that performs platform security
+# @return void response
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/security-officer/platforms/{{platformGUID}}/user-accounts
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "UserAccountRequestBody",
+  "userAccount": {
+    "class" : "OpenMetadataUserAccount",
+    "userId": "",
+    "userName": "",
+    "userAccountType": "EMPLOYEE",
+    "employeeNumber": "",
+    "employeeType": "",
+    "givenName": "",
+    "surname": "",
+    "email": "",
+    "manager": "",
+    "distinguishedName": "",
+    "securityRoles": [""],
+    "securityGroups": [""],
+    "otherProperties": {
+      "defaultZones" : [],
+      "publishZones" : []
+    },
+    "userAccountStatus": "CREDENTIALS_EXPIRED",
+    "secrets": {
+      "clearPassword" : "newSecret1"
+    }
+  }
+}
+
+
+###
+# @name: getUserAccount
+# Return the user account object for the requested user from the platform metadata security connector.
+# Null is returned if no platform security or user account has been set up.
+# The user requires operator permission for the platform unless it is their own user account they are retrieving.
+#
+# @param serverName  name of called server
+# @param platformGUID unique identifier of the platform
+# @param accountUserId    user id of the account
+# @return user account response
+#
+GET {{baseURL}}/servers/{{viewServer}}/api/open-metadata/security-officer/platforms/{{platformGUID}}/user-accounts/{{accountUserId}}
+Authorization: Bearer {{token}}
+
+
+###
+# @name: deleteUserAccount
+# Clear the account for a user with the platform security connector.
+#
+# @param serverName  name of called server
+# @param platformGUID unique identifier of the platform
+# @param accountUserId    user id of the account
+# @return void response
+#
+DELETE {{baseURL}}/servers/{{viewServer}}/api/open-metadata/security-officer/platforms/{{platformGUID}}/user-accounts/{{accountUserId}}
+Authorization: Bearer {{token}}
+
+
+###
+# @name: getUserList
+# Return the list of users registered with the platform security connector.
+#
+# @param serverName  name of called server
+# @param platformGUID unique identifier of the platform
+# @param status status of the user - or null for any status
+# @param type   type of user - or null for any type
+# @return list of matching userIds in the user directory
+#
+GET {{baseURL}}/servers/{{viewServer}}/api/open-metadata/security-officer/platforms/{{platformGUID}}/user-accounts?status=AVAILABLE&type=EMPLOYEE
+Authorization: Bearer {{token}}
+
+
+###
+# =====================================================================================================================
+# Manage security access controls.
+# https://egeria-project.org/concepts/security-access-control/
+
+@ controlName=add name here
+
+###
+# @name setSecurityAccessControl
+# Set up or update a security access control in the platform metadata security connector.
+# The user requires operator permission for the platform.
+#
+# @param serverName  name of called server
+# @param platformGUID unique identifier of the platform
+# @param requestBody requestBody used to create and configure the connector that performs platform security
+# @return void response
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/security-officer/platforms/{{platformGUID}}/security-access-control
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "SecurityAccessControlRequestBody",
+  "securityAccessControl": {
+    "controlName": "{{controlName}}",
+    "displayName": "",
+    "description": "",
+    "controlTypeName": "",
+    "associatedSecurityList": {
+       "operationName" : [ "listOrUser1", "listOrUser2" ]
+    },
+    "mappingProperties": {
+       "property1" : "propertyValue1"
+    },
+    "securityLabels": [],
+    "securityProperties": {
+       "property1" : "propertyValue1"
+    },
+    "otherProperties": {
+       "property1" : "propertyValue1"
+    }
+  }
+}
+
+
+###
+# @name getSecurityAccessControl
+# Return the security access control object from the platform metadata security connector.  Null is returned if no control has been set up.
+# The user requires operator permission for the platform.
+#
+# @param serverName  name of called server
+# @param platformGUID unique identifier of the platform
+# @param controlName    name of the control
+# @return user account response
+#
+GET {{baseURL}}/servers/{{viewServer}}/api/open-metadata/security-officer/platforms/{{platformGUID}}/security-access-control/{{controlName}}
+Authorization: Bearer {{token}}
+
+
+###
+# @name deleteSecurityAccessControl
+# Clear the named security access control with the platform security connector.
+#
+# @param serverName  name of called server
+# @param platformGUID unique identifier of the platform
+# @param controlName    name of the control
+# @return void response
+#
+DELETE {{baseURL}}/servers/{{viewServer}}/api/open-metadata/security-officer/platforms/{{platformGUID}}/security-access-control/{{controlName}}
+Authorization: Bearer {{token}}
+
+
+###
+# =====================================================================================================================
+# Manage the structure of the governance zones.
+
+@governanceZoneGUID=add guid here
+@nestedGovernanceZoneGUID=add guid here
+
+###
+# @name: linkGovernanceZones
+# Attach a nested governance zone to a broader governance zone definition.
+#
+# @param serverName         name of called server
+# @param governanceZoneGUID  unique identifier of the first governance zone definition
+# @param nestedGovernanceZoneGUID      unique identifier of the second governance zone definition
+# @param requestBody  description of the relationship.
+#
+# @return void or
+#  InvalidParameterException  one of the parameters is null or invalid.
+#  PropertyServerException    a problem retrieving information from the property server(s).
+#  UserNotAuthorizedException the requesting user is not authorized to issue this request.
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/security-officer/governance-zones/{{governanceZoneGUID}}/governance-zone-hierarchies/{{nestedGovernanceZoneGUID}}/attach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewRelationshipRequestBody",
+  "properties": {
+    "class": "ZoneHierarchy",
+    "effectiveFrom": "{{$isoTimestamp}}",
+    "effectiveTo": "{{$isoTimestamp}}"
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+
+###
+# @name: detachGovernanceZones
+# Detach a governance zone definition from a hierarchical relationship.
+#
+# @param serverName         name of called server
+# @param governanceZoneGUID  unique identifier of the first governance zone definition
+# @param nestedGovernanceZoneGUID      unique identifier of the second governance zone definition
+# @param requestBody  description of the relationship.
+#
+# @return void or
+#  InvalidParameterException  one of the parameters is null or invalid.
+#  PropertyServerException    a problem retrieving information from the property server(s).
+#  UserNotAuthorizedException the requesting user is not authorized to issue this request.
+#
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/security-officer/governance-zones/{{governanceZoneGUID}}/governance-zone-hierarchies/{{nestedGovernanceZoneGUID}}/detach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteRelationshipRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# =====================================================================================================================
+# Retrieve the defined security roles and groups.
+# These elements are catalogued by the Secrets Store Cataloguer integration connector and are only visible to the security team.
+###
+# @name find Security Roles
+# Returns the list of collections matching the search string.  Graph query depth is zero so linked elements are not returned.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/security-officer/collections/by-search-string
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "SearchStringRequestBody",
+  "metadataElementTypeName" : "SecurityRole",
+  "graphQueryDepth": 0
+}
+
+
+###
+# @name find Security Groups
+# Returns the list of collections matching the search string.  Graph query depth is zero so linked elements are not returned.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/security-officer/collections/by-search-string
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "SearchStringRequestBody",
+  "metadataElementTypeName" : "SecurityGroup",
+  "graphQueryDepth": 0
+}
+
+###
+# =====================================================================================================================
+# Secrets collection relationships
+# https://egeria-project.org/concepts/secrets-collection
+
+@secretsCollectionGUID=add guid here
+@securityAccessControlGUID=add guid here
+@securityListGUID=add guid here
+@userIdentityGUID=add guid here
+
+###
+# @name linkResourcePermissions
+# Attach a security access control to the secrets collection that defines it.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/security-officer/secrets-collections/{{secretsCollectionGUID}}/resource-permissions/{{securityAccessControlGUID}}/attach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewRelationshipRequestBody",
+  "properties": {
+    "class": "ResourcePermissionsProperties",
+    "label": "add label",
+    "description": "add description",
+    "effectiveFrom": "{{$isoTimestamp}}",
+    "effectiveTo": "{{$isoTimestamp}}"
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name detachResourcePermissions
+# Detach a security access control from the secrets collection that defined it.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/security-officer/secrets-collections/{{secretsCollectionGUID}}/resource-permissions/{{securityAccessControlGUID}}/detach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteRelationshipRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name linkSecretsCollectionSecurityList
+# Attach a security list to the secrets collection that lists it.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/security-officer/secrets-collections/{{secretsCollectionGUID}}/security-lists/{{securityListGUID}}/attach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewRelationshipRequestBody",
+  "properties": {
+    "class": "SecretsCollectionSecurityListProperties",
+    "label": "add label",
+    "description": "add description",
+    "effectiveFrom": "{{$isoTimestamp}}",
+    "effectiveTo": "{{$isoTimestamp}}"
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name detachSecretsCollectionSecurityList
+# Detach a security list from the secrets collection that listed it.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/security-officer/secrets-collections/{{secretsCollectionGUID}}/security-lists/{{securityListGUID}}/detach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteRelationshipRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name linkUserAccount
+# Attach a user identity to the secrets collection that configures its account.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/security-officer/secrets-collections/{{secretsCollectionGUID}}/user-accounts/{{userIdentityGUID}}/attach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewRelationshipRequestBody",
+  "properties": {
+    "class": "UserAccountProperties",
+    "label": "add label",
+    "description": "add description",
+    "effectiveFrom": "{{$isoTimestamp}}",
+    "effectiveTo": "{{$isoTimestamp}}"
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name detachUserAccount
+# Detach a user identity from the secrets collection that configured its account.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/security-officer/secrets-collections/{{secretsCollectionGUID}}/user-accounts/{{userIdentityGUID}}/detach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteRelationshipRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# =====================================================================================================================
+# Secrets collection profile classification
+# https://egeria-project.org/concepts/secrets-collection
+
+
+###
+# @name setUserAccountProfile
+# Classify a secrets collection with a profile of the user accounts that it holds.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/security-officer/secrets-collections/{{secretsCollectionGUID}}/user-account-profile
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewClassificationRequestBody",
+  "properties": {
+    "class": "UserAccountProfileProperties",
+    "userAccountCount": 0,
+    "employeeAccountCount": 0,
+    "contractorAccountCount": 0,
+    "externalAccountCount": 0,
+    "effectiveFrom": "{{$isoTimestamp}}",
+    "effectiveTo": "{{$isoTimestamp}}"
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name clearUserAccountProfile
+# Remove the user account profile from a secrets collection.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/security-officer/secrets-collections/{{secretsCollectionGUID}}/user-account-profile/remove
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteClassificationRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# =====================================================================================================================
+# Governance zone profile classification
+# https://egeria-project.org/concepts/governance-zone
+
+
+###
+# @name setZoneMembershipProfile
+# Classify a governance zone with a profile of its membership.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/security-officer/governance-zones/{{governanceZoneGUID}}/zone-membership-profile
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "NewClassificationRequestBody",
+  "properties": {
+    "class": "ZoneMembershipProfileProperties",
+    "securityGroups": ["add security group here"],
+    "effectiveFrom": "{{$isoTimestamp}}",
+    "effectiveTo": "{{$isoTimestamp}}"
+  },
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+
+###
+# @name clearZoneMembershipProfile
+# Remove the zone membership profile from a governance zone.
+POST {{baseURL}}/servers/{{viewServer}}/api/open-metadata/security-officer/governance-zones/{{governanceZoneGUID}}/zone-membership-profile/remove
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "class" : "DeleteClassificationRequestBody",
+  "externalSourceGUID": "add guid here",
+  "externalSourceName": "add qualified name here",
+  "effectiveTime" : "{{$isoTimestamp}}",
+  "forLineage" : false,
+  "forDuplicateProcessing" : false
+}
+

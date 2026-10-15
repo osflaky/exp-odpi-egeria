@@ -1,0 +1,101 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Copyright Contributors to the ODPi Egeria project. */
+package org.odpi.openmetadata.frameworks.openmetadata.api;
+
+import org.odpi.openmetadata.frameworks.openmetadata.properties.ClassificationProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.properties.translations.TranslationDetailProperties;
+import org.odpi.openmetadata.frameworks.openmetadata.ffdc.InvalidParameterException;
+import org.odpi.openmetadata.frameworks.openmetadata.ffdc.PropertyServerException;
+import org.odpi.openmetadata.frameworks.openmetadata.ffdc.UserNotAuthorizedException;
+
+import java.util.List;
+import java.util.Map;
+
+/**
+ * MultiLanguageInterface enables translations of the string properties of a metadata element to be created, maintained and retrieved.
+ */
+public interface MultiLanguageInterface
+{
+    /**
+     * Create or update the translation for a particular language/locale for a metadata element.
+     *
+     * @param userId caller's userId
+     * @param elementGUID unique identifier of the element that this translation is related to
+     * @param initialClassifications    map of classifications to add to the new translation
+     * @param translationDetail properties of the translation
+     *
+     * @throws InvalidParameterException  the unique identifier is null or not known.
+     * @throws UserNotAuthorizedException the service is not able to access the element
+     * @throws PropertyServerException    a problem accessing the metadata store
+     */
+    void setTranslation(String            userId,
+                        String            elementGUID,
+                        Map<String, ClassificationProperties> initialClassifications,
+                        TranslationDetailProperties translationDetail) throws InvalidParameterException,
+                                                                              UserNotAuthorizedException,
+                                                                              PropertyServerException;
+
+
+    /**
+     * Remove the translation for a particular language/locale for a metadata element.
+     *
+     * @param userId caller's userId
+     * @param elementGUID unique identifier of the element that this translation is related to
+     * @param language language requested
+     * @param locale optional locale to qualify which translation if there are multiple translations for the language.
+     *
+     * @throws InvalidParameterException  the language is null or not known or not unique (add locale)
+     * @throws UserNotAuthorizedException the service is not able to access the element
+     * @throws PropertyServerException    a problem accessing the metadata store
+     */
+    void clearTranslation(String userId,
+                          String elementGUID,
+                          String language,
+                          String locale) throws InvalidParameterException,
+                                                UserNotAuthorizedException,
+                                                PropertyServerException;
+
+
+    /**
+     * Retrieve the translation for the matching language/locale.
+     *
+     * @param userId caller's userId
+     * @param elementGUID unique identifier of the element that this translation is related to
+     * @param language language requested
+     * @param locale optional locale to qualify which translation if there are multiple translations for the language.
+     *
+     * @return the properties of the translation or null if there is none
+     *
+     * @throws InvalidParameterException  the unique identifier is null or not known.
+     * @throws UserNotAuthorizedException the service is not able to access the element
+     * @throws PropertyServerException    a problem accessing the metadata store
+     */
+    TranslationDetailProperties getTranslation(String userId,
+                                               String elementGUID,
+                                               String language,
+                                               String locale) throws InvalidParameterException,
+                                                           UserNotAuthorizedException,
+                                                           PropertyServerException;
+
+
+    /**
+     * Retrieve all translations associated with a metadata element.
+     *
+     * @param userId caller's userId
+     * @param elementGUID unique identifier of the element that this translation is related to
+     * @param startFrom  index of the list to start from (0 for start)
+     * @param pageSize   maximum number of elements to return
+     *
+     * @return list of translation properties or null if there are none
+     *
+     * @throws InvalidParameterException  the unique identifier is null or not known.
+     * @throws UserNotAuthorizedException the service is not able to access the element
+     * @throws PropertyServerException    a problem accessing the metadata store
+     */
+    List<TranslationDetailProperties> getTranslations(String userId,
+                                                      String elementGUID,
+                                                      int    startFrom,
+                                                      int    pageSize) throws InvalidParameterException,
+                                                                    UserNotAuthorizedException,
+                                                                    PropertyServerException;
+}

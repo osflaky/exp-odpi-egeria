@@ -1,0 +1,45 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ * Copyright Contributors to the ODPi Egeria project.
+ */
+
+
+dependencies {
+    implementation project(':open-metadata-implementation:user-security:token-controller')
+    implementation project(':open-metadata-implementation:frameworks:audit-log-framework')
+    implementation project(':open-metadata-implementation:frameworks:open-metadata-framework')
+    implementation project(':open-metadata-implementation:frameworks:open-connector-framework')
+    implementation 'org.slf4j:slf4j-api'
+    implementation project(':open-metadata-implementation:admin-services:admin-services-api')
+    implementation project(':open-metadata-implementation:admin-services:admin-services-registration')
+    implementation project(':open-metadata-implementation:admin-services:admin-services-client')
+    implementation project(':open-metadata-implementation:repository-services:repository-services-apis')
+    implementation project(':open-metadata-implementation:repository-services:repository-services-implementation')
+    implementation project(':open-metadata-implementation:common-services:ffdc-services')
+    implementation project(':open-metadata-implementation:governance-server-services:engine-host-services:engine-host-services-registration')
+    implementation project(':open-metadata-implementation:adapters:open-connectors:connector-configuration-factory')
+    implementation project(':open-metadata-implementation:common-services:metadata-security:metadata-security-apis')
+    implementation project(':open-metadata-implementation:common-services:metadata-security:metadata-security-server')
+    compileOnly 'com.fasterxml.jackson.core:jackson-annotations'
+    compileOnly 'com.fasterxml.jackson.core:jackson-databind'
+}
+
+description = 'Administration Services Server-side'
+
+java {
+    withJavadocJar()
+}
+
+test {
+    // Enable JUnit 5 (Gradle 4.6+).
+    useJUnitPlatform()
+
+    // Always run tests, even when nothing changed.
+    dependsOn 'cleanTest'
+
+    // Show test results.
+    testLogging {
+        events "passed", "skipped", "failed"
+    }
+}
+

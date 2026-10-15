@@ -1,0 +1,36 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+<!-- Copyright Contributors to the ODPi Egeria project. -->
+
+![Stable](../../../images/egeria-content-status-released.png#pagewidth)
+
+# GAF Metadata Management
+
+**GAF Metadata Management** provides the metadata services that support the
+[Open Governance Framework (OGF)](../../frameworks/open-governance-framework), configuring and
+running **[governance engines](https://egeria-project.org/concepts/governance-engine)** and
+**[governance actions](https://egeria-project.org/concepts/governance-action)**, along with the
+integration groups that control which [integration connectors](../../frameworks/open-integration-framework)
+run in an [integration daemon](https://egeria-project.org/concepts/integration-daemon).
+
+* [Documentation](https://egeria-project.org/services/gaf-metadata-management)
+
+
+## Design Information
+
+The module structure for GAF Metadata Management is as follows:
+
+* [gaf-metadata-client](gaf-metadata-client) supports the client library.
+* [gaf-metadata-api](gaf-metadata-api) supports the common Java classes that are used both by the client and the server.
+* [gaf-metadata-server](gaf-metadata-server) supports in implementation of the access service and its related event management.
+* [gaf-metadata-spring](gaf-metadata-spring) supports the REST API using the [Spring](https://egeria-project.org/guides/contributor/runtime/#spring) libraries.
+* [gaf-topic-connectors](gaf-topic-connectors) supports the client and server connectors used to exchange events
+  over the service's out topic.
+
+
+----
+Return to the [access-services](..) module.
+
+----
+License: [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/),
+Copyright Contributors to the ODPi Egeria project.
+

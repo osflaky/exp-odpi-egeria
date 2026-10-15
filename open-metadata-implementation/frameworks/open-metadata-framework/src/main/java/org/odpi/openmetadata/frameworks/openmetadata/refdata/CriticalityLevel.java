@@ -1,0 +1,149 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Copyright Contributors to the ODPi Egeria project. */
+package org.odpi.openmetadata.frameworks.openmetadata.refdata;
+
+import com.fasterxml.jackson.annotation.JsonAutoDetect;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
+
+import static com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility.NONE;
+import static com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility.PUBLIC_ONLY;
+
+/**
+ * CriticalityLevel defines how important a data item is to the organization.
+ */
+@JsonAutoDetect(getterVisibility=PUBLIC_ONLY, setterVisibility=PUBLIC_ONLY, fieldVisibility=NONE)
+@JsonInclude(JsonInclude.Include.NON_NULL)
+@JsonIgnoreProperties(ignoreUnknown=true)
+public enum CriticalityLevel implements OpenMetadataRefData
+{
+    /**
+     * There is no assessment of the criticality for this data.
+     */
+    UNCLASSIFIED (0, "4c2c0370-973f-479c-9251-d400d55ad7e8", "Unclassified",
+                               "There is no assessment of the criticality for this data.", true),
+
+    /**
+     * The data is of minor importance to the organization.
+     */
+    MARGINAL     (1, "75cf926a-57f9-494d-8b08-995bd0dd7a72", "Marginal",
+                               "The data is of minor importance to the organization.", false),
+
+    /**
+     * The data is important to the running of the organization.
+     */
+    IMPORTANT    (2, "e78e4e87-9fa1-4b81-be4e-ca6b499d9898", "Important",
+                               "The data is important to the running of the organization.", false),
+
+    /**
+     * The data is critical to the operation of the organization.
+     */
+    CRITICAL     (3, "a0b6807e-6440-48a7-b76c-847f9e95767a", "Critical",
+                               "The data is critical to the operation of the organization.", false),
+
+    /**
+     * The data is so important that its loss is catastrophic, putting the future of the organization in doubt.
+     */
+    CATASTROPHIC (4, "e6effba2-3861-47f3-9738-dbc452532892", "Catastrophic",
+                               "The data is so important that its loss is catastrophic, putting the future of the organization in doubt.", false),
+
+    /**
+     * Another criticality level.
+     */
+    OTHER        (99, "81044dc1-ae06-404b-83d7-1c4180daa09e","Other",
+                               "Another criticality level.", false);
+
+    private final String descriptionGUID;
+
+    private final int            ordinal;
+    private final String         name;
+    private final String         description;
+    private final boolean        isDefault;
+
+
+    /**
+     * Default constructor for the enumeration.
+     *
+     * @param ordinal numerical representation of the enumeration
+     * @param descriptionGUID identifier for valid value
+     * @param name default string name of the enumeration
+     * @param description default string description of the enumeration
+     * @param isDefault is this the default value for the enum?
+     */
+    CriticalityLevel(int     ordinal,
+                     String  descriptionGUID,
+                     String  name,
+                     String  description,
+                     boolean isDefault)
+    {
+        this.ordinal = ordinal;
+        this.name            = name;
+        this.descriptionGUID = descriptionGUID;
+        this.description     = description;
+        this.isDefault = isDefault;
+    }
+
+
+
+    /**
+     * Return the numeric representation of the enumeration.
+     *
+     * @return int ordinal
+     */
+    @Override
+    public int getOrdinal() { return ordinal; }
+
+
+    /**
+     * Return the default name of the enumeration.
+     *
+     * @return String name
+     */
+    @Override
+    public String getDisplayName() { return name; }
+
+
+    /**
+     * Return the default description of the enumeration.
+     *
+     * @return String description
+     */
+    @Override
+    public String getDescription() { return description; }
+
+
+    /**
+     * Return the unique identifier for the valid value that represents the enum value.
+     *
+     * @return  guid
+     */
+    @Override
+    public  String getDescriptionGUID()
+    {
+        return descriptionGUID;
+    }
+
+
+    /**
+     * Return whether the enum is the default value or not.
+     *
+     * @return boolean
+     */
+    @Override
+    public boolean isDefault()
+    {
+        return isDefault;
+    }
+
+
+    /**
+     * Standard toString method.
+     *
+     * @return print out of variables in a JSON-style
+     */
+    @Override
+    public String toString()
+    {
+        return "CriticalityLevel{name='" + name + '}';
+    }
+}

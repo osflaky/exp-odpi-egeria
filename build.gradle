@@ -1,0 +1,486 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ * Copyright Contributors to the ODPi Egeria project.
+ */
+
+/*
+ * Plugins for this parent module only - so just high level project related
+ * Plugin management - ie version specs - are in settings.gradle
+ */
+plugins {
+    // Checks for unnecessary dependencies
+    id 'com.autonomousapps.dependency-analysis'
+    // helps resolve log implementation clashes and the jakarta/javax capability splits
+    id 'org.gradlex.jvm-dependency-conflict-resolution'
+    id 'checkstyle'
+}
+
+/*
+ * See pom/build.gradle for the Egeria BOM - including specification of dependency constraints and versions
+ * This has MOVED from this top level project
+ */
+
+/*
+ * Modules whose javadoc is complete enough to hold the line.  For these, doclint's "missing" group is
+ * switched on and its findings fail the build, so a parameter cannot be added without documenting it.
+ *
+ * Everywhere else keeps the previous behaviour - doclint runs, but the "missing" group is disabled -
+ * because turning it on across the whole repository at once would fail on documentation debt that
+ * predates the check.  The intent is to clear that debt a module at a time and move each module into
+ * this list as it is cleared, rather than leave the check switched off everywhere for ever.
+ */
+ext.javadocStrictModules = [
+        // Empty for now.  The mechanism below is wired and proven, but no module is clean enough to hold
+        // the line yet: doclint's "missing" group also requires a comment on every member it can see, and
+        // repository-services-apis - the nearest candidate, and the one whose @param tags have been filled
+        // in - still reports 95 "no comment" warnings, mostly on private fields.  Clear a module's warnings,
+        // then add it here, and the check will keep it clear.
+]
+
+/*
+ * Configuration for all projects - INCLUDING this one
+ */
+allprojects {
+    group = 'org.odpi.egeria'
+    version = '6.2-SNAPSHOT'
+
+    // Signing/publish used in parent & child projects
+    apply plugin: 'maven-publish'
+    apply plugin: 'signing'
+
+    // Only use maven central
+    repositories {
+        mavenCentral()
+    }
+} // end of allProjects
+
+/*
+ * Configuration for sub projects only
+ */
+subprojects {
+    // TODO: Consider using convention plugins to stylise different profiles of subprojects
+
+    // The 'bom' project is a special case - we must not apply anything else to it
+    if (project.name != 'bom' && project.buildFile.exists()) {
+        apply plugin: 'java'
+        apply plugin: 'jacoco'
+        apply plugin: 'checkstyle'
+        apply plugin: 'com.autonomousapps.dependency-analysis'
+        apply plugin: 'org.gradlex.jvm-dependency-conflict-resolution'
+
+        jvmDependencyConflicts {
+            conflictResolution {
+                // Tomcat's embedded core bundles the Jakarta Servlet API classes, so it conflicts with the
+                // standalone jakarta.servlet-api jar that Spring Boot also puts on the classpath.  The
+                // plugin's default strategy for this capability is "highest version", and it maps
+                // tomcat-embed-core 10.1.x to servlet API 6.0 - so the standalone 6.1.0 jar wins and
+                // tomcat-embed-core is evicted.  That silently removes the servlet container the platform
+                // runs on: the build still succeeds and the packaged jar still starts, but it has no web
+                // server.  Tomcat has to win this one.
+                select(org.gradlex.jvm.dependency.conflict.detection.rules.CapabilityDefinition.JAKARTA_SERVLET_API,
+                       'org.apache.tomcat.embed:tomcat-embed-core')
+            }
+        }
+
+        // Checking of javaheaders for license & copyright.  This has to stay inside the guard above:
+        // it configures the extension added by the checkstyle plugin, and outside the guard it would be
+        // resolved from the root project instead - which Gradle 9 deprecates and Gradle 10 rejects.
+        checkstyle {
+            toolVersion = '10.7.0'
+            showViolations = true
+        }
+
+        // Consistent dependencies, and exceptions
+        dependencies {
+            implementation platform(project(":bom"))
+            // Some nasty clashes we want to avoid (consumers will need to make their own arrangements
+            modules {
+                module('org.glassfish:jakarta.json') {
+                    replacedBy 'jakarta.json:jakarta.json-api', 'use jakarta.json.api instead of glassfish'
+                }
+            }
+        }
+
+        // we already have bridge modules that implement commons logging, so cannot have another implementation in classpath
+        // we also want to avoid the glassfish implementation of jakarta.json (if we have to, will replace as above)
+        configurations {
+            all {
+                exclude module: 'commons-logging'
+                exclude module: 'org.glassfish:jakarta.json'
+                resolutionStrategy.cacheChangingModulesFor 0, 'seconds'
+            }
+        }
+
+        // Maven publishing (to public repo) requires we included source and javadoc jars
+        java {
+            // Compile, test and javadoc with a JDK 21 toolchain that Gradle locates itself, rather than
+            // whatever JDK happens to be on JAVA_HOME.  Without this, building with an older JDK fails
+            // deep in javac with "release version 21 not supported"; with it, Gradle either finds an
+            // installed 21 or reports that no matching toolchain is available.
+            toolchain {
+                languageVersion = JavaLanguageVersion.of(21)
+            }
+
+            withSourcesJar()
+            withJavadocJar()
+        }
+
+        // JavaExec tasks - the archive writers, report generators and the application plugin's own 'run'
+        // task - do not pick up the toolchain from the java extension the way JavaCompile, Test and
+        // Javadoc do, so they have to be pointed at it explicitly.  Without this they run on whatever
+        // JAVA_HOME provides and fail with UnsupportedClassVersionError on class files built for 21.
+        tasks.withType(JavaExec).configureEach {
+            javaLauncher = javaToolchains.launcherFor {
+                languageVersion = JavaLanguageVersion.of(21)
+            }
+        }
+
+        // compile flags
+        tasks.withType(JavaCompile) {
+            options.release = 21
+            options.encoding = 'UTF-8'
+            options.incremental = true
+            options.failOnError = true
+            options.compilerArgs << "-Xlint:all" << "-Xmaxerrs" << "1000" << "-Xmaxwarns" << "1000"
+            // Retain method parameter names in the bytecode.  Spring needs them to bind REST request
+            // parameters; without this it falls back to LocalVariableTableParameterNameDiscoverer, which
+            // is deprecated for removal in Spring Framework 6.1.
+            options.compilerArgs << "-parameters"
+        }
+
+        tasks.withType(Javadoc).configureEach {
+            if (project.path in rootProject.javadocStrictModules) {
+                // Full doclint, including the "missing" group that catches an undocumented parameter,
+                // return value or exception.  -Werror turns those findings into a build failure rather
+                // than a warning scrolling past in the log, which is the only way they stay fixed.
+                options.addStringOption('Xdoclint:all', '-quiet')
+                options.addBooleanOption('Werror', true)
+            }
+            else {
+                options.addStringOption('Xdoclint:-missing', '-quiet')
+            }
+        }
+
+        // javadoc
+        javadoc {
+            options
+            {
+                addBooleanOption('html5', true)
+                setMemberLevel JavadocMemberLevel.PUBLIC
+            }
+        }
+
+        publishing {
+            {
+                publications {
+                    mavenmodule(MavenPublication) {
+                        from components.java
+                        pom {
+                            url = 'https://egeria.odpi.org'
+                            licenses {
+                                // Code
+                                license {
+                                    name = 'The Apache License, Version 2.0'
+                                    url = 'https://www.apache.org/licenses/LICENSE-2.0.txt'
+                                }
+                                // Docs
+                                license {
+                                    name = 'Creative Commons Attribution 4.0 International (CC BY 4.0)'
+                                    url = 'https://creativecommons.org/licenses/by/4.0'
+                                }
+                            }
+                            developers {
+                                developer {
+                                    id = 'mandy-chessell'
+                                    name = 'Mandy Chessell'
+                                    email = 'mandy.chessell@pdr-associates.com'
+                                    timezone = 'Europe/London'
+                                    roles = ['Project Leader']
+                                    organization = 'Pragmatic Data Research Ltd'
+                                }
+                                developer {
+                                    id = 'planetf1'
+                                    name = 'Nigel Jones'
+                                    email = 'nigel.l.jones+git@gmail.com'
+                                    roles = ['maintainer']
+                                    organization = 'IBM Corporation'
+                                }
+                                developer {
+                                    id = 'dwolfson'
+                                    name = 'Dan Wolfson'
+                                    email = 'dan.wolfson@pdr-associates.com'
+                                    roles = ['maintainer']
+                                    organization = 'Pragmatic Data Research Ltd'
+                                }
+                            }
+                            scm {
+                                connection = 'scm:git:git://github.com/odpi/egeria.git'
+                                developerConnection = 'scm:git:ssh://github.com/odpi/egeria/egeria.git'
+                                url = 'https://github.com/odpi/egeria'
+                            }
+                            organization {
+                                name = 'LF AI & Data Foundation'
+                                url = 'https://lfaidata.foundation'
+                            }
+                            issueManagement {
+                                system = 'GitHub'
+                                url = 'https://github.com/odpi/egeria/issues'
+                            }
+                            inceptionYear = '2018'
+                            mailingLists {
+                                mailingList {
+                                    name = 'Egeria mailing list'
+                                    subscribe = 'egeria-technical-discuss+subscribe@lists.lfaidata.foundation'
+                                    unsubscribe = 'egeria-technical-discuss+unsubscribe@lists.lfaidata.foundation'
+                                    post = 'egeria-technical-discuss@lists.lfaidata.foundation'
+                                    archive = 'https://lists.lfaidata.foundation/g/egeria-technical-discuss/topics'
+                                }
+                            }
+                        }
+                        // Override the project name & description for the pom based on properties set in the child build.gradle (hard to default & required for maven central)
+                        //
+                        // Both values are captured during configuration rather than read inside withXml,
+                        // which is applied while the task runs - reaching for `project` then is
+                        // unsupported with the configuration cache and leaves a zero-length pom.  That is
+                        // easy to miss, because POM generation is not part of `build`.
+                        //
+                        // The description has to be taken in afterEvaluate: this block is configured from
+                        // the root project's subprojects {} closure, which runs before each module's own
+                        // build.gradle has set its description.
+                        def pomName = project.name
+                        def pomDescription = null
+
+                        project.afterEvaluate {
+                            pomDescription = project.description
+                        }
+
+                        pom.withXml {
+                            asNode().appendNode('name', pomName)
+                            asNode().appendNode('description', pomDescription)
+                        }
+                    }
+                }
+            }
+
+        }
+        if (System.getenv("CI")) {
+            apply plugin: 'signing'
+            signing {
+                // gpg --export-secret-keys myemal@gmail.com | base64
+                def signingKey = System.getenv('OSSRH_GPG_PRIVATE_KEY')
+                // Passphrase for key
+                def signingPassword = System.getenv('OSSRH_GPG_PASSPHRASE')
+                // public key id (last 8 characters only) - note keys also need uploading to all the main registries
+                def signingKeyId = System.getenv('OSSRH_GPG_KEYID')
+                // We use these values from secrets rather than gradle.properties
+                useInMemoryPgpKeys(signingKeyId, signingKey, signingPassword)
+                sign publishing.publications.mavenmodule
+            }
+        }
+    }
+
+    // Always need these repos
+    publishing {
+
+        // Release versions get pushed to staging area on maven central, snapshots to snapshot repo
+        // Secrets for credentials
+        repositories {
+            maven {
+                name = mavenRepoName
+                url = version.toString().endsWith('SNAPSHOT') ? mavenSnapshotRepoUrl : mavenRepoUrl
+                // User token generated at https://central.sonatype.com/usertoken
+                credentials {
+                    username = mavenRepoUser
+                    password = mavenRepoPass
+                }
+            }
+        }
+    }
+
+    // shorthand for checking dependencies
+    task printAllDependencies(type: DependencyReportTask) {}
+    task printSubDependencies(type: DependencyReportTask) {}
+    task findDependency(type: DependencyInsightReportTask) {}
+}
+
+
+/*
+ * Additional aggregate tasks run only at parent
+ */
+
+/*
+ * The aggregate javadoc site - one set of pages covering every module, published to GitHub Pages by the
+ * merge workflow (see .github/workflows/merge-v6.yml).
+ *
+ * This used to be produced by io.freefair.aggregate-javadoc, which was pinned at 6.6.3 because its later
+ * versions either refuse to apply to a project that also applies the java plugin (8.x) or drop the
+ * aggregateJavadoc task altogether (9.x).  6.6.3 holds Task references, which the configuration cache
+ * cannot serialise, so the merge workflow had to run this step with --no-configuration-cache.
+ *
+ * Aggregating directly needs no plugin.  It needs two things the root project did not have until now:
+ * a resolvable configuration of its own for the classpath - resolving another project's configuration
+ * during execution is what the configuration cache forbids - and the same logging capability resolution
+ * the subprojects apply, because collecting every module's dependencies in one place brings the competing
+ * SLF4J implementations together.
+ *
+ * The site documents every module, deliberately.  A `javadoc { include(...) }` block used to sit here
+ * under a comment saying the aggregate covered only the client and API modules, but it configured the
+ * root project's own javadoc task - and the root has no src/main/java, so that task is NO-SOURCE and the
+ * includes never applied to anything.  The published site has always covered the whole repository, and
+ * that is the intended behaviour, so nothing filters the source below.
+ */
+apply plugin: 'java'
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+jvmDependencyConflicts {
+    logging {
+        // Every module's dependencies meet on the aggregate classpath, so the SLF4J binding conflict that
+        // the subprojects resolve individually has to be resolved here too.
+        enforceLogback()
+    }
+    conflictResolution {
+        // As in the subprojects - Tomcat has to win the servlet API capability, or it is substituted away.
+        select(org.gradlex.jvm.dependency.conflict.detection.rules.CapabilityDefinition.JAKARTA_SERVLET_API,
+               'org.apache.tomcat.embed:tomcat-embed-core')
+    }
+}
+
+configurations {
+    aggregateJavadocClasspath {
+        canBeConsumed = false
+        canBeResolved = true
+        description = 'The compile classpath of every module, for the aggregate javadoc.'
+    }
+}
+
+// Container projects - the ones that only group other modules - have no build file and nothing to document.
+def documentedProjects = subprojects.findAll { it.buildFile.exists() && it.name != 'bom' }
+
+dependencies {
+    documentedProjects.each { aggregateJavadocClasspath project(it.path) }
+}
+
+tasks.register('aggregateJavadoc', Javadoc) {
+    group = 'documentation'
+    description = 'Builds one javadoc site covering every module.'
+
+    // Reading each module's source set here, at configuration time, is the same pattern codeCoverageReport
+    // already uses.  It is the classpath that has to come from this project's own configuration.
+    documentedProjects.each { subProject ->
+        subProject.plugins.withId('java') {
+            source subProject.sourceSets.main.allJava
+        }
+    }
+    classpath = configurations.aggregateJavadocClasspath
+    destinationDir = file("${layout.buildDirectory.get().asFile}/docs/javadoc")
+
+    options {
+        addBooleanOption('html5', true)
+        // Deliberately NOT the subprojects' PUBLIC member level.  The aggregate site has always been
+        // built at javadoc's default - protected - and dropping to PUBLIC loses the pages for protected
+        // nested classes such as ConnectorBase.ProtectedConnection.
+        setMemberLevel JavadocMemberLevel.PROTECTED
+        // As in the subprojects: doclint runs, but its "missing" group stays off while the documentation
+        // debt that predates the check is cleared module by module.
+        addStringOption('Xdoclint:-missing', '-quiet')
+    }
+}
+
+// Jacoco reporting -- from gradle docs
+task codeCoverageReport(type: JacocoReport) {
+    // Gather execution data from all subprojects
+    executionData fileTree(project.rootDir.absolutePath).include("**/build/jacoco/*.exec")
+    // Add all relevant sourcesets from the subprojects
+    subprojects.each {
+        // Only projects that actually apply the java plugin have a sourceSets container of their own.
+        // Asking the others for one used to fall through to their parent project, which Gradle 9
+        // deprecates and Gradle 10 rejects - and they have no source to report on in any case.
+        if (it.plugins.hasPlugin('java')) {
+            sourceSets it.sourceSets.main
+        }
+    }
+    // enable the different report types (html, xml, csv)
+    reports {
+        // xml is usually used to integrate code coverage with
+        // other tools like SonarQube, Coveralls or Codecov
+        xml.required = true
+
+        // HTML reports can be used to see code coverage
+        // without any external tools
+        html.required = true
+        csv.required = true
+    }
+}
+// always run the tests before generating the report
+codeCoverageReport.dependsOn {
+    subprojects*.test
+}
+
+// Dependency checking - see https://github.com/autonomousapps/dependency-analysis-android-gradle-plugin
+dependencyAnalysis {
+    issues {
+        all {
+            onAny {
+                severity('fail')
+            }
+        }
+
+        // Spring Boot starters are POM-only aggregators: they contribute no classes of their own, so
+        // dependency-analysis always reports them as unused.  They are exactly what the platform chassis
+        // is meant to declare - removing them would strip the runtime stack out of the server - so the
+        // advice is suppressed here rather than acted on.
+        project(':open-metadata-implementation:platform-chassis:platform-chassis-spring') {
+            onUnusedDependencies {
+                exclude('org.springframework.boot:spring-boot-starter-actuator',
+                        'org.springframework.boot:spring-boot-starter-tomcat',
+                        'org.springframework.boot:spring-boot-starter-validation',
+                        'org.springframework.boot:spring-boot-starter-web',
+                        'org.springframework.boot:spring-boot-starter-test')
+            }
+        }
+    }
+}
+
+// Always run dependency check for every regular build
+build.dependsOn("buildHealth")
+
+/*
+ * `build` is not everything CI runs.  The merge and release workflows also generate the publication POMs,
+ * assemble the distribution and build the aggregate javadoc site, and none of those is reachable from
+ * `build` - so a green local build has repeatedly hidden breakage in them.  Three times during the 6.2
+ * toolchain work: the packaged jar's launcher, POM generation producing zero-length files, and the
+ * aggregate javadoc.
+ *
+ * `./gradlew verifyRelease` runs all of them in one invocation.
+ */
+tasks.register('verifyRelease') {
+    group = 'verification'
+    description = 'Runs what CI runs: every module build and test, the publication POMs, the aggregate javadoc and the platform distribution.'
+
+    // Container projects - the ones that only group other modules - have no build file, so they have
+    // neither a build to run nor a publication to generate a POM for.
+    def realSubprojects = subprojects.findAll { it.buildFile.exists() }
+
+    // Every module's own build, not just the root's.  `dependsOn 'build'` alone resolves to the root
+    // project's build task, and the root has no source - so it runs nothing and every module's tests are
+    // skipped.  Naming the subproject task paths is what actually compiles and tests the code.
+    dependsOn 'build'
+    dependsOn realSubprojects.collect { "${it.path}:build" }
+    dependsOn realSubprojects.collect { "${it.path}:generatePomFileForMavenmodulePublication" }
+    dependsOn ':open-metadata-distribution:omag-server-platform:assemble'
+    // The aggregate javadoc is what the merge workflow publishes to GitHub Pages.  It used to need its
+    // own invocation with --no-configuration-cache; now that it is built directly rather than by the
+    // freefair plugin, it can share this one.
+    dependsOn 'aggregateJavadoc'
+
+    doLast {
+        logger.lifecycle('')
+        logger.lifecycle('verifyRelease: every module build and test, every publication POM, the aggregate')
+        logger.lifecycle('javadoc and the platform distribution are green.')
+        logger.lifecycle('')
+    }
+}

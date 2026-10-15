@@ -1,0 +1,339 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Copyright Contributors to the ODPi Egeria project. */
+package org.odpi.openmetadata.commonservices.ffdc.rest;
+
+
+import org.odpi.openmetadata.adapters.connectors.restclients.RESTClientConnector;
+import org.odpi.openmetadata.adapters.connectors.restclients.factory.RESTClientFactory;
+import org.odpi.openmetadata.commonservices.ffdc.OMAGCommonAuditCode;
+import org.odpi.openmetadata.commonservices.ffdc.OMAGCommonErrorCode;
+import org.odpi.openmetadata.commonservices.ffdc.RESTExceptionHandler;
+import org.odpi.openmetadata.frameworks.auditlog.AuditLog;
+import org.odpi.openmetadata.frameworks.connectors.SecretsStoreConnector;
+import org.odpi.openmetadata.frameworks.connectors.controls.SecretsStorePurpose;
+import org.odpi.openmetadata.frameworks.openmetadata.ffdc.InvalidParameterException;
+import org.odpi.openmetadata.frameworks.openmetadata.ffdc.PropertyServerException;
+
+import java.util.Map;
+
+
+/**
+ * RESTClient is responsible for issuing calls to the OMAS REST APIs.
+ */
+public class FFDCRESTClientBase
+{
+    protected String               serverName;             /* Initialized in constructor */
+    protected String               serverPlatformURLRoot;  /* Initialized in constructor */
+    protected AuditLog             auditLog;               /* Initialized in constructor */
+
+    protected final RESTExceptionHandler exceptionHandler = new RESTExceptionHandler();
+
+    private final RESTClientConnector clientConnector;        /* Initialized in constructor */
+
+    /**
+     * Constructor for no authentication with audit log.
+     *
+     * @param serverName name of the OMAG Server to call
+     * @param serverPlatformURLRoot URL root of the server platform where the OMAG Server is running.
+     * @param secretsStoreProvider secrets store connector for bearer token
+     * @param secretsStoreLocation secrets store location for bearer token
+     * @param secretsStoreCollection secrets store collection for bearer token
+     * @param auditLog destination for log messages.
+     *
+     * @throws InvalidParameterException a problem creating the client-side components to issue any
+     * REST API calls.
+     */
+    protected FFDCRESTClientBase(String   serverName,
+                                 String   serverPlatformURLRoot,
+                                 String   secretsStoreProvider,
+                                 String   secretsStoreLocation,
+                                 String   secretsStoreCollection,
+                                 AuditLog auditLog) throws InvalidParameterException
+    {
+        final String  methodName = "RESTClient(explicit secrets store)";
+
+        this.serverName = serverName;
+        this.serverPlatformURLRoot = serverPlatformURLRoot;
+        this.auditLog = auditLog;
+
+        try
+        {
+            RESTClientFactory factory = new RESTClientFactory(serverName,
+                                                              serverPlatformURLRoot,
+                                                              secretsStoreProvider,
+                                                              secretsStoreLocation,
+                                                              secretsStoreCollection,
+                                                              SecretsStorePurpose.REST_BEARER_TOKEN.getName(),
+                                                              auditLog);
+
+            this.clientConnector = factory.getClientConnector();
+        }
+        catch (Exception     error)
+        {
+            throw new InvalidParameterException(OMAGCommonErrorCode.UNABLE_TO_CREATE_CLIENT.getMessageDefinition(serverName,
+                                                                                                                  serverPlatformURLRoot,
+                                                                                                                  error.getMessage()),
+                                                this.getClass().getName(),
+                                                methodName,
+                                                error,
+                                                "serverPlatformURLRoot or serverName");
+        }
+    }
+
+
+    /**
+     * Create a new client with no authentication embedded in the HTTP request.
+     *
+     * @param serverName name of the OMAG Server to call
+     * @param serverPlatformURLRoot URL root of the server platform where the OMAG Server is running
+     * @param secretsStoreConnectorMap connectors to secrets stores
+     * @param auditLog destination for log messages
+     * @throws InvalidParameterException a problem creating the client-side components to issue any
+     *                                       REST API calls.
+     */
+    public FFDCRESTClientBase(String                             serverName,
+                              String                             serverPlatformURLRoot,
+                              Map<String, SecretsStoreConnector> secretsStoreConnectorMap,
+                              AuditLog                           auditLog) throws InvalidParameterException
+    {
+        final String  methodName = "RESTClient(connector secrets store)";
+
+        this.serverName = serverName;
+        this.serverPlatformURLRoot = serverPlatformURLRoot;
+        this.auditLog = auditLog;
+
+        try
+        {
+            RESTClientFactory factory = new RESTClientFactory(serverName,
+                                                              serverPlatformURLRoot,
+                                                              secretsStoreConnectorMap,
+                                                              auditLog);
+
+            this.clientConnector = factory.getClientConnector();
+        }
+        catch (Exception     error)
+        {
+            throw new InvalidParameterException(OMAGCommonErrorCode.UNABLE_TO_CREATE_CLIENT.getMessageDefinition(serverName,
+                                                                                                                  serverPlatformURLRoot,
+                                                                                                                  error.getMessage()),
+                                                this.getClass().getName(),
+                                                methodName,
+                                                error,
+                                                "serverPlatformURLRoot or serverName");
+        }
+    }
+
+    /**
+     * Issue a GET REST call that returns a response object.
+     *
+     * @param <T> return type
+     * @param methodName  name of the method being called.
+     * @param returnClass class of the response object.
+     * @param urlTemplate template of the URL for the REST API call with place-holders for the parameters.
+     *
+     * @return response object
+     * @throws PropertyServerException something went wrong with the REST call stack.
+     */
+    protected <T> T callGetRESTCallNoParams(String    methodName,
+                                            Class<T>  returnClass,
+                                            String    urlTemplate) throws PropertyServerException
+    {
+        try
+        {
+            return clientConnector.callGetRESTCall(methodName, returnClass, urlTemplate);
+        }
+        catch (Exception error)
+        {
+            logRESTCallException(methodName, error);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Issue a GET REST call that returns a response object.
+     *
+     * @param <T> return type
+     * @param methodName  name of the method being called.
+     * @param returnClass class of the response object.
+     * @param urlTemplate template of the URL for the REST API call with place-holders for the parameters.
+     * @param params      a list of parameters that are slotted into the url template.
+     *
+     * @return response object
+     * @throws PropertyServerException something went wrong with the REST call stack.
+     */
+    protected  <T> T callGetRESTCall(String    methodName,
+                                     Class<T>  returnClass,
+                                     String    urlTemplate,
+                                     Object... params) throws PropertyServerException
+    {
+        try
+        {
+            return clientConnector.callGetRESTCall(methodName, returnClass, urlTemplate, params);
+        }
+        catch (Exception error)
+        {
+            logRESTCallException(methodName, error);
+        }
+
+        return null;
+    }
+
+    /**
+     * Issue a POST REST call that returns a response object.  This is typically a create, update, or find with
+     * complex parameters.
+     *
+     * @param <T> return type
+     * @param methodName  name of the method being called.
+     * @param returnClass class of the response object.
+     * @param urlTemplate  template of the URL for the REST API call with place-holders for the parameters.
+     * @param requestBody request body for the request.
+     *
+     * @return response object
+     * @throws PropertyServerException something went wrong with the REST call stack.
+     */
+    public <T> T callPostRESTCallNoParams(String    methodName,
+                                          Class<T>  returnClass,
+                                          String    urlTemplate,
+                                          Object    requestBody) throws PropertyServerException
+    {
+        try
+        {
+            return clientConnector.callPostRESTCallNoParams(methodName, returnClass, urlTemplate, requestBody);
+        }
+        catch (Exception error)
+        {
+            logRESTCallException(methodName, error);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Issue a POST REST call that returns a response object.  This is typically a create, update, or find with
+     * complex parameters.
+     *
+     * @param <T> return type
+     * @param methodName  name of the method being called.
+     * @param returnClass class of the response object.
+     * @param urlTemplate  template of the URL for the REST API call with place-holders for the parameters.
+     * @param requestBody request body for the request.
+     * @param params  a list of parameters that are slotted into the url template.
+     *
+     * @return response object
+     * @throws PropertyServerException something went wrong with the REST call stack.
+     */
+    protected  <T> T callPostRESTCall(String    methodName,
+                                      Class<T>  returnClass,
+                                      String    urlTemplate,
+                                      Object    requestBody,
+                                      Object... params) throws PropertyServerException
+    {
+        try
+        {
+            return clientConnector.callPostRESTCall(methodName, returnClass, urlTemplate, requestBody, params);
+        }
+        catch (Exception error)
+        {
+            logRESTCallException(methodName, error);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Issue a PUT REST call that returns a response object.  This is typically an update.
+     *
+     * @param <T> return type
+     * @param methodName  name of the method being called.
+     * @param returnClass class of the response object.
+     * @param urlTemplate  template of the URL for the REST API call with place-holders for the parameters.
+     * @param requestBody request body for the request.
+     * @param params  a list of parameters that are slotted into the url template.
+     *
+     * @return response object
+     * @throws PropertyServerException something went wrong with the REST call stack.
+     */
+    protected  <T> T callPutRESTCall(String    methodName,
+                                     Class<T>  returnClass,
+                                     String    urlTemplate,
+                                     Object    requestBody,
+                                     Object... params) throws PropertyServerException
+    {
+        try
+        {
+            return clientConnector.callPutRESTCall(methodName, returnClass, urlTemplate, requestBody, params);
+        }
+        catch (Exception error)
+        {
+            logRESTCallException(methodName, error);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Issue a Delete REST call that returns a response object.
+     *
+     * @param <T> return type
+     * @param methodName  name of the method being called.
+     * @param returnClass class of the response object.
+     * @param urlTemplate template of the URL for the REST API call with place-holders for the parameters.
+     * @param requestBody body of request
+     * @param params      a list of parameters that are slotted into the url template.
+     *
+     * @return response object
+     * @throws PropertyServerException something went wrong with the REST call stack.
+     */
+    protected  <T> T callDeleteRESTCall(String    methodName,
+                                        Class<T>  returnClass,
+                                        String    urlTemplate,
+                                        Object    requestBody,
+                                        Object... params) throws PropertyServerException
+    {
+        try
+        {
+            return clientConnector.callDeleteRESTCall(methodName, returnClass, urlTemplate, requestBody, params);
+        }
+        catch (Exception error)
+        {
+            logRESTCallException(methodName, error);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Provide detailed logging for exceptions.
+     *
+     * @param methodName calling method
+     * @param error resulting exception
+     * @throws PropertyServerException wrapping exception
+     */
+    private void logRESTCallException(String    methodName,
+                                      Exception error) throws PropertyServerException
+    {
+        if (auditLog != null)
+        {
+            auditLog.logException(methodName,
+                                  OMAGCommonAuditCode.CLIENT_SIDE_REST_API_ERROR.getMessageDefinition(methodName,
+                                                                                                      serverName,
+                                                                                                      serverPlatformURLRoot,
+                                                                                                      error.getMessage()),
+                                  error);
+        }
+
+        throw new PropertyServerException(OMAGCommonErrorCode.CLIENT_SIDE_REST_API_ERROR.getMessageDefinition(methodName,
+                                                                                                              serverName,
+                                                                                                              serverPlatformURLRoot,
+                                                                                                              error.getMessage()),
+                                          this.getClass().getName(),
+                                          methodName,
+                                          error);
+    }
+}
